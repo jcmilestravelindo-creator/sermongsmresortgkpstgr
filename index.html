@@ -141,9 +141,26 @@
             const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
             const [connectionError, setConnectionError] = useState(null);
 
-            // --- STATE BARU: LIVE ATTENDANCE ---
+            // --- HELPER: FORMAT TANGGAL STABIL (YYYY-MM-DD) ---
+            const getSafeDateId = () => {
+                const d = new Date();
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            // --- STATE LIVE ATTENDANCE ---
             const [liveAttendance, setLiveAttendance] = useState([]);
             const [attendanceMode, setAttendanceMode] = useState(false); // False = Cek Data, True = Absen Masuk
+
+            // GUNAKAN REF AGAR SCANNER SELALU BACA DATA TERBARU
+            const attendanceModeRef = useRef(attendanceMode);
+            const liveAttendanceRef = useRef(liveAttendance);
+
+            // Update Ref setiap kali state berubah
+            useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
+            useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
 
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
@@ -158,13 +175,14 @@
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
 
-            // --- EFFECT BARU: Sinkronisasi Absensi Realtime ---
+            // --- EFFECT: Sinkronisasi Absensi Realtime ---
             useEffect(() => {
                 const db = window.db;
                 const { collection, query, orderBy, onSnapshot } = window.fs || {};
                 if (!userAuth || !db) return;
 
-                const todayStr = new Date().toLocaleDateString('id-ID').split('/').reverse().join('-');
+                // GUNAKAN HELPER BARU
+                const todayStr = getSafeDateId();
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${todayStr}/records`;
                 
                 try {
@@ -338,14 +356,20 @@
                 } 
             };
 
-            // --- UPDATE LOGIKA SCANNER UNTUK LIVE ATTENDANCE ---
+            // --- UPDATE LOGIKA SCANNER UNTUK LIVE ATTENDANCE (FIXED) ---
             const handleScanSuccess = (qrId) => {
+                // Gunakan REF untuk membaca mode terkini secara akurat
+                const isModeLive = attendanceModeRef.current;
+                const currentLiveData = liveAttendanceRef.current;
+
                 const p = participants.find(item => item.id === qrId);
                 
                 if (p) {
-                    if (attendanceMode) {
-                        const todayStr = new Date().toLocaleDateString('id-ID').split('/').reverse().join('-');
-                        const alreadyPresent = liveAttendance.find(item => item.id === p.id);
+                    if (isModeLive) {
+                        const todayStr = getSafeDateId(); // Gunakan format tanggal stabil
+                        
+                        // Cek duplikat menggunakan data dari REF
+                        const alreadyPresent = currentLiveData.find(item => item.id === p.id);
 
                         if (alreadyPresent) {
                             setScanResult({ success: false, msg: `⚠️ ${p.nama} SUDAH ABSEN jam ${alreadyPresent.jam}!` });
@@ -362,7 +386,14 @@
                                 timestamp: now.getTime(),
                                 scanner: currentUser.nama
                             };
-                            saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
+                            
+                            // Debugging di console
+                            console.log("Menyimpan absen:", attendanceData);
+
+                            saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData)
+                                .then(() => console.log("Sukses simpan ke cloud"))
+                                .catch(err => alert("Gagal simpan: " + err.message));
+
                             setScanResult({ success: true, msg: `✅ ${p.nama} BERHASIL ABSEN!`, p: p, time: jam });
                             playNotificationSound();
                         }
@@ -913,7 +944,6 @@
                     </div>
                 </div>
             );
-
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
