@@ -18,6 +18,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
@@ -41,6 +42,12 @@
         .glass-panel { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 10px 40px -10px rgba(30, 58, 138, 0.15); }
         .bell-ring { animation: ring 4s ease-in-out infinite; transform-origin: 50% 0%; }
         @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(30deg); } 30% { transform: rotate(-28deg); } 50% { transform: rotate(34deg); } 70% { transform: rotate(-32deg); } 90% { transform: rotate(30deg); } 100% { transform: rotate(0); } }
+        
+        /* Scanner Styles */
+        #reader { border: none !important; border-radius: 20px; overflow: hidden; }
+        #reader__scan_region img { display: none; }
+        #reader__dashboard_section_csr button { background-color: #4F46E5; color: white; border-radius: 12px; padding: 12px 20px; border: none; font-weight: bold; margin-top: 15px; cursor: pointer; width: 100%; box-shadow: 0 4px 0 #3730A3; transition: all 0.2s; }
+        #reader__dashboard_section_csr button:active { transform: translateY(4px); box-shadow: none; }
     </style>
 
     <script type="module">
@@ -110,6 +117,10 @@
             const [isConnected, setIsConnected] = useState(false);
             const [userAuth, setUserAuth] = useState(null);
             
+            // Scanner State
+            const [scanResult, setScanResult] = useState(null);
+            const scannerRef = useRef(null);
+
             // State Bahan Ajar (Theme)
             const [themeData, setThemeData] = useState(null);
             const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
@@ -161,6 +172,7 @@
                 setIsLogoutModalOpen(false); setIsInstallModalOpen(false);
                 setDeleteConfig({ show: false, path: null });
                 setAdminResetConfig({ show: false, user: null, newPass: '' });
+                setScanResult(null); // Reset scan result
                 setViewRaw(newView);
             };
 
@@ -277,6 +289,36 @@
                         alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
                     } catch(e) { alert("Gagal reset: " + e.message); }
                 } else { alert("Password Salah! Reset Database Dibatalkan."); }
+            };
+
+            // --- SCANNER LOGIC (RESTORED) ---
+            useEffect(() => { 
+                if (view === 'scan' && !scanResult) { 
+                    setTimeout(startScanner, 300); 
+                    return () => stopScanner(); 
+                } 
+            }, [view, scanResult]);
+
+            const startScanner = () => { 
+                if (scannerRef.current) scannerRef.current.clear().catch(()=>{}); 
+                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250, aspectRatio: 1.0 }, false);
+                scanner.render((decodedText) => { handleScanSuccess(decodedText); scanner.clear(); }, (error) => {}); 
+                scannerRef.current = scanner; 
+            };
+
+            const stopScanner = () => { 
+                if (scannerRef.current) { try { scannerRef.current.clear(); } catch(e){} scannerRef.current = null; } 
+            };
+
+            const handleScanSuccess = (qrId) => {
+                const p = participants.find(item => item.id === qrId);
+                if (p) {
+                    setScanResult({ success: true, msg: `✅ DITEMUKAN: ${p.nama}`, p: p });
+                    playNotificationSound();
+                } else {
+                    setScanResult({ success: false, msg: '❌ QR Tidak Terdaftar di Database!' });
+                    playErrorSound();
+                }
             };
 
             // --- COMPONENT DEFINITIONS ---
@@ -638,6 +680,12 @@
                                 <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
                                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
                                     
+                                    {/* TOMBOL SCAN QR DIKEMBALIKAN */}
+                                    <button onClick={() => setView('scan')} className="w-full btn-playful bg-slate-800 text-white border-b-4 border-slate-950 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
+                                        <div className="text-left"><h3 className="font-bold">Scan QR Peserta</h3><p className="text-[10px] text-slate-400">Cek Database (Tanpa Absen)</p></div>
+                                    </button>
+
                                     <button onClick={() => setView('manage_broadcast')} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-3 rounded-xl flex items-center gap-3 shadow-lg shadow-indigo-200 mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="megaphone" width="18"></i></div>
                                         <div className="text-left text-xs"><h3 className="font-bold text-sm">Broadcast Notifikasi</h3><p className="text-[10px] text-indigo-200 opacity-90">Kirim Info ke Semua Layar</p></div>
@@ -668,6 +716,40 @@
             );
             }
             
+            // --- TAMPILAN SCANNER (DIKEMBALIKAN) ---
+            if (view === 'scan') return (
+                <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
+                    <button onClick={handleBackToMenu} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                    
+                    <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
+                        <div id="reader" className="w-full h-auto bg-black"></div>
+                        
+                        {scanResult && (
+                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ? 'bg-white' : 'bg-red-50'}`}>
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                    <i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i>
+                                </div>
+                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ? 'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
+                                <p className="text-center text-sm text-slate-500 font-bold mb-4">{scanResult.msg}</p>
+                                
+                                {scanResult.success && scanResult.p && (
+                                    <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2">
+                                        <div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div>
+                                        <div className="flex gap-4">
+                                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div>
+                                            <div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p></div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <button onClick={() => { setScanResult(null); startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">Arahkan kamera ke QR Code peserta untuk cek data.</p>
+                </div>
+            );
+
             // --- TAMPILAN EDIT BAHAN AJAR ---
             if (view === 'edit_theme') return (
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
@@ -764,7 +846,6 @@
                 </div>
             );
 
-            // --- DATABASE PESERTA (DIKEMBALIKAN) ---
             if (view === 'generate') return (
                 <div key="view-generate" className="min-h-screen bg-slate-100 p-4">
                     <div className="max-w-md mx-auto">
