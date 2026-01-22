@@ -47,7 +47,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
+        
         // --- KONFIGURASI FIREBASE ---
         let firebaseConfig;
         try {
@@ -70,7 +70,6 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        
         window.db = db;
         window.auth = auth;
         window.signInAnonymously = signInAnonymously;
@@ -84,7 +83,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
-
+        
         // --- KOMPONEN MODAL ---
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
@@ -111,6 +110,10 @@
             const [isConnected, setIsConnected] = useState(false);
             const [userAuth, setUserAuth] = useState(null);
             
+            // State Bahan Ajar (Theme)
+            const [themeData, setThemeData] = useState(null);
+            const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
+
             const [showAddForm, setShowAddForm] = useState(false);
             const [formData, setFormData] = useState({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
             const [isDownloading, setIsDownloading] = useState(false);
@@ -124,16 +127,21 @@
             const [activeBroadcast, setActiveBroadcast] = useState(null);
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
-
+            
             const [editingId, setEditingId] = useState(null);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'petugas', nama: '' });
             const [selfPassword, setSelfPassword] = useState('');
             const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
             const [connectionError, setConnectionError] = useState(null);
+            
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
-
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             
+            const defaultTheme = {
+                title: "Terpanggil dan siap melayani Tuhan",
+                weeks: [ { date: "", topic: "Contoh Tema Minggu 1", content: "Isi bahan ajar...", themeVerse: 'Yohanes 3:16', memoryVerse: 'Yohanes 3:16' } ]
+            };
+
             const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
             const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
 
@@ -195,6 +203,9 @@
                 }, (err) => console.error("Users Sync Error", err));
 
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())));
+                
+                // Sync Theme (Bahan Ajar)
+                const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null), (err) => console.error("Theme Sync Error", err));
 
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
@@ -214,6 +225,7 @@
                 return () => {
                     unsubscribeUsers();
                     unsubscribeParticipants(); 
+                    unsubscribeTheme();
                     unsubscribeAnnouncements();
                 };
             }, [userAuth]);
@@ -227,6 +239,7 @@
                 if (path.startsWith('users/')) finalRef = doc(db, `${basePath}/users`, path.split('/')[1]);
                 else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
                 else if (path.startsWith('announcements/active')) finalRef = doc(db, `${basePath}/announcements`, 'active');
+                else if (path.startsWith('theme/')) finalRef = doc(db, `${basePath}/theme`, path.split('/')[1]);
                 else return Promise.reject("Invalid path");
                 return setDoc(finalRef, data, { merge: true });
             };
@@ -241,7 +254,7 @@
                  else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
                  if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
-            
+
             const handleResetAllData = async () => {
                 if (!currentUser) return;
                 const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
@@ -483,6 +496,46 @@
             };
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
             
+            // --- THEME / BAHAN AJAR HANDLERS (Dikembalikan & Ditambah fitur Delete) ---
+            const handleAddWeek = () => {
+                setEditThemeForm({
+                    ...editThemeForm,
+                    weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }]
+                });
+            };
+            
+            // FITUR DELETE MINGGU (BARU)
+            const handleRemoveWeek = (index) => {
+                const newWeeks = [...editThemeForm.weeks];
+                newWeeks.splice(index, 1);
+                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+            };
+
+            const handleWeekChange = (index, field, value) => {
+                const newWeeks = [...editThemeForm.weeks];
+                newWeeks[index][field] = value;
+                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+            };
+
+            const handleSaveTheme = () => {
+                if(!editThemeForm.title) return alert("Mohon isi judul bahan ajar!");
+                // Validasi opsional: if(editThemeForm.weeks.length === 0) return alert("Tambahkan minimal 1 minggu!");
+                saveToCloud('theme/current', editThemeForm);
+                alert("Bahan Ajar berhasil diupdate!");
+                handleBackToMenu();
+            };
+            
+            // FITUR DELETE/RESET SELURUH TEMA (BARU)
+            const handleDeleteTheme = () => {
+                if(confirm("Yakin ingin menghapus SELURUH bahan ajar?")) {
+                     const emptyTheme = { title: "Judul Baru", weeks: [] };
+                     saveToCloud('theme/current', emptyTheme);
+                     alert("Bahan Ajar telah direset.");
+                     setEditThemeForm(emptyTheme);
+                }
+            };
+            // -----------------------------------------------------------------------
+
             // --- GLOBAL VARIABLES ---
             const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
             const isAdmin = safeUser.role === 'admin';
@@ -530,6 +583,12 @@
                 </div>
             );
             if (view === 'menu') {
+                const currentTheme = themeData || defaultTheme;
+                let displayWeeks = currentTheme.weeks || [];
+                // Fallback structure check
+                if (!Array.isArray(displayWeeks)) displayWeeks = [];
+                const gridCols = displayWeeks.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
+
                 return (
                 <div key="view-menu" className="min-h-screen bg-school-sunday p-4 pt-8 pb-20 relative">
                      {notification && (
@@ -544,6 +603,35 @@
                             <div className="flex justify-between items-center relative z-10">
                                 <div><p className="text-white/80 text-xs font-bold mb-1">Shalom,</p><h1 className="text-3xl font-black drop-shadow-md tracking-tight" style={{fontFamily: 'Fredoka, sans-serif'}}>{safeUser.nama}</h1><span className="text-[10px] font-black uppercase tracking-wider bg-white/25 inline-block px-3 py-1 rounded-full mt-2 border border-white/30 backdrop-blur-sm">{safeUser.role}</span></div>
                                 <button onClick={handleLogoutClick} className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl text-white transition flex items-center justify-center shadow-inner border border-white/30" title="Keluar"><i data-lucide="log-out" width="20"></i></button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 pb-0">
+                            {/* --- KARTU BAHAN AJAR (DIKEMBALIKAN) --- */}
+                            <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
+                                <div className="relative z-10">
+                                    <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
+                                    <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
+                                    <div className={`grid gap-3 ${gridCols}`}>
+                                        {displayWeeks.map((week, idx) => (
+                                            <div key={idx} className={`p-3 rounded-2xl border flex flex-col h-full ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100' : 'bg-indigo-50 border-indigo-100'}`}>
+                                                <div className={`mb-2 border-b pb-1 ${idx % 2 === 0 ? 'border-sky-200' : 'border-indigo-200'}`}>
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider block ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}</span>
+                                                    <h4 className={`font-bold text-sm leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
+                                                </div>
+                                                <div className="flex-1 space-y-2 mb-2">
+                                                    {week.themeVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Ayat Tema</p><p className="text-xs font-bold text-slate-700">{week.themeVerse}</p></div>)}
+                                                    {week.memoryVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Hafalan</p><p className="text-xs font-bold text-slate-700">{week.memoryVerse}</p></div>)}
+                                                </div>
+                                                <p className="text-slate-600 italic font-medium text-[10px] leading-relaxed line-clamp-3">"{week.content}"</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {(isAdmin || isPanitia) && (
+                                    <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
+                                )}
                             </div>
                         </div>
 
@@ -586,20 +674,84 @@
                 </div>
             );
             }
+            
+            // --- TAMPILAN EDIT BAHAN AJAR (DIKEMBALIKAN & DITAMBAHKAN DELETE) ---
+            if (view === 'edit_theme') return (
+                <div className="min-h-screen bg-slate-50 p-4 pb-20">
+                    <div className="max-w-md mx-auto">
+                        <div className="flex items-center justify-between mb-6">
+                            <button onClick={handleBackToMenu} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                            <h2 className="font-black text-xl text-slate-700">Edit Bahan Ajar</h2>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 space-y-4 mb-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Judul Besar / Tema Bulanan</label>
+                                <input className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" value={editThemeForm.title} onChange={e => setEditThemeForm({...editThemeForm, title: e.target.value})} placeholder="Contoh: Kasih Allah..." />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {editThemeForm.weeks.map((week, index) => (
+                                <div key={index} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 relative group">
+                                    {/* TOMBOL DELETE MINGGU (FITUR BARU) */}
+                                    <button onClick={() => handleRemoveWeek(index)} className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition" title="Hapus Minggu Ini"><i data-lucide="trash-2" width="18"></i></button>
+                               
+                                    <h3 className="font-black text-indigo-500 text-sm uppercase tracking-widest mb-4">Minggu ke-{index + 1}</h3>
+                                    
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Tanggal (Opsional)</label>
+                                            <input type="date" className="w-full p-2 border rounded-lg font-bold text-slate-600 text-sm" value={week.date} onChange={e => handleWeekChange(index, 'date', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Topik / Judul Minggu Ini</label>
+                                            <input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.topic} onChange={e => handleWeekChange(index, 'topic', e.target.value)} placeholder="Contoh: Minggu 1: Ketaatan" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Tema (Singkat)</label>
+                                            <input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Hafalan (Isi Lengkap)</label>
+                                            <textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-xs h-16" value={week.memoryVerse} onChange={e => handleWeekChange(index, 'memoryVerse', e.target.value)} placeholder="Tulis ayat hafalan disini..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label>
+                                            <textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
+
+                        <div className="sticky bottom-4 mt-6 space-y-2">
+                            <button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button>
+                            {/* TOMBOL DELETE/RESET TOTAL (FITUR BARU) */}
+                            <button onClick={handleDeleteTheme} className="w-full btn-playful bg-rose-100 text-rose-500 border-rose-200 py-3 rounded-2xl font-bold text-sm">HAPUS/RESET SEMUA</button>
+                        </div>
+                    </div>
+                </div>
+            );
+            // -------------------------------------------------------------
 
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+    
                         <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
                             <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
-                             <div className="space-y-3">
+                          
+                            <div className="space-y-3">
                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
                                 <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
                                 <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
                                 <select className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 bg-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
                                     <option value="petugas">Petugas</option><option value="admin">Admin</option><option value="panitia">Panitia</option><option value="peserta">Peserta</option>
-                                 </select>
+                                </select>
                                 <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null); setNewUser({ username: '', password: '', role: 'petugas', nama: '' }); }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
                             </div>
                         </div>
@@ -621,14 +773,13 @@
                     {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
                 </div>
             );
-            
+
             if (view === 'generate') return (<div key="view-generate" className="min-h-screen bg-slate-100 p-4"><div className="max-w-md mx-auto"><button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button><div className="bg-white rounded-xl shadow p-6"><h2 className="font-bold text-xl mb-6 text-indigo-800 flex items-center gap-2"><i data-lucide="users"></i> Data Peserta</h2><div className="mb-6 space-y-4"><div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition"><input type="file" accept=".csv" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" /><i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i><span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span><span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span></div><button onClick={() => setShowAddForm(!showAddForm)} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 py-2 rounded transition">+ Input Manual</button>{showAddForm && (<div className="bg-slate-50 p-4 rounded border animate-bounce-in"><h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ? 'Edit Peserta' : 'Tambah Peserta'}</h3><input className="w-full p-2 border rounded mb-2" placeholder="Nama Lengkap" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} /><select className="w-full p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}><option>Anak Sekolah Minggu</option><option>GSM</option><option>Panitia</option><option>Umum</option><option>Kelas</option> </select><select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}><option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}</select><div className="flex gap-2"><button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>{editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}</div></div>)}</div>{participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}<div className="grid grid-cols-2 gap-3">{participants.map(p => (<div key={p.id} className={`border p-3 rounded text-center bg-white shadow-sm hover:shadow-md transition relative ${editingId === p.id ? 'border-amber-400 bg-amber-50' : ''}`}><div className="absolute top-2 right-2 flex gap-1"><button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button><button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button><button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100"><i data-lucide="trash-2" width="12"></i></button></div><img src={generateQRUrl(p.id)} className="w-24 mx-auto mb-2 mix-blend-multiply cursor-pointer hover:scale-110 transition-transform duration-200 border-2 border-transparent hover:border-indigo-200 rounded-lg p-1" loading="lazy" onClick={() => downloadSingleQR(p)} title="Klik untuk download QR" /><p className="font-bold text-xs truncate text-slate-800">{p.nama}</p><p className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 inline-block mt-1">{p.kategori}</p>{p.kelas && <p className="text-sm font-black text-red-600 mt-1 uppercase tracking-tighter">{p.kelas}</p>}</div>))}</div></div></div>{deleteConfig.show && <DeleteConfirmModal />}</div>);
 
             if (view === 'my_barcode') {
                 const p = participants.find(item => item.nama.toLowerCase() === safeUser.nama.toLowerCase());
                 const qrId = p ? p.id : safeUser.username;
                 const qrUrl = generateQRUrl(qrId);
-
                 return (
                     <div className="min-h-screen bg-indigo-600 p-4 flex flex-col items-center justify-center relative">
                         <button onClick={handleBackToMenu} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
