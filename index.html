@@ -432,6 +432,30 @@
                 } else { alert("Password Salah! Reset Database Dibatalkan."); }
             };
 
+            const handleClearSessionData = async () => {
+                if (!selectedSession) return;
+                const sessionName = getSessionName(selectedSession);
+                const confirmMsg = `PERINGATAN: Anda akan MENGHAPUS SEMUA data kehadiran untuk:\n\n"${sessionName}"\n\nTindakan ini tidak bisa dibatalkan. Lanjutkan?`;
+                if (!window.confirm(confirmMsg)) return;
+
+                const db = window.db; 
+                const { collection, getDocs, deleteDoc } = window.fs;
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
+                const collectionRef = collection(db, `artifacts/${appId}/public/data/attendance_${selectedSession}`);
+
+                try {
+                    const snapshot = await getDocs(collectionRef);
+                    if (snapshot.empty) return alert("Data sudah kosong.");
+                    
+                    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                    await Promise.all(deletePromises);
+                    alert("Laporan kehadiran berhasil dihapus (dikosongkan).");
+                } catch (e) {
+                    console.error(e);
+                    alert("Gagal menghapus data: " + e.message);
+                }
+            };
+
             // --- EXPORT FUNCTIONS (EXCEL & PDF) ---
             const handleExportExcel = () => {
                 if (!selectedSession || attendance.length === 0) return alert("Tidak ada data untuk diexport.");
@@ -1154,7 +1178,7 @@
                         <div className="bg-white rounded-xl shadow overflow-hidden">
                             <div className="p-4 border-b bg-amber-50">
                                 <div className="flex justify-between items-center mb-3">
-                                    <h2 className="font-bold text-amber-800 flex items-center gap-2"><i data-lucide="clipboard-list"></i> Data Kehadiran</h2>
+                                    <h2 className="font-bold text-amber-800 flex items-center gap-2"><i data-lucide="clipboard-list"></i> Laporan Live</h2>
                                     <span className="bg-red-100 text-red-600 text-[10px] font-black px-2 py-1 rounded-full flex items-center gap-1 animate-pulse border border-red-200">
                                         <div className="w-2 h-2 bg-red-500 rounded-full"></div> LIVE
                                     </span>
@@ -1179,6 +1203,11 @@
                                         <button onClick={handleExportPDF} className="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-2 rounded-lg font-bold flex justify-center gap-1 items-center transition shadow-sm">
                                             <i data-lucide="file-text" width="14"></i> EXPORT PDF
                                         </button>
+                                        {(isAdmin || isPanitia) && (
+                                            <button onClick={handleClearSessionData} className="w-full bg-red-100 hover:bg-red-200 text-red-600 text-xs px-3 py-2 rounded-lg font-bold flex justify-center gap-1 items-center transition shadow-sm border border-red-200">
+                                                <i data-lucide="trash-2" width="14"></i> HAPUS SEMUA DATA (RESET)
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
