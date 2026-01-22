@@ -48,13 +48,11 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         
-        // --- KONFIGURASI FIREBASE ---
         let firebaseConfig;
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             } else {
-                // Konfigurasi Default (Fallback)
                 firebaseConfig = {
                     apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
                     authDomain: "asggkpstgr.firebaseapp.com",
@@ -84,9 +82,7 @@
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
         
-        // --- KOMPONEN MODAL ---
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
-            React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
             if (!config.show) return null;
             return (
                 <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
@@ -123,7 +119,6 @@
             const [adminResetConfig, setAdminResetConfig] = useState({ show: false, user: null, newPass: '' });
             const [notification, setNotification] = useState(null);
             
-            // Broadcast State
             const [activeBroadcast, setActiveBroadcast] = useState(null);
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
@@ -147,6 +142,11 @@
 
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             
+            // --- FIX PENTING: RELOAD ICONS SETIAP RENDER ---
+            useEffect(() => { 
+                try { if(window.lucide) window.lucide.createIcons(); } catch(e){} 
+            });
+
             const setView = (newView) => {
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
@@ -164,7 +164,6 @@
                 currentUser ? setViewRaw('menu') : setViewRaw('login');
             };
 
-            // --- AUTH & SYNC ---
             useEffect(() => {
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth } = window;
@@ -186,7 +185,6 @@
                 initAuth();
                 const savedUser = localStorage.getItem('gkps_user');
                 if (savedUser) { try { setCurrentUser(JSON.parse(savedUser)); setViewRaw('menu'); } catch(e){} }
-                setTimeout(() => { try { lucide.createIcons(); } catch(e){} }, 100);
             }, []);
 
             useEffect(() => {
@@ -203,10 +201,7 @@
                 }, (err) => console.error("Users Sync Error", err));
 
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())));
-                
-                // Sync Theme (Bahan Ajar)
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null), (err) => console.error("Theme Sync Error", err));
-
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
@@ -496,7 +491,7 @@
             };
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
             
-            // --- THEME / BAHAN AJAR HANDLERS (Dikembalikan & Ditambah fitur Delete) ---
+            // --- THEME / BAHAN AJAR HANDLERS ---
             const handleAddWeek = () => {
                 setEditThemeForm({
                     ...editThemeForm,
@@ -504,11 +499,13 @@
                 });
             };
             
-            // FITUR DELETE MINGGU (BARU)
+            // FITUR DELETE MINGGU
             const handleRemoveWeek = (index) => {
-                const newWeeks = [...editThemeForm.weeks];
-                newWeeks.splice(index, 1);
-                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+                if(confirm("Yakin hapus materi minggu ini?")) {
+                    const newWeeks = [...editThemeForm.weeks];
+                    newWeeks.splice(index, 1);
+                    setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+                }
             };
 
             const handleWeekChange = (index, field, value) => {
@@ -519,14 +516,11 @@
 
             const handleSaveTheme = () => {
                 if(!editThemeForm.title) return alert("Mohon isi judul bahan ajar!");
-                // Validasi opsional: if(editThemeForm.weeks.length === 0) return alert("Tambahkan minimal 1 minggu!");
                 saveToCloud('theme/current', editThemeForm);
                 alert("Bahan Ajar berhasil diupdate!");
                 handleBackToMenu();
             };
             
-            // -------------------------------------------------------------
-
             // --- GLOBAL VARIABLES ---
             const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
             const isAdmin = safeUser.role === 'admin';
@@ -576,7 +570,6 @@
             if (view === 'menu') {
                 const currentTheme = themeData || defaultTheme;
                 let displayWeeks = currentTheme.weeks || [];
-                // Fallback structure check
                 if (!Array.isArray(displayWeeks)) displayWeeks = [];
                 const gridCols = displayWeeks.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
 
@@ -598,7 +591,7 @@
                         </div>
 
                         <div className="p-6 pb-0">
-                            {/* --- KARTU BAHAN AJAR (DIKEMBALIKAN) --- */}
+                            {/* --- KARTU BAHAN AJAR --- */}
                             <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
                                 <div className="relative z-10">
@@ -666,7 +659,7 @@
             );
             }
             
-            // --- TAMPILAN EDIT BAHAN AJAR (DIKEMBALIKAN & DITAMBAHKAN DELETE) ---
+            // --- TAMPILAN EDIT BAHAN AJAR ---
             if (view === 'edit_theme') return (
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
@@ -685,8 +678,8 @@
                         <div className="space-y-4">
                             {editThemeForm.weeks.map((week, index) => (
                                 <div key={index} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 relative group">
-                                    {/* TOMBOL DELETE MINGGU (FITUR BARU) */}
-                                    <button onClick={() => handleRemoveWeek(index)} className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition" title="Hapus Minggu Ini"><i data-lucide="trash-2" width="18"></i></button>
+                                    {/* --- TOMBOL DELETE DIPERJELAS (MERAH & BOX) --- */}
+                                    <button onClick={() => handleRemoveWeek(index)} className="absolute top-4 right-4 bg-rose-100 hover:bg-rose-200 text-rose-500 p-2 rounded-xl transition shadow-sm" title="Hapus Minggu Ini"><i data-lucide="trash-2" width="18"></i></button>
                                
                                     <h3 className="font-black text-indigo-500 text-sm uppercase tracking-widest mb-4">Minggu ke-{index + 1}</h3>
                                     
@@ -724,7 +717,6 @@
                     </div>
                 </div>
             );
-            // -------------------------------------------------------------
 
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
