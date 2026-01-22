@@ -525,16 +525,7 @@
                 handleBackToMenu();
             };
             
-            // FITUR DELETE/RESET SELURUH TEMA (BARU)
-            const handleDeleteTheme = () => {
-                if(confirm("Yakin ingin menghapus SELURUH bahan ajar?")) {
-                     const emptyTheme = { title: "Judul Baru", weeks: [] };
-                     saveToCloud('theme/current', emptyTheme);
-                     alert("Bahan Ajar telah direset.");
-                     setEditThemeForm(emptyTheme);
-                }
-            };
-            // -----------------------------------------------------------------------
+            // -------------------------------------------------------------
 
             // --- GLOBAL VARIABLES ---
             const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
@@ -729,8 +720,6 @@
 
                         <div className="sticky bottom-4 mt-6 space-y-2">
                             <button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button>
-                            {/* TOMBOL DELETE/RESET TOTAL (FITUR BARU) */}
-                            <button onClick={handleDeleteTheme} className="w-full btn-playful bg-rose-100 text-rose-500 border-rose-200 py-3 rounded-2xl font-bold text-sm">HAPUS/RESET SEMUA</button>
                         </div>
                     </div>
                 </div>
@@ -773,8 +762,6 @@
                     {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
                 </div>
             );
-
-            if (view === 'generate') return (<div key="view-generate" className="min-h-screen bg-slate-100 p-4"><div className="max-w-md mx-auto"><button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button><div className="bg-white rounded-xl shadow p-6"><h2 className="font-bold text-xl mb-6 text-indigo-800 flex items-center gap-2"><i data-lucide="users"></i> Data Peserta</h2><div className="mb-6 space-y-4"><div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition"><input type="file" accept=".csv" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" /><i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i><span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span><span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span></div><button onClick={() => setShowAddForm(!showAddForm)} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 py-2 rounded transition">+ Input Manual</button>{showAddForm && (<div className="bg-slate-50 p-4 rounded border animate-bounce-in"><h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ? 'Edit Peserta' : 'Tambah Peserta'}</h3><input className="w-full p-2 border rounded mb-2" placeholder="Nama Lengkap" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} /><select className="w-full p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}><option>Anak Sekolah Minggu</option><option>GSM</option><option>Panitia</option><option>Umum</option><option>Kelas</option> </select><select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}><option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}</select><div className="flex gap-2"><button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>{editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}</div></div>)}</div>{participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}<div className="grid grid-cols-2 gap-3">{participants.map(p => (<div key={p.id} className={`border p-3 rounded text-center bg-white shadow-sm hover:shadow-md transition relative ${editingId === p.id ? 'border-amber-400 bg-amber-50' : ''}`}><div className="absolute top-2 right-2 flex gap-1"><button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button><button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button><button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100"><i data-lucide="trash-2" width="12"></i></button></div><img src={generateQRUrl(p.id)} className="w-24 mx-auto mb-2 mix-blend-multiply cursor-pointer hover:scale-110 transition-transform duration-200 border-2 border-transparent hover:border-indigo-200 rounded-lg p-1" loading="lazy" onClick={() => downloadSingleQR(p)} title="Klik untuk download QR" /><p className="font-bold text-xs truncate text-slate-800">{p.nama}</p><p className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 inline-block mt-1">{p.kategori}</p>{p.kelas && <p className="text-sm font-black text-red-600 mt-1 uppercase tracking-tighter">{p.kelas}</p>}</div>))}</div></div></div>{deleteConfig.show && <DeleteConfirmModal />}</div>);
 
             if (view === 'my_barcode') {
                 const p = participants.find(item => item.nama.toLowerCase() === safeUser.nama.toLowerCase());
