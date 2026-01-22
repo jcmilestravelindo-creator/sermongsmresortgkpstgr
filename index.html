@@ -414,7 +414,7 @@
             
             const handleResetAllData = async () => {
                 if (!currentUser) return;
-                const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA & ABSENSI secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
+                const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
                 if (confirmPass === null) return;
                 if (confirmPass === currentUser.password) {
                     const db = window.db; const { collection, getDocs, deleteDoc } = window.fs;
@@ -426,10 +426,45 @@
                     };
                     try {
                         await clearCollection('participants');
-                        for (const s of sessions) { await clearCollection(`attendance_${s.id}`); }
-                        alert("DATABASE BERHASIL DIRESET KE NOL (KOSONG).");
+                        // Note: Attendance is usually tied to sessions, but if we reset participants we might want to clear attendance too.
+                        // However, let's keep this focused on participants as requested by the name.
+                        alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
                     } catch(e) { alert("Gagal reset: " + e.message); }
                 } else { alert("Password Salah! Reset Database Dibatalkan."); }
+            };
+
+            const handleResetEvents = async () => {
+                if (!currentUser) return;
+                const confirmPass = prompt(`PERINGATAN: Fitur ini akan MENGHAPUS:\n- Semua Sesi Kegiatan & Absensinya\n- Semua Jadwal (Rundown)\n- Semua Jadwal Broadcast\n- Mereset Bahan Ajar (Sermon) ke Default\n\nData Peserta TIDAK akan dihapus.\n\nMasukkan Password (${currentUser.username}) untuk konfirmasi:`);
+                if (confirmPass === null) return;
+                if (confirmPass === currentUser.password) {
+                    const db = window.db; 
+                    const { collection, getDocs, deleteDoc, doc, setDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    
+                    const clearCollection = async (collName) => {
+                        const snapshot = await getDocs(collection(db, `${basePath}/${collName}`));
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+                    };
+
+                    try {
+                        // 1. Hapus Absensi per Sesi (harus sebelum hapus sesi agar ID-nya ada)
+                        for (const s of sessions) { 
+                            await clearCollection(`attendance_${s.id}`); 
+                        }
+                        
+                        // 2. Hapus Collection Utama
+                        await clearCollection('sessions');
+                        await clearCollection('rundown');
+                        await clearCollection('announcements_scheduled');
+                        
+                        // 3. Reset Tema / Sermon (Overwrite)
+                        await setDoc(doc(db, `${basePath}/theme`, 'current'), defaultTheme);
+
+                        alert("BERHASIL: Semua Sesi, Jadwal, dan Bahan Ajar telah di-reset bersih.");
+                    } catch(e) { alert("Gagal reset: " + e.message); }
+                } else { alert("Password Salah!"); }
             };
 
             const handleClearSessionData = async () => {
@@ -997,7 +1032,19 @@
                                     {isAdmin && (<button onClick={() => setView('generate')} className="w-full btn-playful btn-white border-b-4 mb-3 p-3 rounded-xl flex items-center gap-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><i data-lucide="database" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold text-slate-700">Database Peserta</h3></div></button>)}
                                     <button onClick={() => setView('scan')} className="w-full btn-playful bg-slate-800 text-white border-b-4 border-slate-950 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3"><div className="bg-white/20 p-2 rounded-lg"><i data-lucide="camera" width="20"></i></div><div className="text-left"><h3 className="font-bold">Mulai Scan Absensi</h3><p className="text-[10px] text-slate-400">Mode Kamera</p></div></button>
                                     <button onClick={() => setView('report')} className="w-full btn-playful btn-yellow border-b-4 border-amber-600 p-3 rounded-xl flex items-center gap-3 shadow-sm"><div className="bg-white/20 p-2 rounded-lg"><i data-lucide="file-spreadsheet" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold">Laporan Kehadiran</h3></div></button>
-                                    {isAdmin && (<button onClick={handleResetAllData} className="w-full mt-4 btn-playful bg-rose-100 text-rose-600 border-b-4 border-rose-200 hover:bg-rose-200 p-3 rounded-xl flex items-center justify-center gap-2"><i data-lucide="alert-octagon" width="14"></i><span className="font-black text-[10px]">RESET DATABASE</span></button>)}
+                                    
+                                    {isAdmin && (
+                                        <div className="mt-4 pt-4 border-t border-dashed border-slate-300 space-y-2">
+                                            <button onClick={handleResetEvents} className="w-full btn-playful bg-orange-100 text-orange-600 border-b-4 border-orange-200 hover:bg-orange-200 p-3 rounded-xl flex items-center justify-center gap-2">
+                                                <i data-lucide="calendar-x" width="14"></i>
+                                                <span className="font-black text-[10px]">RESET SESI & JADWAL</span>
+                                            </button>
+                                            <button onClick={handleResetAllData} className="w-full btn-playful bg-rose-100 text-rose-600 border-b-4 border-rose-200 hover:bg-rose-200 p-3 rounded-xl flex items-center justify-center gap-2">
+                                                <i data-lucide="users" width="14"></i>
+                                                <span className="font-black text-[10px]">RESET DATA PESERTA</span>
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <button onClick={() => setView('change_password')} className="w-full py-3 text-slate-400 text-xs font-bold hover:text-slate-600 transition flex items-center justify-center gap-2"><i data-lucide="lock" width="12"></i> Ganti Password Saya</button>
