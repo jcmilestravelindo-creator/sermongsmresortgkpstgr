@@ -43,11 +43,12 @@
         .bell-ring { animation: ring 4s ease-in-out infinite; transform-origin: 50% 0%; }
         @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(30deg); } 30% { transform: rotate(-28deg); } 50% { transform: rotate(34deg); } 70% { transform: rotate(-32deg); } 90% { transform: rotate(30deg); } 100% { transform: rotate(0); } }
         
-        /* Scanner Styles */
-        #reader { border: none !important; border-radius: 20px; overflow: hidden; }
-        #reader__scan_region img { display: none; }
-        #reader__dashboard_section_csr button { background-color: #4F46E5; color: white; border-radius: 12px; padding: 12px 20px; border: none; font-weight: bold; margin-top: 15px; cursor: pointer; width: 100%; box-shadow: 0 4px 0 #3730A3; transition: all 0.2s; }
-        #reader__dashboard_section_csr button:active { transform: translateY(4px); box-shadow: none; }
+        /* Scanner UI Fixes */
+        #reader { width: 100%; border-radius: 20px; overflow: hidden; background: black; min-height: 300px; }
+        #reader video { object-fit: cover; border-radius: 20px; }
+        #reader__scan_region img { display: none; } 
+        /* Sembunyikan tombol bawaan library yang mengganggu */
+        #reader__dashboard_section_csr span, #reader__dashboard_section_swaplink { display: none !important; }
     </style>
 
     <script type="module">
@@ -55,13 +56,11 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         
-        // --- KONFIGURASI FIREBASE ---
         let firebaseConfig;
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             } else {
-                // Konfigurasi Default (Fallback)
                 firebaseConfig = {
                     apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
                     authDomain: "asggkpstgr.firebaseapp.com",
@@ -91,7 +90,6 @@
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
         
-        // --- KOMPONEN MODAL ---
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
             if (!config.show) return null;
@@ -120,6 +118,7 @@
             // Scanner State
             const [scanResult, setScanResult] = useState(null);
             const scannerRef = useRef(null);
+            const isScanning = useRef(false);
 
             // State Bahan Ajar (Theme)
             const [themeData, setThemeData] = useState(null);
@@ -134,7 +133,6 @@
             const [adminResetConfig, setAdminResetConfig] = useState({ show: false, user: null, newPass: '' });
             const [notification, setNotification] = useState(null);
             
-            // Broadcast State
             const [activeBroadcast, setActiveBroadcast] = useState(null);
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
@@ -158,7 +156,6 @@
 
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             
-            // --- FIX PENTING: RELOAD ICONS SETIAP RENDER ---
             useEffect(() => { 
                 try { if(window.lucide) window.lucide.createIcons(); } catch(e){} 
             });
@@ -172,7 +169,7 @@
                 setIsLogoutModalOpen(false); setIsInstallModalOpen(false);
                 setDeleteConfig({ show: false, path: null });
                 setAdminResetConfig({ show: false, user: null, newPass: '' });
-                setScanResult(null); // Reset scan result
+                setScanResult(null); 
                 setViewRaw(newView);
             };
 
@@ -181,7 +178,6 @@
                 currentUser ? setViewRaw('menu') : setViewRaw('login');
             };
 
-            // --- AUTH & SYNC ---
             useEffect(() => {
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth } = window;
@@ -219,10 +215,7 @@
                 }, (err) => console.error("Users Sync Error", err));
 
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())));
-                
-                // Sync Theme (Bahan Ajar)
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null), (err) => console.error("Theme Sync Error", err));
-
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
@@ -291,7 +284,7 @@
                 } else { alert("Password Salah! Reset Database Dibatalkan."); }
             };
 
-            // --- SCANNER LOGIC (RESTORED) ---
+            // --- PERBAIKAN LOGIKA SCANNER ---
             useEffect(() => { 
                 if (view === 'scan' && !scanResult) { 
                     setTimeout(startScanner, 300); 
@@ -300,18 +293,41 @@
             }, [view, scanResult]);
 
             const startScanner = () => { 
+                if (isScanning.current) return;
                 if (scannerRef.current) scannerRef.current.clear().catch(()=>{}); 
-                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250, aspectRatio: 1.0 }, false);
-                scanner.render((decodedText) => { handleScanSuccess(decodedText); scanner.clear(); }, (error) => {}); 
+                
+                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 }, false);
+                
+                scanner.render((decodedText) => { 
+                    // 1. LOGIKA UTAMA: Tangani sukses dulu, baru stop scanner
+                    handleScanSuccess(decodedText);
+                    
+                    // 2. Stop scanner dengan aman agar tidak crash
+                    scanner.clear().then(() => {
+                        isScanning.current = false;
+                        scannerRef.current = null;
+                    }).catch((err) => {
+                        console.error("Failed to clear scanner", err);
+                    });
+                }, (error) => {}); 
+                
                 scannerRef.current = scanner; 
+                isScanning.current = true;
             };
 
             const stopScanner = () => { 
-                if (scannerRef.current) { try { scannerRef.current.clear(); } catch(e){} scannerRef.current = null; } 
+                if (scannerRef.current) { 
+                    try { 
+                        scannerRef.current.clear().catch(err => console.log(err)); 
+                    } catch(e){} 
+                    scannerRef.current = null; 
+                    isScanning.current = false;
+                } 
             };
 
             const handleScanSuccess = (qrId) => {
                 const p = participants.find(item => item.id === qrId);
+                // Kita set state DULU agar UI muncul, walaupun scanner belum fully stopped
                 if (p) {
                     setScanResult({ success: true, msg: `✅ DITEMUKAN: ${p.nama}`, p: p });
                     playNotificationSound();
