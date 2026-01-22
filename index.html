@@ -570,8 +570,13 @@
 
             // 4. LOGIC RESET PASSWORD ADMIN (Menu Lupa Password)
             const handleResetPassword = () => {
-                // Token 'GKPS2026' adalah hardcoded token untuk reset darurat
-                if (resetForm.token !== 'GKPS2026') return alert("Kode Otorisasi Salah!");
+                // PERBAIKAN: Gunakan trim() untuk menghapus spasi yang tidak sengaja terbawa
+                // Token tetap: GKPS2026
+                if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
+                    playErrorSound();
+                    return alert("Kode Otorisasi Salah! Pastikan kode adalah: GKPS2026 (Huruf Besar Semua)");
+                }
+
                 if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
                 
                 // Cari user admin dan update
@@ -583,6 +588,8 @@
                 }).then(() => {
                     alert("Password Admin Berhasil Direset!");
                     setView('login');
+                }).catch((err) => {
+                    alert("Gagal koneksi ke database. Pastikan internet lancar.");
                 });
             };
 
@@ -1010,4 +1017,3 @@
     </script>
 </body>
 </html>
-
