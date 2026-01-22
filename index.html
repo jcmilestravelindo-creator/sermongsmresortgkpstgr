@@ -112,18 +112,17 @@
                 firebaseConfig = JSON.parse(__firebase_config);
             } else {
                 // Fallback for local testing.
-                // PERHATIAN: JIKA DIJALANKAN DI LOKAL (FILE SENDIRI),
-                // ANDA HARUS MENGGANTI NILAI DI BAWAH INI DENGAN CONFIG PROJECT FIREBASE ANDA SENDIRI.
+                // KONFIGURASI DARI USER (asggkpstgr)
                 firebaseConfig = {
-                    apiKey: "AIzaSyCwxpeHLF4aW_DhxZBB6hsShLAMrwFB338",
-                    authDomain: "gsmresortgkpstangerang.firebaseapp.com",
-                    projectId: "gsmresortgkpstangerang",
-                    storageBucket: "gsmresortgkpstangerang.firebasestorage.app",
-                    messagingSenderId: "758354201297",
-                    appId: "1:758354201297:web:bca77ca0024b26f1bd13f0",
-                    measurementId: "G-GZBQBVBXPK"
+                    apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
+                    authDomain: "asggkpstgr.firebaseapp.com",
+                    projectId: "asggkpstgr",
+                    storageBucket: "asggkpstgr.firebasestorage.app",
+                    messagingSenderId: "681951652798",
+                    appId: "1:681951652798:web:aa7344c5e2c376f753a7ef",
+                    measurementId: "G-5P5JQ7KHLE"
                 };
-                console.warn("⚠️ PERINGATAN: Menggunakan konfigurasi Fallback. Jika tidak terhubung, ganti dengan config Firebase Anda.");
+                console.log("✅ Menggunakan konfigurasi Firebase Lokal (asggkpstgr)");
             }
         } catch (e) {
             console.error("Firebase config parse error", e);
