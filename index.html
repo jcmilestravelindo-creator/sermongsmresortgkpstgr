@@ -105,21 +105,39 @@
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
 
         // --- KONFIGURASI FIREBASE ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyCwxpeHLF4aW_DhxZBB6hsShLAMrwFB338",
-            authDomain: "gsmresortgkpstangerang.firebaseapp.com",
-            projectId: "gsmresortgkpstangerang",
-            storageBucket: "gsmresortgkpstangerang.firebasestorage.app",
-            messagingSenderId: "758354201297",
-            appId: "1:758354201297:web:bca77ca0024b26f1bd13f0",
-            measurementId: "G-GZBQBVBXPK"
-        };
+        let firebaseConfig;
+        try {
+            // Use environment config if available (Canvas environment)
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            } else {
+                // Fallback for local testing or if variable is missing
+                firebaseConfig = {
+                    apiKey: "AIzaSyCwxpeHLF4aW_DhxZBB6hsShLAMrwFB338",
+                    authDomain: "gsmresortgkpstangerang.firebaseapp.com",
+                    projectId: "gsmresortgkpstangerang",
+                    storageBucket: "gsmresortgkpstangerang.firebasestorage.app",
+                    messagingSenderId: "758354201297",
+                    appId: "1:758354201297:web:bca77ca0024b26f1bd13f0",
+                    measurementId: "G-GZBQBVBXPK"
+                };
+            }
+        } catch (e) {
+            console.error("Firebase config parse error", e);
+        }
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const analytics = getAnalytics(app);
+        
+        // Initialize Analytics conditionally
+        let analytics;
+        try {
+            analytics = getAnalytics(app);
+        } catch (e) {
+            console.log("Analytics not supported in this environment");
+        }
 
         // EXPOSE FIREBASE TO WINDOW
         window.db = db;
@@ -210,9 +228,12 @@
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
             const scannerRef = useRef(null);
             
+            // --- GLOBAL CONFIG FROM ENVIRONMENT ---
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
+            
             const defaultTheme = {
                 title: "Terpanggil dan siap melayani Tuhan lewat anak-anak",
-                weeks: [ { date: "", topic: "Minggu 1: Kasih", content: "Bahan ajar minggu pertama..." } ]
+                weeks: [ { date: "", topic: "Minggu 1: Kasih", content: "Bahan ajar minggu pertama...", themeVerse: '', memoryVerse: '' } ]
             };
             
             const playFunnySound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(200, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
@@ -246,11 +267,14 @@
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth } = window;
                     try {
+                        // Check if environment provided a custom token (Canvas environment)
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(auth, __initial_auth_token);
                         } else {
+                            // Fallback
                             await signInAnonymously(auth);
                         }
+                        
                         if (auth.currentUser) {
                             setUserAuth(auth.currentUser);
                             setIsConnected(true);
@@ -268,7 +292,8 @@
             useEffect(() => {
                 const db = window.db; const { collection, doc, onSnapshot } = window.fs || {};
                 if (!userAuth || !db || !collection) return;
-                const appId = 'default-gkps-app'; 
+                
+                // Using dynamic appId for paths
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
                 onSnapshot(collection(db, `${publicDataPath}/users`), (snap) => {
@@ -313,21 +338,18 @@
             useEffect(() => {
                 const db = window.db; const { collection, onSnapshot } = window.fs || {};
                 if (!userAuth || !currentUser || !db) return;
-                const appId = 'default-gkps-app';
                 onSnapshot(collection(db, `artifacts/${appId}/public/data/notes_${currentUser.username}`), (snap) => setMyNotes(snap.docs.map(d => d.data()).reverse()));
             }, [currentUser, userAuth]);
 
             useEffect(() => {
                 const db = window.db; const { collection, onSnapshot } = window.fs || {};
                 if (!selectedSession || !db || !userAuth) return;
-                const appId = 'default-gkps-app';
                 onSnapshot(collection(db, `artifacts/${appId}/public/data/attendance_${selectedSession}`), (snap) => setAttendance(snap.docs.map(d => d.data())));
             }, [selectedSession, userAuth]);
 
             const saveToCloud = (path, data) => {
                 const db = window.db; const { doc, setDoc } = window.fs || {};
                 if (!db || !doc) return Promise.reject("Database belum siap");
-                const appId = 'default-gkps-app'; 
                 const basePath = `artifacts/${appId}/public/data`;
                 let finalRef;
                 if (path.startsWith('settings/')) finalRef = doc(db, `${basePath}/settings`, path.split('/')[1]);
@@ -348,7 +370,6 @@
             const deleteFromCloud = (path) => {
                  const db = window.db; const { doc, deleteDoc } = window.fs || {};
                  if (!db) return;
-                 const appId = 'default-gkps-app';
                  const basePath = `artifacts/${appId}/public/data`;
                  let finalRef;
                  if (path.startsWith('announcements/scheduled/')) finalRef = doc(db, `${basePath}/announcements_scheduled`, path.split('/').pop());
@@ -368,7 +389,6 @@
                 if (confirmPass === null) return;
                 if (confirmPass === currentUser.password) {
                     const db = window.db; const { collection, getDocs, deleteDoc } = window.fs;
-                    const appId = 'default-gkps-app'; 
                     const basePath = `artifacts/${appId}/public/data`;
                     const clearCollection = async (collName) => {
                         const snapshot = await getDocs(collection(db, `${basePath}/${collName}`));
@@ -678,6 +698,26 @@
             };
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
             
+            // --- THEME EDIT HANDLERS (NEWLY ADDED) ---
+            const handleAddWeek = () => {
+                setEditThemeForm({
+                    ...editThemeForm,
+                    weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }]
+                });
+            };
+
+            const handleRemoveWeek = (index) => {
+                const newWeeks = [...editThemeForm.weeks];
+                newWeeks.splice(index, 1);
+                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+            };
+
+            const handleWeekChange = (index, field, value) => {
+                const newWeeks = [...editThemeForm.weeks];
+                newWeeks[index][field] = value;
+                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+            };
+
             const handleSaveTheme = () => {
                 if(!editThemeForm.title) return alert("Mohon isi judul bahan ajar!");
                 if(editThemeForm.weeks.length === 0) return alert("Tambahkan minimal 1 minggu!");
@@ -685,6 +725,8 @@
                 alert("Bahan Ajar berhasil diupdate!");
                 handleBackToMenu();
             };
+            // ----------------------------------------
+
             const handleSaveNote = () => {
                 if (!noteForm.title || !noteForm.content) return alert("Judul dan Isi Catatan tidak boleh kosong!");
                 const id = noteForm.id || `NOTE-${Date.now()}`;
@@ -750,6 +792,7 @@
                 let displayWeeks = currentTheme.weeks;
                 if (!displayWeeks || !Array.isArray(displayWeeks)) {
                     displayWeeks = [];
+                    // Fallback for old data structure
                     if (currentTheme.verseRef) displayWeeks.push({ date: '', topic: currentTheme.verseRef, content: currentTheme.verseText, themeVerse: '', memoryVerse: '' });
                     if (currentTheme.week2Title) displayWeeks.push({ date: '', topic: currentTheme.week2Title, content: currentTheme.week2Content, themeVerse: '', memoryVerse: '' });
                 }
@@ -793,7 +836,7 @@
                                     </div>
                                 </div>
                                 {(isAdmin || isPanitia) && (
-                                    <button onClick={() => setView('edit_theme')} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
+                                    <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
                                 )}
                             </div>
                         </div>
@@ -844,6 +887,64 @@
                 </div>
             );
             }
+            
+            // --- INI ADALAH BAGIAN YANG SEBELUMNYA HILANG: FORM EDIT TEMA ---
+            if (view === 'edit_theme') return (
+                <div className="min-h-screen bg-slate-50 p-4 pb-20">
+                    <div className="max-w-md mx-auto">
+                        <div className="flex items-center justify-between mb-6">
+                            <button onClick={handleBackToMenu} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                            <h2 className="font-black text-xl text-slate-700">Edit Bahan Ajar</h2>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 space-y-4 mb-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Judul Besar / Tema Bulanan</label>
+                                <input className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" value={editThemeForm.title} onChange={e => setEditThemeForm({...editThemeForm, title: e.target.value})} placeholder="Contoh: Kasih Allah..." />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {editThemeForm.weeks.map((week, index) => (
+                                <div key={index} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 relative group">
+                                    <button onClick={() => handleRemoveWeek(index)} className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" width="18"></i></button>
+                                    <h3 className="font-black text-indigo-500 text-sm uppercase tracking-widest mb-4">Minggu ke-{index + 1}</h3>
+                                    
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Tanggal (Opsional)</label>
+                                            <input type="date" className="w-full p-2 border rounded-lg font-bold text-slate-600 text-sm" value={week.date} onChange={e => handleWeekChange(index, 'date', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Topik / Judul Minggu Ini</label>
+                                            <input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.topic} onChange={e => handleWeekChange(index, 'topic', e.target.value)} placeholder="Contoh: Minggu 1: Ketaatan" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Tema (Singkat)</label>
+                                            <input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Hafalan (Isi Lengkap)</label>
+                                            <textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-xs h-16" value={week.memoryVerse} onChange={e => handleWeekChange(index, 'memoryVerse', e.target.value)} placeholder="Tulis ayat hafalan disini..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label>
+                                            <textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
+
+                        <div className="sticky bottom-4 mt-6">
+                            <button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button>
+                        </div>
+                    </div>
+                </div>
+            );
+            // -----------------------------------------------------------------
 
             if (view === 'manual_checkin') {
                 const isCheckInOpen = checkInStatus && checkInStatus.isOpen === true;
@@ -879,13 +980,13 @@
                                 </div>
                                 {(isAdmin || isPanitia) && (
                                     <div className="bg-slate-100 p-4 rounded-xl mb-6 border-2 border-slate-200">
-                                        <p className="text-xs font-bold text-slate-500 uppercase mb-2">Kontrol Admin</p>
-                                        <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
-                                            <span className="font-bold text-slate-700 text-sm">Status Akses:</span>
-                                            <span className={`text-xs font-black px-3 py-1 rounded-lg border ${isCheckInOpen ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-rose-100 text-rose-600 border-rose-200'}`}>{isCheckInOpen ? 'DIBUKA (OPEN)' : 'DITUTUP (CLOSED)'}</span>
-                                        </div>
-                                        <button onClick={toggleCheckIn} className={`w-full mt-3 py-3 rounded-xl font-black text-white text-sm transition shadow-md active:scale-95 ${isCheckInOpen ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-200' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200'}`}>{isCheckInOpen ? 'Tutup Akses Check In' : 'Buka Akses Check In'}</button>
-                                        <p className="text-[10px] text-slate-400 mt-2 italic text-center">Tombol ini hanya terlihat oleh Admin/Panitia</p>
+                                            <p className="text-xs font-bold text-slate-500 uppercase mb-2">Kontrol Admin</p>
+                                            <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                                                <span className="font-bold text-slate-700 text-sm">Status Akses:</span>
+                                                <span className={`text-xs font-black px-3 py-1 rounded-lg border ${isCheckInOpen ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-rose-100 text-rose-600 border-rose-200'}`}>{isCheckInOpen ? 'DIBUKA (OPEN)' : 'DITUTUP (CLOSED)'}</span>
+                                            </div>
+                                            <button onClick={toggleCheckIn} className={`w-full mt-3 py-3 rounded-xl font-black text-white text-sm transition shadow-md active:scale-95 ${isCheckInOpen ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-200' : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200'}`}>{isCheckInOpen ? 'Tutup Akses Check In' : 'Buka Akses Check In'}</button>
+                                            <p className="text-[10px] text-slate-400 mt-2 italic text-center">Tombol ini hanya terlihat oleh Admin/Panitia</p>
                                     </div>
                                 )}
                                 <div className="text-left">
