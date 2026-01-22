@@ -111,7 +111,9 @@
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             } else {
-                // Fallback for local testing or if variable is missing
+                // Fallback for local testing.
+                // PERHATIAN: JIKA DIJALANKAN DI LOKAL (FILE SENDIRI),
+                // ANDA HARUS MENGGANTI NILAI DI BAWAH INI DENGAN CONFIG PROJECT FIREBASE ANDA SENDIRI.
                 firebaseConfig = {
                     apiKey: "AIzaSyCwxpeHLF4aW_DhxZBB6hsShLAMrwFB338",
                     authDomain: "gsmresortgkpstangerang.firebaseapp.com",
@@ -121,6 +123,7 @@
                     appId: "1:758354201297:web:bca77ca0024b26f1bd13f0",
                     measurementId: "G-GZBQBVBXPK"
                 };
+                console.warn("⚠️ PERINGATAN: Menggunakan konfigurasi Fallback. Jika tidak terhubung, ganti dengan config Firebase Anda.");
             }
         } catch (e) {
             console.error("Firebase config parse error", e);
@@ -224,6 +227,7 @@
             
             const [checkInStatus, setCheckInStatus] = useState({ isOpen: false });
             const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
+            const [connectionError, setConnectionError] = useState(null);
 
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
             const scannerRef = useRef(null);
@@ -281,6 +285,7 @@
                         }
                     } catch (error) {
                         console.error("Auth Error:", error);
+                        setConnectionError(error.message);
                     }
                 };
                 initAuth();
@@ -296,26 +301,29 @@
                 // Using dynamic appId for paths
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
-                onSnapshot(collection(db, `${publicDataPath}/users`), (snap) => {
+                const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), (snap) => {
                     const loadedUsers = snap.docs.map(d => d.data());
                     if (loadedUsers.length === 0) {
                         saveToCloud(`users/admin`, { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' });
                     } else { setUsers(loadedUsers); }
-                });
-                onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null));
-                onSnapshot(doc(db, `${publicDataPath}/settings`, 'manualCheckIn'), (snap) => setCheckInStatus(snap.exists() ? snap.data() : { isOpen: false }));
-                onSnapshot(collection(db, `${publicDataPath}/sessions`), (snap) => {
+                }, (err) => console.error("Users Sync Error", err));
+
+                const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null), (err) => console.error("Theme Sync Error", err));
+                const unsubscribeSettings = onSnapshot(doc(db, `${publicDataPath}/settings`, 'manualCheckIn'), (snap) => setCheckInStatus(snap.exists() ? snap.data() : { isOpen: false }), (err) => console.error("Settings Sync Error", err));
+                
+                const unsubscribeSessions = onSnapshot(collection(db, `${publicDataPath}/sessions`), (snap) => {
                     const data = snap.docs.map(d => d.data());
                     const sorted = data.sort((a,b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
                     setSessions(sorted);
                     if (!selectedSession && sorted.length > 0) setSelectedSession(sorted[0].id);
                 });
-                onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())));
-                onSnapshot(collection(db, `${publicDataPath}/rundown`), (snap) => {
+                
+                const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())));
+                const unsubscribeRundown = onSnapshot(collection(db, `${publicDataPath}/rundown`), (snap) => {
                     const data = snap.docs.map(d => d.data());
                     setRundown(data.sort((a,b) => (a.time || '').localeCompare(b.time || '')));
                 });
-                onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
+                const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
                         if (data.title && data.title.toLowerCase().includes('quizz')) return;
@@ -331,20 +339,27 @@
                         }
                     }
                 });
-                onSnapshot(collection(db, `${publicDataPath}/announcements_scheduled`), (snap) => setScheduledBroadcasts(snap.docs.map(d => d.data())));
-                onSnapshot(collection(db, `${publicDataPath}/messages`), (snap) => setMessages(snap.docs.map(d => d.data()).reverse()));
+                const unsubscribeScheduled = onSnapshot(collection(db, `${publicDataPath}/announcements_scheduled`), (snap) => setScheduledBroadcasts(snap.docs.map(d => d.data())));
+                const unsubscribeMessages = onSnapshot(collection(db, `${publicDataPath}/messages`), (snap) => setMessages(snap.docs.map(d => d.data()).reverse()));
+
+                return () => {
+                    unsubscribeUsers(); unsubscribeTheme(); unsubscribeSettings(); unsubscribeSessions();
+                    unsubscribeParticipants(); unsubscribeRundown(); unsubscribeAnnouncements(); unsubscribeScheduled(); unsubscribeMessages();
+                };
             }, [userAuth]);
 
             useEffect(() => {
                 const db = window.db; const { collection, onSnapshot } = window.fs || {};
                 if (!userAuth || !currentUser || !db) return;
-                onSnapshot(collection(db, `artifacts/${appId}/public/data/notes_${currentUser.username}`), (snap) => setMyNotes(snap.docs.map(d => d.data()).reverse()));
+                const unsubscribeNotes = onSnapshot(collection(db, `artifacts/${appId}/public/data/notes_${currentUser.username}`), (snap) => setMyNotes(snap.docs.map(d => d.data()).reverse()));
+                return () => unsubscribeNotes();
             }, [currentUser, userAuth]);
 
             useEffect(() => {
                 const db = window.db; const { collection, onSnapshot } = window.fs || {};
                 if (!selectedSession || !db || !userAuth) return;
-                onSnapshot(collection(db, `artifacts/${appId}/public/data/attendance_${selectedSession}`), (snap) => setAttendance(snap.docs.map(d => d.data())));
+                const unsubscribeAttendance = onSnapshot(collection(db, `artifacts/${appId}/public/data/attendance_${selectedSession}`), (snap) => setAttendance(snap.docs.map(d => d.data())));
+                return () => unsubscribeAttendance();
             }, [selectedSession, userAuth]);
 
             const saveToCloud = (path, data) => {
@@ -1081,15 +1096,40 @@
             }
 
             // --- JARING PENGAMAN (SAFETY NET) ---
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
-                    <div className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-xl">
-                        <div className="animate-spin w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full mx-auto mb-4"></div>
-                        <h1 className="text-xl font-black text-slate-700 mb-1">Memuat...</h1>
-                        <button onClick={() => window.location.reload()} className="text-indigo-500 font-bold text-sm underline">Refresh Halaman</button>
+            if (view === 'login' || !isConnected) {
+                 // Jika error terjadi
+                 if (connectionError) {
+                     return (
+                         <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
+                            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm border-4 border-rose-100">
+                                <div className="text-rose-500 mb-4"><i data-lucide="alert-octagon" width="48" height="48" className="mx-auto"></i></div>
+                                <h2 className="text-xl font-black text-slate-700 mb-2">Gagal Terhubung</h2>
+                                <p className="text-sm text-slate-500 mb-4 font-bold">Koneksi ke Database gagal.</p>
+                                <div className="bg-slate-100 p-3 rounded-xl text-xs text-left mb-4 overflow-auto max-h-32 border border-slate-200">
+                                    <code>{connectionError}</code>
+                                </div>
+                                <p className="text-xs text-slate-400 mb-6">
+                                    <b>Tips:</b> Jika Anda menjalankan file ini secara lokal (offline/file sendiri), Anda <u>wajib</u> mengganti konfigurasi <code>firebaseConfig</code> di dalam kode dengan Project Firebase milik Anda sendiri.
+                                </p>
+                                <button onClick={() => window.location.reload()} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Coba Lagi</button>
+                            </div>
+                         </div>
+                     )
+                 }
+                 // Tampilan Loading Normal
+                 return (
+                    <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
+                        <div className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-xl">
+                            <div className="animate-spin w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <h1 className="text-xl font-black text-slate-700 mb-1">Memuat...</h1>
+                            <button onClick={() => window.location.reload()} className="text-indigo-500 font-bold text-sm underline">Refresh Halaman</button>
+                        </div>
                     </div>
-                </div>
-            );
+                );
+            }
+            
+            // Fallback render (harusnya tidak sampai sini jika view valid)
+            return null;
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -1097,4 +1137,3 @@
     </script>
 </body>
 </html>
-
