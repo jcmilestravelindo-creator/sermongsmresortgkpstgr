@@ -150,16 +150,12 @@
                 return `${year}-${month}-${day}`;
             };
 
-            // --- STATE LIVE ATTENDANCE ---
+            // --- STATE DATA ABSENSI (Hanya untuk Cek Duplikat) ---
             const [liveAttendance, setLiveAttendance] = useState([]);
-            const [attendanceMode, setAttendanceMode] = useState(false); // False = Cek Data, True = Absen Masuk
-
-            // GUNAKAN REF AGAR SCANNER SELALU BACA DATA TERBARU
-            const attendanceModeRef = useRef(attendanceMode);
+            // Kita pakai Ref untuk liveAttendance agar bisa dibaca di dalam Scanner tanpa re-render scanner
             const liveAttendanceRef = useRef(liveAttendance);
 
             // Update Ref setiap kali state berubah
-            useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
 
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
@@ -175,13 +171,12 @@
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
 
-            // --- EFFECT: Sinkronisasi Absensi Realtime ---
+            // --- EFFECT: Sinkronisasi Absensi Realtime (Untuk Cek Duplikat) ---
             useEffect(() => {
                 const db = window.db;
                 const { collection, query, orderBy, onSnapshot } = window.fs || {};
                 if (!userAuth || !db) return;
 
-                // GUNAKAN HELPER BARU
                 const todayStr = getSafeDateId();
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${todayStr}/records`;
                 
@@ -190,7 +185,7 @@
                     const unsubscribe = onSnapshot(q, (snap) => {
                         const data = snap.docs.map(d => d.data());
                         setLiveAttendance(data);
-                    }, (err) => console.log("Belum ada data absen hari ini"));
+                    }, (err) => {});
                     return () => unsubscribe();
                 } catch(e) {}
             }, [userAuth]);
@@ -356,50 +351,43 @@
                 } 
             };
 
-            // --- UPDATE LOGIKA SCANNER UNTUK LIVE ATTENDANCE (FIXED) ---
+            // --- FUNGSI ABSENSI LIVE (ALWAYS ACTIVE) ---
             const handleScanSuccess = (qrId) => {
-                // Gunakan REF untuk membaca mode terkini secara akurat
-                const isModeLive = attendanceModeRef.current;
+                // Ambil data terbaru dari Ref
                 const currentLiveData = liveAttendanceRef.current;
 
                 const p = participants.find(item => item.id === qrId);
                 
                 if (p) {
-                    if (isModeLive) {
-                        const todayStr = getSafeDateId(); // Gunakan format tanggal stabil
-                        
-                        // Cek duplikat menggunakan data dari REF
-                        const alreadyPresent = currentLiveData.find(item => item.id === p.id);
+                    const todayStr = getSafeDateId(); // Gunakan format tanggal stabil
+                    
+                    // Cek duplikat
+                    const alreadyPresent = currentLiveData.find(item => item.id === p.id);
 
-                        if (alreadyPresent) {
-                            setScanResult({ success: false, msg: `⚠️ ${p.nama} SUDAH ABSEN jam ${alreadyPresent.jam}!` });
-                            playErrorSound();
-                        } else {
-                            const now = new Date();
-                            const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-                            const attendanceData = {
-                                id: p.id,
-                                nama: p.nama,
-                                kategori: p.kategori,
-                                kelas: p.kelas || '-',
-                                jam: jam,
-                                timestamp: now.getTime(),
-                                scanner: currentUser.nama
-                            };
-                            
-                            // Debugging di console
-                            console.log("Menyimpan absen:", attendanceData);
-
-                            saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData)
-                                .then(() => console.log("Sukses simpan ke cloud"))
-                                .catch(err => alert("Gagal simpan: " + err.message));
-
-                            setScanResult({ success: true, msg: `✅ ${p.nama} BERHASIL ABSEN!`, p: p, time: jam });
-                            playNotificationSound();
-                        }
+                    if (alreadyPresent) {
+                        setScanResult({ success: false, msg: `⚠️ ${p.nama} SUDAH ABSEN jam ${alreadyPresent.jam}!` });
+                        playErrorSound();
                     } else {
-                        // Mode lama (Hanya Cek)
-                        setScanResult({ success: true, msg: `✅ DITEMUKAN: ${p.nama}`, p: p });
+                        const now = new Date();
+                        const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                        const attendanceData = {
+                            id: p.id,
+                            nama: p.nama,
+                            kategori: p.kategori,
+                            kelas: p.kelas || '-',
+                            jam: jam,
+                            timestamp: now.getTime(),
+                            scanner: currentUser.nama
+                        };
+                        
+                        // Debugging di console
+                        console.log("Menyimpan absen:", attendanceData);
+
+                        saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData)
+                            .then(() => console.log("Sukses simpan ke cloud"))
+                            .catch(err => alert("Gagal simpan: " + err.message));
+
+                        setScanResult({ success: true, msg: `✅ ${p.nama} BERHASIL ABSEN!`, p: p, time: jam });
                         playNotificationSound();
                     }
                 } else {
@@ -758,19 +746,10 @@
                                 <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
                                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
                                     
-                                    {/* TOMBOL SCAN QR LAMA (NON-ABSEN) */}
-                                    <button onClick={() => { setView('scan'); setAttendanceMode(false); }} className="w-full btn-playful bg-slate-800 text-white border-b-4 border-slate-950 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                    {/* TOMBOL SCAN QR (SEKARANG JADI ABSENSI LIVE) */}
+                                    <button onClick={() => setView('scan')} className="w-full btn-playful bg-emerald-500 text-white border-b-4 border-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
-                                        <div className="text-left"><h3 className="font-bold">Scan QR Peserta</h3><p className="text-[10px] text-slate-400">Cek Database (Tanpa Absen)</p></div>
-                                    </button>
-
-                                    {/* TOMBOL BARU: LIVE ATTENDANCE */}
-                                    <button onClick={() => { setView('live_report'); setAttendanceMode(true); }} className="w-full btn-playful bg-emerald-500 text-white border-b-4 border-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
-                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-check" width="20"></i></div>
-                                        <div className="text-left">
-                                            <h3 className="font-bold">Mulai Absensi (Live)</h3>
-                                            <p className="text-[10px] text-emerald-100 opacity-90">Scan & Laporan Kehadiran Realtime</p>
-                                        </div>
+                                        <div className="text-left"><h3 className="font-bold">Scan QR Absensi</h3><p className="text-[10px] text-emerald-100 opacity-90">Scan & Otomatis Simpan Kehadiran</p></div>
                                     </button>
 
                                     <button onClick={() => setView('manage_broadcast')} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-3 rounded-xl flex items-center gap-3 shadow-lg shadow-indigo-200 mb-3">
@@ -804,62 +783,10 @@
             );
             }
             
-            // --- VIEW LIVE REPORT ---
-            if (view === 'live_report') {
-                const totalHadir = liveAttendance.length;
-                return (
-                <div className="min-h-screen bg-slate-50 relative flex flex-col">
-                    {/* Header Sticky */}
-                    <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
-                        <div className="flex items-center justify-between mb-4">
-                             <button onClick={() => { setAttendanceMode(false); handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
-                             <div className="text-right">
-                                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
-                                <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
-                             </div>
-                        </div>
-                        
-                        {/* Tombol Buka Scanner */}
-                        <button onClick={() => setView('scan')} className="w-full btn-playful bg-indigo-600 text-white py-3 rounded-xl font-black text-lg shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 mb-2">
-                            <i data-lucide="scan-line"></i> SCAN QR MASUK
-                        </button>
-                    </div>
-
-                    {/* List Kehadiran */}
-                    <div className="flex-1 p-4 pb-20 overflow-y-auto">
-                        {liveAttendance.length === 0 ? (
-                            <div className="text-center mt-10 opacity-50">
-                                <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
-                                <p className="font-bold text-slate-400 text-sm">Belum ada data absen hari ini.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {liveAttendance.map((item, idx) => (
-                                    <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-bounce-in">
-                                        <div className="bg-emerald-100 text-emerald-600 font-black text-xs p-3 rounded-xl min-w-[60px] text-center">
-                                            {item.jam}
-                                            <span className="block text-[8px] opacity-60 font-normal">WIB</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="font-bold text-slate-800 truncate">{item.nama}</h4>
-                                            <p className="text-xs text-slate-500 font-bold truncate">
-                                                <span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span>
-                                                {item.kelas !== '-' && <span className="bg-orange-50 text-orange-600 px-1.5 rounded">{item.kelas}</span>}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-                );
-            }
-
             // --- TAMPILAN SCANNER ---
             if (view === 'scan') return (
                 <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
-                    <button onClick={() => attendanceMode ? setView('live_report') : handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> {attendanceMode ? 'Lihat Laporan' : 'Kembali'}</button>
+                    <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
                     
                     <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
                         <div id="reader" className="w-full h-auto bg-black"></div>
@@ -888,7 +815,7 @@
                         )}
                     </div>
                     
-                    <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">Arahkan kamera ke QR Code peserta untuk cek data.</p>
+                    <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">Arahkan kamera ke QR Code peserta untuk cek data & simpan kehadiran.</p>
                 </div>
             );
             if (view === 'edit_theme') return (
