@@ -879,7 +879,17 @@
             
             // --- VIEW ATTENDANCE MANAGER (NEW) ---
             if (view === 'attendance_manager') {
-                const filteredParticipants = participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()));
+                // LOGIKA FILTER: 
+                // Jika Peserta: Hanya tampilkan data diri sendiri.
+                // Jika Admin: Cari berdasarkan input.
+                let filteredParticipants = [];
+                if (isPeserta) {
+                    const mySelf = participants.find(p => p.nama.toLowerCase() === safeUser.nama.toLowerCase());
+                    if (mySelf) filteredParticipants = [mySelf];
+                } else {
+                    filteredParticipants = participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()));
+                }
+
                 return (
                     <div className="min-h-screen bg-slate-50 relative">
                         <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
@@ -915,31 +925,40 @@
                                 </div>
                             )}
 
-                            {/* SEARCH MANUAL */}
-                            <input className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700" placeholder="Cari Nama Peserta..." value={filterManual} onChange={e => setFilterManual(e.target.value)} />
+                            {/* SEARCH MANUAL - HANYA ADMIN YANG BUTUH CARI ORANG LAIN */}
+                            {!isPeserta && (
+                                <input className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700" placeholder="Cari Nama Peserta..." value={filterManual} onChange={e => setFilterManual(e.target.value)} />
+                            )}
                         </div>
 
                         <div className="p-4 pb-20 space-y-3">
-                            {filteredParticipants.map(p => {
-                                const statusData = liveAttendance.find(l => l.id === p.id);
-                                return (
-                                    <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-bounce-in">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div>
-                                                <h4 className="font-bold text-slate-800">{p.nama}</h4>
-                                                <p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas || '-'}</p>
+                            {filteredParticipants.length === 0 && isPeserta ? (
+                                <div className="text-center p-8 opacity-50">
+                                    <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
+                                    <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
+                                </div>
+                            ) : (
+                                filteredParticipants.map(p => {
+                                    const statusData = liveAttendance.find(l => l.id === p.id);
+                                    return (
+                                        <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-bounce-in">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <h4 className="font-bold text-slate-800">{p.nama}</h4>
+                                                    <p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas || '-'}</p>
+                                                </div>
+                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ? 'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ? 'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
                                             </div>
-                                            {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ? 'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ? 'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
+                                            <div className="grid grid-cols-4 gap-2">
+                                                <button onClick={() => handleManualAttendance(p, 'Hadir')} className="bg-emerald-50 text-emerald-600 border-b-2 border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold">Hadir</button>
+                                                <button onClick={() => handleManualAttendance(p, 'Izin')} className="bg-orange-50 text-orange-600 border-b-2 border-orange-200 hover:bg-orange-100 py-2 rounded-lg text-xs font-bold">Izin</button>
+                                                <button onClick={() => handleManualAttendance(p, 'Sakit')} className="bg-blue-50 text-blue-600 border-b-2 border-blue-200 hover:bg-blue-100 py-2 rounded-lg text-xs font-bold">Sakit</button>
+                                                <button onClick={() => handleManualAttendance(p, 'Alpha')} className="bg-red-50 text-red-600 border-b-2 border-red-200 hover:bg-red-100 py-2 rounded-lg text-xs font-bold">Alpha</button>
+                                            </div>
                                         </div>
-                                        <div className="grid grid-cols-4 gap-2">
-                                            <button onClick={() => handleManualAttendance(p, 'Hadir')} className="bg-emerald-50 text-emerald-600 border-b-2 border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold">Hadir</button>
-                                            <button onClick={() => handleManualAttendance(p, 'Izin')} className="bg-orange-50 text-orange-600 border-b-2 border-orange-200 hover:bg-orange-100 py-2 rounded-lg text-xs font-bold">Izin</button>
-                                            <button onClick={() => handleManualAttendance(p, 'Sakit')} className="bg-blue-50 text-blue-600 border-b-2 border-blue-200 hover:bg-blue-100 py-2 rounded-lg text-xs font-bold">Sakit</button>
-                                            <button onClick={() => handleManualAttendance(p, 'Alpha')} className="bg-red-50 text-red-600 border-b-2 border-red-200 hover:bg-red-100 py-2 rounded-lg text-xs font-bold">Alpha</button>
-                                        </div>
-                                    </div>
-                                )
-                            })}
+                                    )
+                                })
+                            )}
                         </div>
                     </div>
                 );
