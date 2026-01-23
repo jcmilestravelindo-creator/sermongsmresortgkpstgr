@@ -88,7 +88,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
-        
+
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
             if (!config.show) return null;
@@ -140,14 +140,14 @@
             const [selfPassword, setSelfPassword] = useState('');
             const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
             const [connectionError, setConnectionError] = useState(null);
-
+            
             // --- STATE BARU: Absensi Manual & Config ---
             const [liveAttendance, setLiveAttendance] = useState([]);
             const [attendanceMode, setAttendanceMode] = useState(false); 
             const [sessionConfig, setSessionConfig] = useState({ isOpen: true, autoMode: false, openTime: '07:00', closeTime: '12:00' });
             const [filterManual, setFilterManual] = useState("");
 
-            // Refs (Penting untuk Scanner agar data tidak stale)
+            // Refs
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
             const sessionConfigRef = useRef(sessionConfig);
@@ -155,7 +155,7 @@
             useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
-
+            
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             const defaultTheme = {
@@ -171,14 +171,12 @@
                 const day = String(d.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             };
-
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
                 if (!config.autoMode) return config.isOpen; 
                 
                 const now = new Date();
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
-                
                 const [openH, openM] = config.openTime.split(':').map(Number);
                 const [closeH, closeM] = config.closeTime.split(':').map(Number);
                 
@@ -188,12 +186,16 @@
                 return currentMinutes >= startMinutes && currentMinutes < endMinutes;
             };
 
-            const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
-            const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
+            const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator();
+                const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain);
+                gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
+            const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
             
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
-
+            
             const setView = (newView) => {
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
@@ -232,7 +234,8 @@
                 };
                 initAuth();
                 const savedUser = localStorage.getItem('gkps_user');
-                if (savedUser) { try { setCurrentUser(JSON.parse(savedUser)); setViewRaw('menu'); } catch(e){} }
+                if (savedUser) { try { setCurrentUser(JSON.parse(savedUser));
+                setViewRaw('menu'); } catch(e){} }
             }, []);
 
             useEffect(() => {
@@ -249,7 +252,8 @@
                 }, (err) => console.error("Users Sync Error", err));
 
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())));
-                const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null), (err) => console.error("Theme Sync Error", err));
+                const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ?
+                snap.data() : null), (err) => console.error("Theme Sync Error", err));
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
@@ -266,7 +270,7 @@
                 });
 
                 // Sync Attendance
-                const todayStr = getSafeDateId(); 
+                const todayStr = getSafeDateId();
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${todayStr}/records`;
                 let unsubscribeAttendance = () => {};
                 try {
@@ -343,8 +347,10 @@
                     try {
                         await clearCollection('participants');
                         alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
-                    } catch(e) { alert("Gagal reset: " + e.message); }
-                } else { alert("Password Salah! Reset Database Dibatalkan."); }
+                    } catch(e) { alert("Gagal reset: " + e.message);
+                    }
+                } else { alert("Password Salah! Reset Database Dibatalkan.");
+                }
             };
 
             // --- LOGIKA SCANNER ---
@@ -373,7 +379,8 @@
 
             const stopScanner = () => { 
                 if (scannerRef.current) { 
-                    try { scannerRef.current.clear().catch(err => console.log(err)); } catch(e){} 
+                    try { scannerRef.current.clear().catch(err => console.log(err));
+                    } catch(e){} 
                     scannerRef.current = null;
                     isScanning.current = false;
                 } 
@@ -385,7 +392,6 @@
                 const isOpen = checkSessionStatus();
 
                 const p = participants.find(item => item.id === qrId);
-                
                 if (p) {
                     if (isModeLive) {
                         if (!isOpen) {
@@ -462,6 +468,7 @@
                     </div>
                 </div>
             );
+
             const BroadcastPopup = () => {
                 if (!activeBroadcast || !showBroadcastModal) return null;
                 const isUrgent = activeBroadcast.type === 'urgent';
@@ -498,6 +505,7 @@
                     </div>
                 </div>
             );
+
             const InstallModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-white/50 relative">
@@ -510,7 +518,7 @@
                     </div>
                 </div>
             );
-            
+
             // --- HANDLERS ---
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -553,6 +561,7 @@
                     setDeleteConfig({ show: false, path: null });
                 }
             };
+
             const handleResetPassword = () => {
                 if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
                     playErrorSound();
@@ -575,9 +584,11 @@
                         localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
                         alert("Password Admin Berhasil Direset!"); 
                         setView('menu');
-                    } else { alert("Gagal koneksi: " + err.message); }
+                    } else { alert("Gagal koneksi: " + err.message);
+                    }
                 });
             };
+
             const initiateAdminReset = (u) => setAdminResetConfig({ show: true, user: u, newPass: '' });
             const performAdminReset = () => {
                 if (!adminResetConfig.newPass || adminResetConfig.newPass.length < 3) return alert("Password minimal 3 karakter");
@@ -610,7 +621,8 @@
                 saveToCloud(`participants/${id}`, { id, nama: formData.nama, kategori: formData.kategori, kelas: formData.kelas });
                 setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setEditingId(null); if(editingId) setShowAddForm(false); alert("Tersimpan!");
             };
-            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
             const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
             const downloadSingleQR = async (p) => {
@@ -620,7 +632,8 @@
                     const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
                     link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
                     document.body.appendChild(link); link.click(); document.body.removeChild(link); window.scrollTo(0, scrollPos);
-                } catch (e) { window.open(generateQRUrl(p.id), '_blank'); }
+                } catch (e) { window.open(generateQRUrl(p.id), '_blank');
+                }
             };
             const downloadAllQR = async () => {
                 if (participants.length === 0) return;
@@ -662,7 +675,6 @@
                 setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
             };
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
-            
             // --- THEME / BAHAN AJAR HANDLERS ---
             const handleAddWeek = () => {
                 setEditThemeForm({
@@ -718,7 +730,6 @@
                     </div>
                 </div>
             );
-            
             if (view === 'forgot_password') return (
                 <div className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -737,7 +748,6 @@
                     </div>
                 </div>
             );
-
             // --- VIEW MENU ---
             if (view === 'menu') {
                 const currentTheme = themeData || defaultTheme;
@@ -797,6 +807,14 @@
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
                             </button>
 
+                             {/* --- TAMBAHAN: Tombol Absen Manual untuk Peserta --- */}
+                            {isPeserta && (
+                                <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4">
+                                    <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
+                                    <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Input Absen</h3><p className="text-xs text-slate-400 font-bold">Catat Kehadiran Manual</p></div>
+                                </button>
+                            )}
+
                              {!isPeserta && (
                                 <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
                                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
@@ -837,7 +855,7 @@
                                     {isAdmin && (<button onClick={() => setView('generate')} className="w-full btn-playful btn-white border-b-4 mb-3 p-3 rounded-xl flex items-center gap-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><i data-lucide="database" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold text-slate-700">Database Peserta</h3></div></button>)}
          
                                     {isAdmin && (
-                                         <div className="mt-4 pt-4 border-t border-dashed border-slate-300 space-y-2">
+                                        <div className="mt-4 pt-4 border-t border-dashed border-slate-300 space-y-2">
                                             <button onClick={handleResetAllData} className="w-full btn-playful bg-rose-100 text-rose-600 border-b-4 border-rose-200 hover:bg-rose-200 p-3 rounded-xl flex items-center justify-center gap-2">
                                                 <i data-lucide="users" width="14"></i>
                                                 <span className="font-black text-[10px]">RESET DATA PESERTA</span>
@@ -870,28 +888,32 @@
                                 <h2 className="font-black text-xl text-slate-800">Kelola Absensi</h2>
                             </div>
                             
-                            {/* SETTING SESSION */}
-                            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-bold text-sm text-indigo-800">Mode Otomatis</span>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" className="sr-only peer" checked={sessionConfig.autoMode} onChange={e => setSessionConfig({...sessionConfig, autoMode: e.target.checked})} />
-                                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                    </label>
+                            {/* SETTING SESSION - HANYA MUNCUL JIKA BUKAN PESERTA */}
+                            {!isPeserta && (
+                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-sm text-indigo-800">Mode Otomatis</span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only peer" checked={sessionConfig.autoMode} onChange={e => setSessionConfig({...sessionConfig, autoMode: e.target.checked})} />
+                                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                        </label>
+                                    </div>
+                                    
+                                    {sessionConfig.autoMode ? (
+                                        <div className="flex gap-2">
+                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} onChange={e => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
+                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Tutup</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.closeTime} onChange={e => setSessionConfig({...sessionConfig, closeTime: e.target.value})} /></div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
+                                            <span className="font-bold text-sm text-slate-600">Status Absensi</span>
+                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
+                                        </div>
+                                    )}
+                                    
+                                    <button onClick={handleSaveConfig} className="w-full bg-indigo-600 text-white text-xs font-bold py-3 rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200">Simpan Pengaturan</button>
                                 </div>
-                                {sessionConfig.autoMode ? (
-                                    <div className="flex gap-2">
-                                        <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} onChange={e => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
-                                        <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Tutup</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.closeTime} onChange={e => setSessionConfig({...sessionConfig, closeTime: e.target.value})} /></div>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
-                                        <span className="font-bold text-sm text-slate-600">Status Absensi</span>
-                                        <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
-                                    </div>
-                                )}
-                                <button onClick={handleSaveConfig} className="w-full bg-indigo-600 text-white text-xs font-bold py-3 rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200">Simpan Pengaturan</button>
-                            </div>
+                            )}
 
                             {/* SEARCH MANUAL */}
                             <input className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700" placeholder="Cari Nama Peserta..." value={filterManual} onChange={e => setFilterManual(e.target.value)} />
@@ -930,7 +952,7 @@
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
                     <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
                         <div className="flex items-center justify-between mb-4">
-                             <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
+                            <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
                              <div className="text-right">
                                 <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
                                 <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
@@ -996,6 +1018,7 @@
                                     <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">
                                         {scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}
                                         <div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div>
+                                        
                                         <div className="flex gap-4">
                                             <div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div>
                                             <div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p></div>
@@ -1016,17 +1039,17 @@
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
                         <div className="flex items-center justify-between mb-6">
-                             <button onClick={handleBackToMenu} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                            <button onClick={handleBackToMenu} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
                             <h2 className="font-black text-xl text-slate-700">Edit Bahan Ajar</h2>
                         </div>
                         <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 space-y-4 mb-4">
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Judul Besar / Tema Bulanan</label>
-                                 <input className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" value={editThemeForm.title} onChange={e => setEditThemeForm({...editThemeForm, title: e.target.value})} placeholder="Contoh: Kasih Allah..." />
+                                <input className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" value={editThemeForm.title} onChange={e => setEditThemeForm({...editThemeForm, title: e.target.value})} placeholder="Contoh: Kasih Allah..." />
                             </div>
                         </div>
 
-                         <div className="space-y-4">
+                        <div className="space-y-4">
                             {editThemeForm.weeks.map((week, index) => (
                                 <div key={index} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 relative group">
                                     <button onClick={() => handleRemoveWeek(index)} className="absolute top-4 right-4 bg-rose-100 hover:bg-rose-200 text-rose-500 p-2 rounded-xl transition shadow-sm" title="Hapus Minggu Ini"><i data-lucide="trash-2" width="18"></i></button>
@@ -1196,7 +1219,7 @@
                                     <option value="urgent">Penting/Darurat (Merah)</option>
                                 </select>
                                 <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg">KIRIM SEKARANG</button>
-                            </div>
+                             </div>
                         </div>
                     </div>
                 </div>
