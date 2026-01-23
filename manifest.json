@@ -1,0 +1,21 @@
+{
+  "name": "Database GSM GKPS Tangerang",
+  "short_name": "GSM GKPS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F0F9FF",
+  "theme_color": "#F0F9FF",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/color/192/church.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://img.icons8.com/color/512/church.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
