@@ -19,6 +19,8 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -500,6 +502,65 @@
             };
             // --------------------------
 
+            // --- FUNGSI IMPORT USER (EXCEL/CSV) ---
+            const handleImportUsers = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const saveRow = async (row) => {
+                    // Format: Username, Password, Nama, Role
+                    let [username, password, nama, role] = row;
+                    if(!username || !password) return;
+                    username = String(username).trim();
+                    password = String(password).trim();
+                    role = role ? role.toLowerCase().trim() : 'peserta';
+                    
+                    await saveToCloud(`users/${username}`, { username, password, nama: nama || username, role });
+                };
+
+                if (file.name.endsWith('.csv')) {
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                        const rows = ev.target.result.split('\n').slice(1);
+                        let count = 0;
+                        for (const rowStr of rows) {
+                            if (!rowStr.trim()) continue;
+                            const row = rowStr.split(',').map(s => s.trim());
+                            await saveRow(row);
+                            count++;
+                        }
+                        alert(`Berhasil import ${count} user via CSV!`);
+                    };
+                    reader.readAsText(file);
+                } else if (file.name.match(/\.(xlsx|xls)$/)) {
+                    if (!window.XLSX) return alert("Library Excel belum dimuat. Pastikan Anda terhubung ke internet.");
+                    const data = await file.arrayBuffer();
+                    const workbook = window.XLSX.read(data);
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = window.XLSX.utils.sheet_to_json(sheet);
+                    let count = 0;
+                    for (const row of json) {
+                        // Support berbagai case key
+                        const username = row['Username'] || row['username'] || Object.values(row)[0];
+                        const password = row['Password'] || row['password'] || Object.values(row)[1];
+                        const nama = row['Nama'] || row['nama'] || Object.values(row)[2];
+                        const role = row['Role'] || row['role'] || Object.values(row)[3];
+
+                        if (username && password) {
+                            await saveToCloud(`users/${username}`, {
+                                username: String(username),
+                                password: String(password),
+                                nama: nama || username,
+                                role: role ? role.toLowerCase() : 'peserta'
+                            });
+                            count++;
+                        }
+                    }
+                    alert(`Berhasil import ${count} user via Excel!`);
+                }
+            };
+            // ------------------------------------
+
             // --- COMPONENT DEFINITIONS ---
             const LogoutModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
@@ -749,18 +810,18 @@
             const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
             const isAdmin = safeUser.role === 'admin';
             const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
-            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm';
+            // UPDATE: Menambahkan Pembimbing dan Pendeta ke dalam kategori isPeserta (jika diperlukan) atau logika akses lain
+            // Disini Pembimbing dan Pendeta dianggap memiliki akses setara GSM/Peserta dalam hal view dasar
+            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
+
             // --- VIEW LOGIC ---
 
             if (view === 'login') return (
                 <div key="view-login" className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
                         <div className="text-center mb-8">
-                            {/* PERUBAHAN 2: Teks Header Login */}
                             <h1 className="text-3xl font-black text-sky-600 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Pamasuk Ham Ma Au</h1>
-                            {/* PERUBAHAN 3: Teks Sub-Header 1 */}
                             <p className="text-slate-500 font-bold text-sm mt-1 bg-white/50 inline-block px-3 py-1 rounded-full">Sistem Daftar Hadir GSM</p>
-                            {/* PERUBAHAN 4: Teks Sub-Header 2 (Tambah GKPS) */}
                             <p className="text-slate-400 font-bold text-xs mt-1">GKPS Resort Tangerang</p>
                         </div>
                         <form onSubmit={handleLogin} className="space-y-4">
@@ -859,7 +920,8 @@
                                  </button>
                             )}
 
-                            {(safeUser.role === 'gsm' || safeUser.role === 'petugas') && (
+                            {/* UPDATE: Logika tombol Data Kehadiran untuk GSM, Petugas, Pembimbing, Pendeta */}
+                            {(['gsm', 'petugas', 'pembimbing', 'pendeta'].includes(safeUser.role)) && (
                                 <button onClick={() => setView('live_report')} className="w-full btn-playful bg-emerald-500 border-b-4 border-emerald-700 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4 transform hover:scale-[1.01]">
                                     <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="clipboard-list" width="24" height="24"></i></div>
                                     <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Data Kehadiran</h3><p className="text-xs text-emerald-100 font-bold opacity-90">Cek List Peserta Hadir</p></div>
@@ -1088,15 +1150,34 @@
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        
+                        {/* UPDATE: FITUR IMPORT USER */}
+                        <div className="bg-white rounded-xl shadow p-4 mb-4 border-2 border-dashed border-indigo-200 text-center">
+                             <div className="text-center relative hover:bg-indigo-50 transition rounded-lg p-2 cursor-pointer">
+                                <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
+                                <span className="text-sm font-bold text-indigo-600 block">Import User (Excel/CSV)</span>
+                                <span className="text-[10px] text-gray-400 block">Format: Username, Password, Nama, Role</span>
+                            </div>
+                        </div>
+                        
                         <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
                             <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
                              <div className="space-y-3">
                                  <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
                                 <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
                                 <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
+                                
+                                {/* UPDATE: MENAMBAHKAN OPSI PEMBIMBING DAN PENDETA */}
                                 <select className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 bg-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
-                                    <option value="petugas">Petugas</option><option value="admin">Admin</option><option value="pengurus">Pengurus</option><option value="gsm">GSM</option>
+                                    <option value="petugas">Petugas</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="pengurus">Pengurus</option>
+                                    <option value="gsm">GSM</option>
+                                    <option value="pembimbing">Pembimbing</option>
+                                    <option value="pendeta">Pendeta</option>
                                  </select>
+                                
                                 <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null);
                                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
                                 }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
