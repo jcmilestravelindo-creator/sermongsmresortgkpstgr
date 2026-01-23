@@ -716,8 +716,9 @@
             // --- GLOBAL VARIABLES ---
             const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
             const isAdmin = safeUser.role === 'admin';
-            const isPanitia = safeUser.role === 'panitia';
-            const isPeserta = safeUser.role === 'peserta';
+            // PERUBAHAN: Menyesuaikan logika role baru
+            const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
+            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm';
 
             // --- VIEW LOGIC ---
 
@@ -813,7 +814,8 @@
                         </div>
 
                         <div className="p-6 space-y-4">
-                            <button onClick={() => setView('my_barcode')} className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
+                            <button onClick={() => setView('my_barcode')} 
+className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
                                 <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="qr-code" width="28" height="28"></i></div>
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
                             </button>
@@ -1129,7 +1131,7 @@
                                 <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
                                 <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
                                 <select className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 bg-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
-                                    <option value="petugas">Petugas</option><option value="admin">Admin</option><option value="panitia">Panitia</option><option value="peserta">Peserta</option>
+                                    <option value="petugas">Petugas</option><option value="admin">Admin</option><option value="pengurus">Pengurus</option><option value="gsm">GSM</option>
                                 </select>
                                 <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null); setNewUser({ username: '', password: '', role: 'petugas', nama: '' }); }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
                             </div>
