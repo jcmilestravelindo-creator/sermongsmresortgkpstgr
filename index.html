@@ -434,6 +434,17 @@
             };
 
             const handleManualAttendance = (p, status) => {
+                // --- PERBAIKAN: CEK STATUS SESI DULU ---
+                const isOpen = checkSessionStatus();
+                
+                // Jika user adalah PESERTA dan Sesi Tutup -> TOLAK
+                if (isPeserta && !isOpen) {
+                    alert("⛔ MAAF, ABSENSI SEDANG DITUTUP!\nSilakan hubungi admin atau tunggu jam buka.");
+                    playErrorSound();
+                    return; // Stop eksekusi
+                }
+                // ----------------------------------------
+
                 const todayStr = getSafeDateId();
                 const now = new Date();
                 const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
