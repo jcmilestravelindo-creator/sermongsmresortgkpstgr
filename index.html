@@ -76,7 +76,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        // EXPOSE FIREBASE TO WINDOW
+        // EXPOSE TO WINDOW
         window.db = db;
         window.auth = auth;
         window.signInAnonymously = signInAnonymously;
@@ -143,13 +143,13 @@
             const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
             const [connectionError, setConnectionError] = useState(null);
 
-            // --- STATE DATA BARU: ABSENSI & CONFIG ---
+            // --- STATE BARU: Absensi Manual & Config ---
             const [liveAttendance, setLiveAttendance] = useState([]);
             const [attendanceMode, setAttendanceMode] = useState(false); 
             const [sessionConfig, setSessionConfig] = useState({ isOpen: true, autoMode: false, openTime: '07:00', closeTime: '12:00' });
             const [filterManual, setFilterManual] = useState("");
 
-            // Refs
+            // Refs (Penting untuk Scanner agar data tidak stale)
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
             const sessionConfigRef = useRef(sessionConfig);
@@ -167,16 +167,20 @@
                 return `${year}-${month}-${day}`;
             };
 
-            // Helper Check Session
+            // Helper Check Session Status
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
                 if (!config.autoMode) return config.isOpen; 
+                
                 const now = new Date();
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                
                 const [openH, openM] = config.openTime.split(':').map(Number);
                 const [closeH, closeM] = config.closeTime.split(':').map(Number);
+                
                 const startMinutes = openH * 60 + openM;
                 const endMinutes = closeH * 60 + closeM;
+
                 return currentMinutes >= startMinutes && currentMinutes < endMinutes;
             };
 
@@ -193,7 +197,7 @@
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
 
-            // --- SINKRONISASI DATA ---
+            // --- SINKRONISASI DATA UTAMA & ABSENSI ---
             useEffect(() => {
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth } = window;
@@ -218,7 +222,9 @@
             }, []);
 
             useEffect(() => {
-                const db = window.db; const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
+                const db = window.db; 
+                const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
+                
                 if (!userAuth || !db || !collection) return;
                 
                 const publicDataPath = `artifacts/${appId}/public/data`;
@@ -278,7 +284,7 @@
                 };
             }, [userAuth]);
 
-            // --- FUNGSI DATABASE ---
+            // --- FUNGSI SAVE TERUPDATE ---
             const saveToCloud = (path, data) => {
                 const db = window.db;
                 const { doc, setDoc } = window.fs || {};
@@ -291,6 +297,7 @@
                 else if (path.startsWith('theme/')) finalRef = doc(db, `${basePath}/theme`, path.split('/')[1]);
                 else if (path.startsWith('config/')) finalRef = doc(db, `${basePath}/config`, path.split('/')[1]);
                 else if (path.startsWith('attendance/')) {
+                    // format: attendance/YYYY-MM-DD/records/ID
                     const parts = path.split('/');
                     finalRef = doc(db, `${basePath}/attendance/${parts[1]}/records`, parts[3]);
                 }
@@ -309,7 +316,27 @@
                  if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
 
-            // --- SCANNER LOGIC ---
+            const handleResetAllData = async () => {
+                if (!currentUser) return;
+                const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
+                if (confirmPass === null) return;
+                if (confirmPass === currentUser.password) {
+                    const db = window.db;
+                    const { collection, getDocs, deleteDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const clearCollection = async (collName) => {
+                        const snapshot = await getDocs(collection(db, `${basePath}/${collName}`));
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+                    };
+                    try {
+                        await clearCollection('participants');
+                        alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
+                    } catch(e) { alert("Gagal reset: " + e.message); }
+                } else { alert("Password Salah! Reset Database Dibatalkan."); }
+            };
+
+            // --- LOGIKA SCANNER & MANUAL ---
             useEffect(() => { 
                 if (view === 'scan' && !scanResult) { 
                     setTimeout(startScanner, 300); 
@@ -390,7 +417,7 @@
                 }
             };
 
-            // --- MANUAL ATTENDANCE LOGIC ---
+            // --- MANUAL ABSENSI HANDLER ---
             const handleManualAttendance = (p, status) => {
                 const todayStr = getSafeDateId();
                 const now = new Date();
@@ -413,7 +440,7 @@
                 saveToCloud('config/session', sessionConfig).then(() => alert("Pengaturan Sesi Disimpan!"));
             };
 
-            // --- HANDLERS LAIN ---
+            // --- HANDLERS STANDARD ---
             const setView = (newView) => {
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
@@ -472,25 +499,6 @@
                     deleteFromCloud(deleteConfig.path);
                     setDeleteConfig({ show: false, path: null });
                 }
-            };
-            const handleResetAllData = async () => {
-                if (!currentUser) return;
-                const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
-                if (confirmPass === null) return;
-                if (confirmPass === currentUser.password) {
-                    const db = window.db;
-                    const { collection, getDocs, deleteDoc } = window.fs;
-                    const basePath = `artifacts/${appId}/public/data`;
-                    const clearCollection = async (collName) => {
-                        const snapshot = await getDocs(collection(db, `${basePath}/${collName}`));
-                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-                        await Promise.all(deletePromises);
-                    };
-                    try {
-                        await clearCollection('participants');
-                        alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
-                    } catch(e) { alert("Gagal reset: " + e.message); }
-                } else { alert("Password Salah! Reset Database Dibatalkan."); }
             };
             const handleResetPassword = () => {
                 if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
@@ -602,7 +610,7 @@
             };
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
             
-            // --- THEME HANDLERS ---
+            // --- THEME / BAHAN AJAR HANDLERS ---
             const handleAddWeek = () => {
                 setEditThemeForm({
                     ...editThemeForm,
@@ -657,7 +665,6 @@
                     </div>
                 </div>
             );
-            
             if (view === 'forgot_password') return (
                 <div className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -676,8 +683,6 @@
                     </div>
                 </div>
             );
-
-            // --- VIEW MENU ---
             if (view === 'menu') {
                 const currentTheme = themeData || defaultTheme;
                 let displayWeeks = currentTheme.weeks || [];
@@ -740,8 +745,8 @@
                                 <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
                                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
                                     
-                                    {/* TOMBOL BARU: KELOLA ABSENSI (MANUAL & SETTING) */}
-                                    <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                    {/* MENU KELOLA ABSENSI (MANUAL & SETTING) */}
+                                    <button onClick={() => { setView('attendance_manager'); }} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-check" width="20"></i></div>
                                         <div className="text-left">
                                             <h3 className="font-bold">Kelola Absensi</h3>
@@ -749,7 +754,7 @@
                                         </div>
                                     </button>
 
-                                    {/* MENU SCANNER */}
+                                    {/* MENU SCAN ABSENSI */}
                                     <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
                                         <div className="text-left">
@@ -758,7 +763,7 @@
                                         </div>
                                     </button>
 
-                                    {/* TOMBOL LIHAT LIST */}
+                                    {/* MENU LIHAT DATA */}
                                     <button onClick={() => { setView('live_report'); }} className="w-full btn-playful bg-emerald-500 text-white border-b-4 border-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-list" width="20"></i></div>
                                         <div className="text-left">
@@ -798,7 +803,7 @@
             );
             }
             
-            // --- VIEW ATTENDANCE MANAGER (NEW) ---
+            // --- VIEW ATTENDANCE MANAGER (SETTING & MANUAL) ---
             if (view === 'attendance_manager') {
                 const filteredParticipants = participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()));
                 return (
