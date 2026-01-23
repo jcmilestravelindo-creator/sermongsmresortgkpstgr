@@ -190,6 +190,17 @@
             const liveAttendanceRef = useRef(liveAttendance);
             const sessionConfigRef = useRef(sessionConfig);
 
+            // --- BARU: STATE UNTUK FILTER TANGGAL (ARCHIVE) ---
+            const getSafeDateId = () => {
+                const d = new Date();
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            const [viewDate, setViewDate] = useState(getSafeDateId());
+            // ------------------------------------------------
+
             useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
@@ -199,13 +210,7 @@
                 title: "Terpanggil dan siap melayani Tuhan",
                 weeks: [ { date: "", topic: "Contoh Tema Minggu 1", content: "Isi bahan ajar...", themeVerse: 'Yohanes 3:16', memoryVerse: 'Yohanes 3:16' } ]
             };
-            const getSafeDateId = () => {
-                const d = new Date();
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            };
+            
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
                 if (!config.autoMode) return config.isOpen; 
@@ -240,6 +245,8 @@
                 setSelectedWeek(null);
                 setScanResult(null); 
                 setViewRaw(newView);
+                // Reset view date when returning to menu or changing views
+                setViewDate(getSafeDateId());
             };
             const handleBackToMenu = () => {
                 window.scrollTo({ top: 0, behavior: 'instant' });
@@ -301,15 +308,20 @@
                         }
                     }
                 });
-                const todayStr = getSafeDateId();
-                const attendancePath = `artifacts/${appId}/public/data/attendance/${todayStr}/records`;
+                
+                // UPDATE: Menggunakan viewDate (bisa berubah) bukan static todayStr
+                // const todayStr = getSafeDateId(); 
+                const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
                 try {
                     const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
                     unsubscribeAttendance = onSnapshot(q, (snap) => {
                         const data = snap.docs.map(d => d.data());
                         setLiveAttendance(data);
-                    }, (err) => {});
+                    }, (err) => {
+                        // Jika permission error atau collection kosong, set kosong
+                        setLiveAttendance([]);
+                    });
                 } catch(e) {}
 
                 const configPath = `artifacts/${appId}/public/data/config/session`;
@@ -328,7 +340,7 @@
                     unsubscribeAttendance();
                     unsubscribeConfig();
                 };
-            }, [userAuth]);
+            }, [userAuth, viewDate]); // Dependency ditambah viewDate agar fetch ulang saat tanggal ganti
 
             const saveToCloud = (path, data) => {
                 const db = window.db;
@@ -557,6 +569,41 @@
                         }
                     }
                     alert(`Berhasil import ${count} user via Excel!`);
+                }
+            };
+            
+            // --- FUNGSI EXPORT KEHADIRAN (EXCEL) ---
+            const handleExportAttendance = () => {
+                if (!window.XLSX) return alert("Library Excel belum dimuat.");
+                if (liveAttendance.length === 0) return alert("Tidak ada data untuk diexport.");
+                
+                const worksheet = XLSX.utils.json_to_sheet(liveAttendance);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
+                XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
+            };
+
+            // --- FUNGSI RESET DATA HARIAN ---
+            const handleResetDailyData = async () => {
+                if (!currentUser) return;
+                const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal: ${viewDate}.\nData yang dihapus tidak bisa kembali!`);
+                if (confirmation === "HAPUS") {
+                    const db = window.db;
+                    const { collection, getDocs, deleteDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const targetCollection = collection(db, `${basePath}/attendance/${viewDate}/records`);
+                    
+                    try {
+                        const snapshot = await getDocs(targetCollection);
+                        if (snapshot.empty) {
+                            return alert("Data sudah kosong.");
+                        }
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+                        alert(`Berhasil mereset data absensi tanggal ${viewDate}.`);
+                    } catch (e) {
+                        alert("Gagal reset: " + e.message);
+                    }
                 }
             };
             // ------------------------------------
@@ -1071,12 +1118,29 @@
                                 <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
                              </div>
                         </div>
+                        
+                        {/* UPDATE: DATE PICKER & EXPORT BUTTON */}
+                        <div className="flex gap-2 items-center mb-2">
+                            <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 text-slate-600 text-xs font-bold p-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-indigo-400" />
+                            
+                            <button onClick={handleExportAttendance} className="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 border-2 border-green-200 flex-1 text-xs font-bold flex items-center justify-center gap-1">
+                                <i data-lucide="download" width="14"></i> Export Excel
+                            </button>
+                        </div>
+                        
+                        {/* UPDATE: RESET DATA BUTTON (Hanya jika bukan Peserta biasa dan ada datanya) */}
+                        {!isPeserta && liveAttendance.length > 0 && (
+                            <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
+                                <i data-lucide="trash-2" width="12"></i> Hapus Data Tanggal Ini
+                            </button>
+                        )}
+                        
                      </div>
                     <div className="flex-1 p-4 pb-20 overflow-y-auto">
                         {liveAttendance.length === 0 ? (
                             <div className="text-center mt-10 opacity-50">
                                 <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
-                                 <p className="font-bold text-slate-400 text-sm">Belum ada data absen hari ini.</p>
+                                 <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
