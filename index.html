@@ -75,8 +75,6 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        
-        // Expose to window for React
         window.db = db;
         window.auth = auth;
         window.signInAnonymously = signInAnonymously;
@@ -143,13 +141,13 @@
             const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
             const [connectionError, setConnectionError] = useState(null);
 
-            // --- STATE BARU UNTUK ABSENSI MANUAL & SETTING ---
+            // --- STATE BARU: Absensi Manual & Config ---
             const [liveAttendance, setLiveAttendance] = useState([]);
-            const [attendanceMode, setAttendanceMode] = useState(false);
+            const [attendanceMode, setAttendanceMode] = useState(false); 
             const [sessionConfig, setSessionConfig] = useState({ isOpen: true, autoMode: false, openTime: '07:00', closeTime: '12:00' });
             const [filterManual, setFilterManual] = useState("");
 
-            // Refs
+            // Refs (Penting untuk Scanner agar data tidak stale)
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
             const sessionConfigRef = useRef(sessionConfig);
@@ -157,6 +155,13 @@
             useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
+
+            const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
+            const defaultTheme = {
+                title: "Terpanggil dan siap melayani Tuhan",
+                weeks: [ { date: "", topic: "Contoh Tema Minggu 1", content: "Isi bahan ajar...", themeVerse: 'Yohanes 3:16', memoryVerse: 'Yohanes 3:16' } ]
+            };
 
             // Helper Date & Time
             const getSafeDateId = () => {
@@ -169,7 +174,7 @@
 
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
-                if (!config.autoMode) return config.isOpen;
+                if (!config.autoMode) return config.isOpen; 
                 
                 const now = new Date();
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -183,20 +188,30 @@
                 return currentMinutes >= startMinutes && currentMinutes < endMinutes;
             };
 
-            const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
-            const defaultTheme = {
-                title: "Terpanggil dan siap melayani Tuhan",
-                weeks: [ { date: "", topic: "Contoh Tema Minggu 1", content: "Isi bahan ajar...", themeVerse: 'Yohanes 3:16', memoryVerse: 'Yohanes 3:16' } ]
-            };
-
             const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
             const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
             
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
 
-            // --- EFFECT: Sinkronisasi Data ---
+            const setView = (newView) => {
+                setEditingId(null);
+                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+                setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
+                setSelfPassword('');
+                setResetForm({ username: '', newPassword: '', token: '' }); 
+                setIsLogoutModalOpen(false); setIsInstallModalOpen(false);
+                setDeleteConfig({ show: false, path: null });
+                setAdminResetConfig({ show: false, user: null, newPass: '' });
+                setScanResult(null); 
+                setViewRaw(newView);
+            };
+
+            const handleBackToMenu = () => {
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                currentUser ? setViewRaw('menu') : setViewRaw('login');
+            };
+
             useEffect(() => {
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth } = window;
@@ -221,8 +236,7 @@
             }, []);
 
             useEffect(() => {
-                const db = window.db; 
-                const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
+                const db = window.db; const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
                 if (!userAuth || !db || !collection) return;
                 
                 const publicDataPath = `artifacts/${appId}/public/data`;
@@ -251,11 +265,9 @@
                     }
                 });
 
-                // Sync Absensi & Config
+                // Sync Attendance
                 const todayStr = getSafeDateId(); 
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${todayStr}/records`;
-                const configPath = `artifacts/${appId}/public/data/config/session`;
-
                 let unsubscribeAttendance = () => {};
                 try {
                     const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
@@ -265,6 +277,8 @@
                     }, (err) => {});
                 } catch(e) {}
 
+                // Sync Session Config
+                const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
                 try {
                     unsubscribeConfig = onSnapshot(doc(db, configPath), (snap) => {
@@ -365,7 +379,6 @@
                 } 
             };
 
-            // --- LOGIKA UTAMA SCANNER ---
             const handleScanSuccess = (qrId) => {
                 const isModeLive = attendanceModeRef.current;
                 const currentLiveData = liveAttendanceRef.current;
@@ -400,7 +413,6 @@
                                 timestamp: now.getTime(),
                                 scanner: currentUser.nama
                             };
-                            
                             saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
                             setScanResult({ success: true, msg: `✅ ${p.nama} BERHASIL ABSEN!`, p: p, time: jam });
                             playNotificationSound();
@@ -415,12 +427,10 @@
                 }
             };
 
-            // --- MANUAL ABSENSI HANDLER ---
             const handleManualAttendance = (p, status) => {
                 const todayStr = getSafeDateId();
                 const now = new Date();
                 const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-                
                 const attendanceData = {
                     id: p.id,
                     nama: p.nama,
@@ -708,6 +718,7 @@
                     </div>
                 </div>
             );
+            
             if (view === 'forgot_password') return (
                 <div className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -726,6 +737,8 @@
                     </div>
                 </div>
             );
+
+            // --- VIEW MENU ---
             if (view === 'menu') {
                 const currentTheme = themeData || defaultTheme;
                 let displayWeeks = currentTheme.weeks || [];
@@ -788,8 +801,8 @@
                                 <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
                                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
                                     
-                                    {/* MENU KELOLA ABSENSI (MANUAL & SETTING) */}
-                                    <button onClick={() => { setView('attendance_manager'); }} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                    {/* TOMBOL BARU: KELOLA ABSENSI (MANUAL & SETTING) */}
+                                    <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-check" width="20"></i></div>
                                         <div className="text-left">
                                             <h3 className="font-bold">Kelola Absensi</h3>
@@ -797,7 +810,7 @@
                                         </div>
                                     </button>
 
-                                    {/* MENU SCAN ABSENSI */}
+                                    {/* MENU SCANNER */}
                                     <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
                                         <div className="text-left">
@@ -806,7 +819,7 @@
                                         </div>
                                     </button>
 
-                                    {/* MENU LIHAT DATA */}
+                                    {/* TOMBOL LIHAT LIST */}
                                     <button onClick={() => { setView('live_report'); }} className="w-full btn-playful bg-emerald-500 text-white border-b-4 border-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-list" width="20"></i></div>
                                         <div className="text-left">
@@ -846,7 +859,7 @@
             );
             }
             
-            // --- VIEW ATTENDANCE MANAGER (SETTING & MANUAL) ---
+            // --- VIEW ATTENDANCE MANAGER (NEW) ---
             if (view === 'attendance_manager') {
                 const filteredParticipants = participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()));
                 return (
@@ -1230,4 +1243,3 @@
     </script>
 </body>
 </html>
-
