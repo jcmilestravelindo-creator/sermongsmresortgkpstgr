@@ -174,7 +174,6 @@
             const [notification, setNotification] = useState(null);
             const [activeBroadcast, setActiveBroadcast] = useState(null);
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
-            
             // --- UPDATED STATE FOR BROADCAST & HISTORY ---
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
             const [broadcastHistory, setBroadcastHistory] = useState([]); 
@@ -206,7 +205,6 @@
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
-            
             // --- FIX: EMPTY DEFAULT THEME TO AVOID FLASH OF OLD CONTENT ---
             const defaultTheme = {
                 title: "", 
@@ -259,18 +257,22 @@
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth } = window;
                     try {
+                      
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(auth, __initial_auth_token);
                         } else {
                             await signInAnonymously(auth);
+      
                         }
                         if (auth.currentUser) {
                             setUserAuth(auth.currentUser);
+                            
                             setIsConnected(true);
                         }
                     } catch (error) {
                         console.error("Auth Error:", error);
                         setConnectionError(error.message);
+   
                     }
                 };
                 initAuth();
@@ -278,7 +280,6 @@
                 if (savedUser) { try { setCurrentUser(JSON.parse(savedUser));
                 setViewRaw('menu'); } catch(e){} }
             }, []);
-
             useEffect(() => {
                 const db = window.db; const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
                 if (!userAuth || !db || !collection) return;
@@ -289,6 +290,7 @@
                     const loadedUsers = snap.docs.map(d => d.data());
                     if (loadedUsers.length === 0) {
                         saveToCloud(`users/admin`, { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' });
+   
                     } else { setUsers(loadedUsers); }
                 }, (err) => console.error("Users Sync Error", err));
 
@@ -346,6 +348,7 @@
                         const data = snap.docs.map(d => d.data());
                         setLiveAttendance(data);
                     }, (err) => {
+                   
                         setLiveAttendance([]);
                     });
                 } catch(e) {}
@@ -423,6 +426,7 @@
                     setTimeout(startScanner, 300); 
                     return () => stopScanner(); 
                 } 
+           
             }, [view, scanResult]);
 
             const startScanner = () => { 
@@ -435,6 +439,7 @@
                     scanner.clear().then(() => {
                         isScanning.current = false;
                         scannerRef.current = null;
+   
                     }).catch((err) => { console.error("Failed to clear scanner", err); });
                 }, (error) => {});
                 scannerRef.current = scanner; 
@@ -475,11 +480,14 @@
                             const attendanceData = {
                                 id: p.id,
                                 nama: p.nama,
+                        
                                 kategori: p.kategori,
-                                kelas: p.kelas || '-',
+                                kelas: p.kelas ||
+                                '-',
                                 jam: jam,
                                 status: 'Hadir',
                                 timestamp: now.getTime(),
+ 
                                 scanner: currentUser.nama
                             };
                             saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
@@ -510,12 +518,14 @@
                     id: p.id,
                     nama: p.nama,
                     kategori: p.kategori,
-                    kelas: p.kelas || '-',
+                    kelas: p.kelas ||
+                    '-',
                     jam: jam,
                     status: status,
                     timestamp: now.getTime(),
                     scanner: currentUser.nama + ' (Manual)'
-                };
+             
+                   };
                 saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
             };
 
@@ -530,6 +540,7 @@
                         if (choiceResult.outcome === 'accepted') {
                             console.log('User accepted the A2HS prompt');
                         }
+              
                         deferredPrompt = null;
                     });
                 } else {
@@ -571,7 +582,8 @@
                     const json = window.XLSX.utils.sheet_to_json(sheet);
                     let count = 0;
                     for (const row of json) {
-                        const username = row['Username'] || row['username'] || Object.values(row)[0];
+                        const username = row['Username'] ||
+                        row['username'] || Object.values(row)[0];
                         const password = row['Password'] || row['password'] || Object.values(row)[1];
                         const nama = row['Nama'] || row['nama'] || Object.values(row)[2];
                         const role = row['Role'] || row['role'] || Object.values(row)[3];
@@ -579,9 +591,11 @@
                         if (username && password) {
                             await saveToCloud(`users/${username}`, {
                                 username: String(username),
+                         
                                 password: String(password),
                                 nama: nama || username,
                                 role: role ? role.toLowerCase() : 'peserta'
+                    
                             });
                             count++;
                         }
@@ -593,7 +607,21 @@
                 if (!window.XLSX) return alert("Library Excel belum dimuat.");
                 if (liveAttendance.length === 0) return alert("Tidak ada data untuk diexport.");
                 
-                const worksheet = XLSX.utils.json_to_sheet(liveAttendance);
+                // --- FIX: Convert Timestamp to Readable Date String ---
+                const dataToExport = liveAttendance.map(item => {
+                    const newItem = { ...item };
+                    if (newItem.timestamp) {
+                        newItem.timestamp = new Date(newItem.timestamp).toLocaleString('id-ID', {
+                            day: '2-digit', month: '2-digit', year: 'numeric', 
+                            hour: '2-digit', minute: '2-digit', second: '2-digit'
+                        });
+                    }
+                    // Ganti key 'timestamp' jadi 'Waktu Scan' agar lebih rapi di Excel (Opsional)
+                    return newItem;
+                });
+                // -----------------------------------------------------
+
+                const worksheet = XLSX.utils.json_to_sheet(dataToExport);
                 const workbook = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
                 XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
@@ -624,12 +652,15 @@
                 <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="log-out" className="text-red-600 w-8 h-8"></i></div>
+     
                         <h3 className="text-xl font-bold text-slate-800 mb-2">Konfirmasi Keluar</h3>
                         <p className="text-slate-600 mb-6">Yakin ingin keluar aplikasi?</p>
                         <div className="flex gap-3">
+                     
                             <button onClick={() => setIsLogoutModalOpen(false)} className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Batal</button>
                             <button onClick={performLogout} className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg">Ya, Keluar</button>
                         </div>
+                 
                     </div>
                 </div>
             );
@@ -639,17 +670,24 @@
                 return (
                     <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                         <div className={`bg-white rounded-3xl shadow-2xl w-full max-w-sm text-center border-4 relative overflow-hidden ${isUrgent ? 'border-red-400' : 'border-sky-400'}`}>
+                         
                             <div className={`h-20 w-full absolute top-0 left-0 ${isUrgent ? 'bg-red-100' : 'bg-sky-100'}`}></div>
                             <div className="relative z-10 p-6 pt-0">
                                 <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 bg-white mt-8 ${isUrgent ? 'border-red-100' : 'border-sky-100'}`}>
+       
                                     <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
                                 </div>
-                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ? 'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
+                          
+                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ?
+                                'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-left">
                                     <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{activeBroadcast.message}</p>
+                   
                                     <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center text-xs text-slate-400 font-bold uppercase"><span><i data-lucide="user" width="12" className="inline mr-1"/>{activeBroadcast.sender}</span><span>{activeBroadcast.timestamp.split(' ')[1]}</span></div>
                                 </div>
-                                <button onClick={handleCloseBroadcast} className={`w-full py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ? 'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
+                                <button onClick={handleCloseBroadcast} className={`w-full 
+                                py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ?
+                                'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
                             </div>
                         </div>
                     </div>
@@ -660,12 +698,15 @@
                 <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-rose-100">
                         <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="trash-2" className="text-rose-600 w-8 h-8"></i></div>
+  
                         <h3 className="text-xl font-black text-slate-800 mb-2 font-fredoka">Hapus Data Ini?</h3>
                         <p className="text-slate-600 mb-6 font-medium">Data yang dihapus tidak bisa dikembalikan loh!</p>
                         <div className="flex gap-3">
+            
                             <button onClick={() => setDeleteConfig({ show: false, path: null })} className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Jangan</button>
                             <button onClick={performDelete} className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-rose-500 hover:bg-rose-600 transition shadow-lg shadow-rose-200">Hapus Aja</button>
                         </div>
+  
                     </div>
                 </div>
             );
@@ -673,10 +714,15 @@
                 <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-white/50 relative">
                         <button onClick={() => setIsInstallModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" width="24"></i></button>
+     
                         <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-50"><i data-lucide="download" className="text-sky-500 w-8 h-8"></i></div>
                         <h3 className="text-xl font-black text-slate-800 mb-4 font-fredoka">Pasang Aplikasi</h3>
-                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2. Pilih <b>"Tambahkan ke Layar Utama"</b> atau <b>"Install App"</b>.</p></div>
-                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-4 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="apple" width="16"></i> iPhone (Safari)</h4><p className="text-xs text-slate-500">1. Klik tombol <b>Share</b> (kotak panah atas) di bawah.</p><p className="text-xs text-slate-500">2. Geser & pilih <b>"Add to Home Screen"</b> (Tambah ke Utama).</p></div>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center 
+                        gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2.
+                        Pilih <b>"Tambahkan ke Layar Utama"</b> atau <b>"Install App"</b>.</p></div>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-4 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="apple" width="16"></i> iPhone (Safari)</h4><p className="text-xs text-slate-500">1.
+                        Klik tombol <b>Share</b> (kotak panah atas) di bawah.</p><p className="text-xs text-slate-500">2.
+                        Geser & pilih <b>"Add to Home Screen"</b> (Tambah ke Utama).</p></div>
                         <button onClick={handleInstall} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Install Sekarang!</button>
                     </div>
                 </div>
@@ -733,15 +779,18 @@
                     password: resetForm.newPassword,
                     role: 'admin', 
                     nama: 'Recovered Admin' 
+          
                 }).then(() => {
                     alert("Password Admin Berhasil Direset!");
                     setView('login');
                 }).catch((err) => {
                     console.error(err);
+           
                     if (err.message.includes("permissions") || err.message.includes("permission")) {
                         const emergencyUser = { username: resetForm.username, password: resetForm.newPassword, role: 'admin', nama: 'Super Admin' };
                         setCurrentUser(emergencyUser);
                         localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
+ 
                         alert("Password Admin Berhasil Direset!"); 
                         setView('menu');
                     } else { alert("Gagal koneksi: " + err.message);
@@ -818,6 +867,7 @@
                         const [nama, kategori, kelas] = line.split(',').map(s => s?.trim());
                         if (nama) {
                             const id = `GSM-${Date.now()}-${idx}`;
+     
                             saveToCloud(`participants/${id}`, { id, nama, kategori: kategori || 'Umum', kelas: kelas || '-' }); count++;
                         }
                     });
@@ -825,64 +875,15 @@
                 }; reader.readAsText(file);
             };
 
-            // --- UPDATED BROADCAST LOGIC WITH HISTORY & SCHEDULE ---
-            useEffect(() => {
-                if (view === 'manage_broadcast') {
-                    const db = window.db;
-                    const { collection, query, orderBy, onSnapshot } = window.fs;
-                    const q = query(collection(db, `artifacts/${appId}/public/data/broadcast_history`), orderBy('createdAt', 'desc'));
-                    const unsub = onSnapshot(q, (snap) => {
-                        setBroadcastHistory(snap.docs.map(d => d.data()));
-                    });
-                    return () => unsub();
-                }
-            }, [view]);
-
             const handleSendBroadcast = () => {
                 if(!broadcastForm.title || !broadcastForm.message) return alert("Isi judul dan pesan!");
-                
                 const id = `NOTIF-${Date.now()}`;
-                const now = new Date();
-                
-                const data = { 
-                    id, 
-                    title: broadcastForm.title, 
-                    message: broadcastForm.message, 
-                    sender: currentUser.nama, 
-                    timestamp: now.toLocaleString('id-ID'), 
-                    createdAt: now.getTime(),
-                    type: broadcastForm.type,
-                    scheduledAt: broadcastForm.schedule || null
-                };
-
-                // 1. Simpan ke 'Active'
+                const data = { id, title: broadcastForm.title, message: broadcastForm.message, sender: currentUser.nama, timestamp: new Date().toLocaleString('id-ID'), type: broadcastForm.type };
                 saveToCloud('announcements/active', data);
-                
-                // 2. Simpan ke 'Arsip'
-                const db = window.db;
-                const { doc, setDoc } = window.fs;
-                const historyRef = doc(db, `artifacts/${appId}/public/data/broadcast_history`, id);
-                setDoc(historyRef, data);
-
-                let msg = "Notifikasi berhasil dikirim!";
-                if (broadcastForm.schedule) {
-                    msg = `Notifikasi DIJADWALKAN otomatis pada: ${new Date(broadcastForm.schedule).toLocaleString('id-ID')}`;
-                }
-
-                alert(msg);
+                alert("Notifikasi dikirim SEKARANG ke semua pengguna!");
                 setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
             };
-
-            const handleDeleteHistory = async (historyId) => {
-                if(!confirm("Hapus arsip ini?")) return;
-                const db = window.db;
-                const { doc, deleteDoc } = window.fs;
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/broadcast_history`, historyId));
-            };
-
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
-            // -----------------------------------------------------
-
             const handleAddWeek = () => {
                 setEditThemeForm({
                     ...editThemeForm,
@@ -917,21 +918,28 @@
                 <div key="view-login" className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
                         <div className="text-center mb-8">
+                 
                             <h1 className="text-3xl font-black text-sky-600 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Pamasuk Ham Ma Au</h1>
                             <p className="text-slate-500 font-bold text-sm mt-1 bg-white/50 inline-block px-3 py-1 rounded-full">Sistem Daftar Hadir GSM</p>
                             <p className="text-slate-400 font-bold text-xs mt-1">GKPS Resort Tangerang</p>
+     
                         </div>
                         <form onSubmit={handleLogin} className="space-y-4">
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Username</label><input name="username" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-Ketik username..." required/></div>
+    
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Password</label><input type="password" name="password" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-***" required/></div>
                             <button type="submit" className="w-full btn-playful btn-blue font-black py-4 rounded-2xl text-lg shadow-lg shadow-sky-200 mt-2">MASUK YUK!</button>
+             
                             <button type="button" onClick={() => setView('forgot_password')} className="text-sky-600 font-bold text-xs hover:text-sky-800 underline text-right block w-full mt-2">Lupa Password?</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
-                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                
+                            {isConnected ?
+                            <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
-                            &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
+                            &copy;
+                            {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
                         </div>
                     </div>
                 </div>
@@ -940,16 +948,21 @@
                 <div className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
                         <div className="text-center mb-6">
+                  
                             <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-rose-50"><i data-lucide="key-round" className="text-rose-500 w-8 h-8"></i></div>
                             <h1 className="text-2xl font-black text-rose-500 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Reset Password</h1>
                             <p className="text-slate-500 font-bold text-xs mt-1">Khusus Akun Admin Utama</p>
+    
                         </div>
                         <div className="space-y-3">
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username Admin</label><input className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Username Anda" value={resetForm.username} onChange={e => setResetForm({...resetForm, username: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username Admin</label><input className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Username Anda" value={resetForm.username} onChange={e => setResetForm({...resetForm, 
+                            username: e.target.value})} /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Password Baru</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="***" value={resetForm.newPassword} onChange={e => setResetForm({...resetForm, newPassword: e.target.value})} /></div>
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Kode Otorisasi</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Kode Master Panitia" value={resetForm.token} onChange={e => setResetForm({...resetForm, token: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Kode Otorisasi</label><input type="password" className="w-full p-3 border-2 
+                            border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Kode Master Panitia" value={resetForm.token} onChange={e => setResetForm({...resetForm, token: e.target.value})} /></div>
                             <button onClick={handleResetPassword} className="w-full btn-playful btn-orange py-3 rounded-xl font-black text-lg shadow-lg shadow-orange-100 mt-2">Reset Password</button>
                             <button onClick={() => setView('login')} className="w-full text-slate-400 font-bold text-xs py-2 hover:text-slate-600 transition">Batal, kembali ke Login</button>
+ 
                         </div>
                     </div>
                 </div>
@@ -958,140 +971,173 @@
                 const currentTheme = themeData || defaultTheme;
                 let displayWeeks = currentTheme.weeks || [];
                 if (!Array.isArray(displayWeeks)) displayWeeks = [];
-                const gridCols = displayWeeks.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
+                const gridCols = displayWeeks.length === 1 ?
+                'grid-cols-1' : 'grid-cols-2';
 
                 return (
                 <div key="view-menu" className="min-h-screen bg-school-sunday p-4 pt-8 pb-20 relative">
                      {notification && (
                         <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-[150] w-full max-w-sm px-4 animate-shake">
+                
                             <div className="bg-yellow-300 border-4 border-yellow-500 text-yellow-900 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-4 animate-bounce-in"><div className="bg-white p-2 rounded-full shadow-sm"><i data-lucide="info" className="text-yellow-600"></i></div><span className="font-bold text-sm leading-tight font-fredoka">{notification}</span></div>
                         </div>
                     )}
                 
+      
                     <div className="max-w-md mx-auto glass-panel rounded-[32px] overflow-hidden border-2 border-white/60">
                         <div className="bg-gradient-to-r from-sky-500 to-indigo-600 p-6 text-white relative">
                             <div className="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="church" width="80" height="80"></i></div>
+             
                             <div className="flex justify-between items-center relative z-10">
                                 <div><p className="text-white/80 text-xs font-bold mb-1">Shalom,</p><h1 className="text-3xl font-black drop-shadow-md tracking-tight" style={{fontFamily: 'Fredoka, sans-serif'}}>{safeUser.nama}</h1><span className="text-[10px] font-black uppercase tracking-wider bg-white/25 inline-block px-3 py-1 rounded-full mt-2 border border-white/30 backdrop-blur-sm">{safeUser.role}</span></div>
-                                <button onClick={handleLogoutClick} className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl text-white transition flex items-center justify-center shadow-inner border border-white/30" title="Keluar"><i data-lucide="log-out" width="20"></i></button>
+                        
+                            <button onClick={handleLogoutClick} className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl text-white transition flex items-center justify-center shadow-inner border border-white/30" title="Keluar"><i data-lucide="log-out" width="20"></i></button>
                             </div>
                         </div>
 
                         <div className="p-6 pb-0">
-                            <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
-                                <div className="relative z-10">
-                                    <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
-                                    
-                                    {/* MODIFIED: Show loading text if themeData is null */}
-                                    {themeData ? (
-                                        <>
-                                            <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
-                                            <div className={`grid gap-3 ${gridCols}`}>
-                                                {displayWeeks.map((week, idx) => (
-                                                    <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-3 rounded-2xl border flex flex-col h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
-                                                        <div className={`mb-2 border-b pb-1 ${idx % 2 === 0 ? 'border-sky-200' : 'border-indigo-200'}`}>
-                                                            <span className={`text-[10px] font-black uppercase tracking-wider block ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}</span>
-                                                            <h4 className={`font-bold text-sm leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
-                                                        </div>
-                                                        <div className="flex-1 space-y-2 mb-2">
-                                                            {week.themeVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Ayat Tema</p><p className="text-xs font-bold text-slate-700">{week.themeVerse}</p></div>)}
-                                                            {week.memoryVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Hafalan</p><p className="text-xs font-bold text-slate-700">{week.memoryVerse}</p></div>)}
-                                                        </div>
-                                                        <p className="text-slate-600 italic font-medium text-[10px] leading-relaxed line-clamp-3">"{week.content}"</p>
-                                                        <div className="mt-2 text-center"><span className="text-[10px] font-bold text-sky-500 bg-white px-2 py-1 rounded-full shadow-sm">Klik untuk Detail</span></div>
+                            {/* FIX: WRAP ENTIRE CARD IN CONDITION - HAPUS KOTAK KOSONG */}
+                            {themeData && themeData.title ? (
+                                <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
+                        
+                                    <div className="relative z-10">
+                                        <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
+                                        <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
+    
+                                        <div className={`grid gap-3 ${gridCols}`}>
+                                            {displayWeeks.map((week, idx) => (
+                    
+                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-3 rounded-2xl border flex flex-col h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ?
+                                                'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
+                                                    <div className={`mb-2 border-b pb-1 ${idx % 2 === 0 ?
+                                                    'border-sky-200' : 'border-indigo-200'}`}>
+                                                        <span className={`text-[10px] font-black uppercase tracking-wider block ${idx % 2 === 0 ?
+                                                        'text-sky-400' : 'text-indigo-400'}`}>{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}</span>
+                                                        <h4 className={`font-bold text-sm leading-tight ${idx % 2 === 0 ?
+                                                        'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="text-center py-10 opacity-50">
-                                            <div className="animate-pulse flex flex-col items-center">
-                                                <div className="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
-                                                <div className="h-20 bg-slate-100 rounded w-full"></div>
-                                            </div>
+                                                    <div className="flex-1 space-y-2 mb-2">
+                                                        {week.themeVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Ayat Tema</p><p className="text-xs font-bold text-slate-700">{week.themeVerse}</p></div>)}
+                                    
+                                                        {week.memoryVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Hafalan</p><p className="text-xs font-bold text-slate-700">{week.memoryVerse}</p></div>)}
+                                                    </div>
+                    
+                                                    <p className="text-slate-600 italic font-medium text-[10px] leading-relaxed line-clamp-3">"{week.content}"</p>
+                                                    <div className="mt-2 text-center"><span className="text-[10px] font-bold text-sky-500 bg-white px-2 py-1 rounded-full shadow-sm">Klik untuk Detail</span></div>
+        
+                                                </div>
+                                            ))}
+                        
                                         </div>
+                                    </div>
+                                    {(isAdmin || isPanitia) && (
+                                        <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
                                     )}
-
                                 </div>
-                                {(isAdmin || isPanitia) && (
-                                    <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
-                                )}
-                            </div>
+                            ) : null} 
+                            {/* END FIX */}
                         </div>
 
                         <div className="p-6 space-y-4">
-                            <button onClick={() => setView('my_barcode')} className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
+                            <button onClick={() => setView('my_barcode')} 
+                            className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
                                 <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="qr-code" width="28" height="28"></i></div>
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
+  
                             </button>
 
                             {isPeserta && (
-                                <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4">
+                                <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl 
+                                flex items-center gap-4 shadow-lg mt-4">
                                     <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
                                     <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Input Absen</h3><p className="text-xs text-slate-400 font-bold">Catat Kehadiran Manual</p></div>
+       
                                 </button>
                             )}
 
                             {(['gsm', 'petugas', 'pembimbing', 'pendeta'].includes(safeUser.role)) && (
+              
                                 <button onClick={() => setView('live_report')} className="w-full btn-playful bg-emerald-500 border-b-4 border-emerald-700 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4 transform hover:scale-[1.01]">
                                     <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="clipboard-list" width="24" height="24"></i></div>
+                    
                                     <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Data Kehadiran</h3><p className="text-xs text-emerald-100 font-bold opacity-90">Cek List Peserta Hadir</p></div>
                                 </button>
                             )}
 
+            
                             {!isPeserta && (
                                 <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
-                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 
+                                    text-center">Menu Admin</h4>
                                     
                                     <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+           
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-check" width="20"></i></div>
                                         <div className="text-left"><h3 className="font-bold">Kelola Absensi</h3><p className="text-[10px] text-indigo-100 opacity-90">Input Manual & Setting Jam</p></div>
+                
                                     </button>
 
-                                    <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                    <button onClick={() => { setView('scan');
+                                    setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
-                                        <div className="text-left"><h3 className="font-bold">Scan QR Absensi</h3><p className="text-[10px] text-sky-100 opacity-90">Mode: Rekam Kehadiran</p></div>
+                                        <div 
+                                        className="text-left"><h3 className="font-bold">Scan QR Absensi</h3><p className="text-[10px] text-sky-100 opacity-90">Mode: Rekam Kehadiran</p></div>
                                     </button>
 
                                     {safeUser.role !== 'petugas' && (
+                
                                         <button onClick={() => { setView('live_report'); }} className="w-full btn-playful bg-emerald-500 text-white border-b-4 border-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                             <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-list" width="20"></i></div>
+         
                                             <div className="text-left"><h3 className="font-bold">Lihat Data Hadir</h3><p className="text-[10px] text-emerald-100 opacity-90">Laporan Realtime Hari Ini</p></div>
                                         </button>
+               
                                     )}
 
                                     <button onClick={() => setView('manage_broadcast')} className="w-full btn-playful bg-slate-700 text-white border-b-4 border-slate-900 p-3 rounded-xl flex items-center gap-3 shadow-lg shadow-slate-300 mb-3">
+                          
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="megaphone" width="18"></i></div>
                                         <div className="text-left text-xs"><h3 className="font-bold text-sm">Broadcast Notifikasi</h3><p className="text-[10px] text-slate-200 opacity-90">Kirim Info ke Semua Layar</p></div>
+                             
                                     </button>
                                 
                                     {isAdmin && (<div className="grid grid-cols-1 gap-3 mb-3"><button onClick={() => setView('manage_users')} className="btn-playful btn-blue rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2 border-b-4 border-sky-700"><i data-lucide="user-cog"></i> Atur User</button></div>)}
+ 
                                     {isAdmin && (<button onClick={() => setView('generate')} className="w-full btn-playful btn-white border-b-4 mb-3 p-3 rounded-xl flex items-center gap-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><i data-lucide="database" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold text-slate-700">Database Peserta</h3></div></button>)}
                                     {isAdmin && (
+ 
                                         <div className="mt-4 pt-4 border-t border-dashed border-slate-300 space-y-2">
-                                            <button onClick={handleResetAllData} className="w-full btn-playful bg-rose-100 text-rose-600 border-b-4 border-rose-200 hover:bg-rose-200 p-3 rounded-xl flex items-center justify-center gap-2">
+                                            <button onClick={handleResetAllData} className="w-full btn-playful bg-rose-100 text-rose-600 border-b-4 border-rose-200 hover:bg-rose-200 p-3 rounded-xl 
+                                            flex items-center justify-center gap-2">
                                                 <i data-lucide="users" width="14"></i>
+                                               
                                                 <span className="font-black text-[10px]">RESET DATA PESERTA</span>
                                             </button>
                                         </div>
+           
                                     )}
                                 </div>
                             )}
+               
                             
                             <button onClick={() => setView('change_password')} className="w-full py-3 text-slate-400 text-xs font-bold hover:text-slate-600 transition flex items-center justify-center gap-2"><i data-lucide="lock" width="12"></i> Ganti Password Saya</button>
-                            <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
+                            <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex 
+                            items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
                         
                             <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; {new Date().getFullYear()} SM GKPS Resort Tangerang</p>
+                                <p className="text-[10px] text-slate-400 font-bold 
+                                mb-1">&copy; {new Date().getFullYear()} SM GKPS Resort Tangerang</p>
                                 <p className="text-[9px] text-slate-300 font-medium">Dibuat untuk Kemuliaan Tuhan</p>
                             </div>
 
                         </div>
+    
                     </div>
                     
                     <WeekDetailModal week={selectedWeek} onClose={() => setSelectedWeek(null)} />
                     {isLogoutModalOpen && <LogoutModal />}
+                
                     {isInstallModalOpen && <InstallModal />}
                     {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
                     <BroadcastPopup />
@@ -1111,66 +1157,94 @@
                 return (
                     <div className="min-h-screen bg-slate-50 relative">
                         <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
+                            
                             <div className="flex items-center gap-3 mb-4">
                                 <button onClick={handleBackToMenu} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
                                 <h2 className="font-black text-xl text-slate-800">Kelola Absensi</h2>
+                     
                             </div>
                             
                             {!isPeserta && (
-                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 space-y-3">
+                                <div className="bg-indigo-50 p-4 
+                                rounded-xl border border-indigo-100 mb-4 space-y-3">
                                     <div className="flex items-center justify-between">
                                         <span className="font-bold text-sm text-indigo-800">Mode Otomatis</span>
+             
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input type="checkbox" className="sr-only peer" checked={sessionConfig.autoMode} onChange={e => setSessionConfig({...sessionConfig, autoMode: e.target.checked})} />
+               
                                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                                         </label>
+           
                                     </div>
                                     
-                                    {sessionConfig.autoMode ? (
+                                    {sessionConfig.autoMode ?
+                                    (
                                         <div className="flex gap-2">
-                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} onChange={e => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
+                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} 
+                                            onChange={e => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
                                             <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Tutup</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.closeTime} onChange={e => setSessionConfig({...sessionConfig, closeTime: e.target.value})} /></div>
+                                  
                                         </div>
                                     ) : (
                                         <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
+         
                                             <span className="font-bold text-sm text-slate-600">Status Absensi</span>
-                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
+                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ?
+                                            'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
                                         </div>
                                     )}
-                                    
+                  
+                   
                                     <button onClick={handleSaveConfig} className="w-full bg-indigo-600 text-white text-xs font-bold py-3 rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200">Simpan Pengaturan</button>
                                 </div>
+  
                             )}
 
                             {!isPeserta && (
-                                <input className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700" placeholder="Cari Nama Peserta..." value={filterManual} onChange={e => setFilterManual(e.target.value)} />
+                                <input className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700" placeholder="Cari 
+                                Nama Peserta..." value={filterManual} onChange={e => setFilterManual(e.target.value)} />
                             )}
                         </div>
 
                         <div className="p-4 pb-20 space-y-3">
-                            {filteredParticipants.length === 0 && isPeserta ? (
+               
+                            {filteredParticipants.length === 0 && isPeserta ?
+                            (
                                 <div className="text-center p-8 opacity-50">
                                     <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
+                        
                                     <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
                                 </div>
                             ) : (
+                  
                                 filteredParticipants.map(p => {
                                     const statusData = liveAttendance.find(l => l.id === p.id);
                                     return (
+    
                                         <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-bounce-in">
                                             <div className="flex justify-between items-start mb-3">
-                                                <div><h4 className="font-bold text-slate-800">{p.nama}</h4><p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas || '-'}</p></div>
-                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ? 'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ? 'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
+        
+                                                <div><h4 className="font-bold text-slate-800">{p.nama}</h4><p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas ||
+                                                '-'}</p></div>
+                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ?
+                                                'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ?
+                                                'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
                                             </div>
                                             <div className="grid grid-cols-4 gap-2">
+       
                                                 <button onClick={() => handleManualAttendance(p, 'Hadir')} className="bg-emerald-50 text-emerald-600 border-b-2 border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold">Hadir</button>
+                                              
                                                 <button onClick={() => handleManualAttendance(p, 'Izin')} className="bg-orange-50 text-orange-600 border-b-2 border-orange-200 hover:bg-orange-100 py-2 rounded-lg text-xs font-bold">Izin</button>
                                                 <button onClick={() => handleManualAttendance(p, 'Sakit')} className="bg-blue-50 text-blue-600 border-b-2 border-blue-200 hover:bg-blue-100 py-2 rounded-lg text-xs font-bold">Sakit</button>
+                        
                                                 <button onClick={() => handleManualAttendance(p, 'Alpha')} className="bg-red-50 text-red-600 border-b-2 border-red-200 hover:bg-red-100 py-2 rounded-lg text-xs font-bold">Alpha</button>
                                             </div>
+                   
                                         </div>
                                     )
                                 })
+           
                             )}
                         </div>
                     </div>
@@ -1183,43 +1257,58 @@
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
                     <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
                         <div className="flex items-center justify-between mb-4">
-                             <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
+                     
+                            <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
                              <div className="text-right">
                                 <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
+        
                                 <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
                              </div>
                         </div>
-                        
+              
+           
                         <div className="flex gap-2 items-center mb-2">
                             <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 text-slate-600 text-xs font-bold p-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-indigo-400" />
-                            
+                  
+           
                             <button onClick={handleExportAttendance} className="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 border-2 border-green-200 flex-1 text-xs font-bold flex items-center justify-center gap-1">
                                 <i data-lucide="download" width="14"></i> Export Excel
-                             </button>
+           
+                            </button>
                         </div>
                         
                         {!isPeserta && liveAttendance.length > 0 && (
-                             <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
+     
+                            <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
                                 <i data-lucide="trash-2" width="12"></i> Hapus Data Tanggal Ini
-                             </button>
+                       
+                            </button>
                         )}
                         
                      </div>
-                    <div className="flex-1 p-4 pb-20 overflow-y-auto">
-                        {liveAttendance.length === 0 ? (
+                    <div className="flex-1 p-4 
+                    pb-20 overflow-y-auto">
+                        {liveAttendance.length === 0 ?
+                        (
                             <div className="text-center mt-10 opacity-50">
                                 <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
+                               
                                 <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
+       
                                 {liveAttendance.map((item, idx) => (
                                     <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-bounce-in">
+                        
                                         <div className={`font-black text-xs p-3 rounded-xl min-w-[60px] text-center ${item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>{item.jam}<span className="block text-[8px] opacity-60 font-normal">WIB</span></div>
-                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ? 'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ? 'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
+                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ?
+                                        'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ?
+                                        'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
                                     </div>
                                 ))}
                             </div>
+  
                         )}
                     </div>
                 </div>
@@ -1231,20 +1320,29 @@
                 return (
                 <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
                     <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
-                    {attendanceMode && (<button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span></button>)}
+                    {attendanceMode && (<button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 
+                    text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span></button>)}
                     <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
                         <div id="reader" className="w-full h-auto bg-black"></div>
                         {scanResult && (
-                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ? 'bg-white' : 'bg-red-50'}`}>
-                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i></div>
-                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ? 'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
+ 
+                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ?
+                            'bg-white' : 'bg-red-50'}`}>
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ?
+                                'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i></div>
+                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ?
+                                'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
                                 <p className="text-center text-sm text-slate-500 font-bold mb-4">{scanResult.msg}</p>
-                                {scanResult.success && scanResult.p && (<div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">{scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}<div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div><div className="flex gap-4"><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p></div></div></div>)}
-                                <button onClick={() => { setScanResult(null); startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
+                                {scanResult.success && scanResult.p && (<div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">{scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs 
+                                font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}<div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div><div className="flex gap-4"><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas ||
+                                '-'}</p></div></div></div>)}
+                                <button onClick={() => { setScanResult(null);
+                                startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
                             </div>
                         )}
                     </div>
                     
+ 
                     <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">Arahkan kamera ke QR Code peserta untuk cek data & simpan kehadiran.</p>
                 </div>
             );
@@ -1253,81 +1351,111 @@
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
                         <div className="flex items-center justify-between mb-6">
+             
                             <button onClick={handleBackToMenu} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
                             <h2 className="font-black text-xl text-slate-700">Edit Bahan Ajar</h2>
                         </div>
+               
                         <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 space-y-4 mb-4">
                             <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Judul Besar / Tema Bulanan</label><input className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" value={editThemeForm.title} onChange={e => setEditThemeForm({...editThemeForm, title: e.target.value})} placeholder="Contoh: Kasih Allah..." /></div>
                         </div>
+  
                         <div className="space-y-4">
                             {editThemeForm.weeks.map((week, index) => (
                                 <div key={index} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 relative group">
+     
                                     <button onClick={() => handleRemoveWeek(index)} className="absolute top-4 right-4 bg-rose-100 hover:bg-rose-200 text-rose-500 p-2 rounded-xl transition shadow-sm" title="Hapus Minggu Ini"><i data-lucide="trash-2" width="18"></i></button>
                                     <h3 className="font-black text-indigo-500 text-sm uppercase tracking-widest mb-4">Minggu ke-{index + 1}</h3>
+      
                                     <div className="space-y-3">
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Tanggal (Opsional)</label><input type="date" className="w-full p-2 border rounded-lg font-bold text-slate-600 text-sm" value={week.date} onChange={e => handleWeekChange(index, 'date', e.target.value)} /></div>
+         
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Topik / Judul Minggu Ini</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.topic} onChange={e => handleWeekChange(index, 'topic', e.target.value)} placeholder="Contoh: Minggu 1: Ketaatan" /></div>
-                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Tema (Singkat)</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" /></div>
+                                        <div><label className="text-[10px] font-bold 
+                                        text-slate-400 uppercase">Ayat Tema (Singkat)</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" /></div>
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Hafalan (Isi Lengkap)</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-xs h-16" value={week.memoryVerse} onChange={e => handleWeekChange(index, 'memoryVerse', e.target.value)} placeholder="Tulis ayat hafalan disini..." /></div>
+              
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." /></div>
                                     </div>
-                                  </div>
+               
+                                </div>
                             ))}
                         </div>
-                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
+                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl 
+                        border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
                         <div className="sticky bottom-4 mt-6 space-y-2"><button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button></div>
                     </div>
                 </div>
-              );
+         
+            );
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+          
                         
                         <div className="bg-white rounded-xl shadow p-4 mb-4 border-2 border-dashed border-indigo-200 text-center">
                              <div className="text-center relative hover:bg-indigo-50 transition rounded-lg p-2 cursor-pointer">
-                                 <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
+                 
+                                <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
                                 <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
-                                <span className="text-sm font-bold text-indigo-600 block">Import User (Excel/CSV)</span>
+                                <span className="text-sm font-bold text-indigo-600 
+                                block">Import User (Excel/CSV)</span>
                                 <span className="text-[10px] text-gray-400 block">Format: Username, Password, Nama, Role</span>
                             </div>
                         </div>
+       
                         
                         <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
-                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
+                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ?
+                            <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
                              <div className="space-y-3">
-                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
+                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ?
+                                 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
                                 <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
-                                <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
+                                <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" 
+                                value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
                                 
                                 <select className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 bg-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
-                                     <option value="petugas">Petugas</option>
+               
+                                    <option value="petugas">Petugas</option>
                                     <option value="admin">Admin</option>
                                     <option value="pengurus">Pengurus</option>
-                                     <option value="gsm">GSM</option>
+   
+                                    <option value="gsm">GSM</option>
                                     <option value="pembimbing">Pembimbing</option>
-                                     <option value="pendeta">Pendeta</option>
+                            
+                                    <option value="pendeta">Pendeta</option>
                                  </select>
                                 
-                                <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null); setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+                         
+                                <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ?
+                                'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null);
+                                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
                                 }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
                             </div>
                         </div>
                         <div className="space-y-2 pb-10">
+                 
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest">User Terdaftar</h3>
                             {users.map(u => (
                                 <div key={u.username} className={`bg-white p-4 rounded-2xl shadow-sm border-2 flex justify-between items-center ${editingId === u.username ? 'border-amber-400 bg-amber-50' : 'border-slate-100'}`}>
-                                      <div><p className="font-bold text-slate-700">{u.username}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama} • {u.role}</p></div>
+   
+                                    <div><p className="font-bold text-slate-700">{u.username}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama} • {u.role}</p></div>
                                     <div className="flex gap-2">
-                                         <button onClick={() => startEditUser(u)} className="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition" title="Edit Data"><i data-lucide="pencil" width="16"></i></button>
+                
+                                        <button onClick={() => startEditUser(u)} className="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition" title="Edit Data"><i data-lucide="pencil" width="16"></i></button>
                                         <button onClick={() => initiateAdminReset(u)} className="text-amber-500 bg-amber-50 p-2 rounded-lg hover:bg-amber-100 transition" title="Reset Password"><i data-lucide="key-round" width="16"></i></button>
-                                          {u.username !== 'admin' && (<button onClick={() => initiateDelete(`users/${u.username}`)} className="text-rose-500 bg-rose-50 p-2 rounded-lg hover:bg-rose-100 transition" title="Hapus User"><i data-lucide="trash-2" width="16"></i></button>)}
+         
+                                        {u.username !== 'admin' && (<button onClick={() => initiateDelete(`users/${u.username}`)} className="text-rose-500 bg-rose-50 p-2 rounded-lg hover:bg-rose-100 transition" title="Hapus User"><i data-lucide="trash-2" width="16"></i></button>)}
                                     </div>
-                                  </div>
+              
+                                </div>
                             ))}
                         </div>
                     </div>
-                     {deleteConfig.show && <DeleteConfirmModal />}
+        
+                    {deleteConfig.show && <DeleteConfirmModal />}
                     {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
                 </div>
             );
@@ -1335,53 +1463,75 @@
                 <div key="view-generate" className="min-h-screen bg-slate-100 p-4">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                
                         <div className="bg-white rounded-xl shadow p-6">
                             <h2 className="font-bold text-xl mb-6 text-indigo-800 flex items-center gap-2"><i data-lucide="users"></i> Data Peserta</h2>
                             
+                      
                             <div className="mb-6 space-y-4">
                                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition">
                                     <input type="file" accept=".csv" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                      <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
+       
+                                    <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
                                     <span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span>
+                    
                                     <span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span>
                                 </div>
                                 
+                 
                                 <button onClick={() => setShowAddForm(!showAddForm)} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 py-2 rounded transition">+ Input Manual</button>
                                 
                                 {showAddForm && (
-                                     <div className="bg-slate-50 p-4 rounded border animate-bounce-in">
-                                        <h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ? 'Edit Peserta' : 'Tambah Peserta'}</h3>
+      
+                                    <div className="bg-slate-50 p-4 rounded border animate-bounce-in">
+                                        <h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ?
+                                        'Edit Peserta' : 'Tambah Peserta'}</h3>
                                         <input className="w-full p-2 border rounded mb-2" placeholder="Nama Lengkap" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} />
-                                        <select className="w-full p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
+                                        <select className="w-full 
+                                        p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
                                             <option>Anak Sekolah Minggu</option><option>GSM</option><option>Panitia</option><option>Umum</option><option>Kelas</option> 
                                         </select>
-                                         <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
-                                            <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
+    
+                                        <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
+                                            <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} 
+                                            value={c}>{c}</option>)}
                                         </select>
                                         <div className="flex gap-2">
-                                              <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
-                                            {editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
+                  
+                                            <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ?
+                                            'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
+                                            {editingId && <button onClick={() => { setEditingId(null);
+                                            setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
                                         </div>
                                     </div>
+            
                                 )}
                             </div>
 
-                            {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
+                            {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ?
+                            'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
                             
                             <div className="grid grid-cols-2 gap-3">
-                                {participants.map(p => (
+                                {participants.map(p => 
+                                (
                                     <div key={p.id} className={`border p-3 rounded text-center bg-white shadow-sm hover:shadow-md transition relative ${editingId === p.id ? 'border-amber-400 bg-amber-50' : ''}`}>
                                         <div className="absolute top-2 right-2 flex gap-1">
-                                             <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button>
-                                            <button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button>
+ 
+                                            <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button>
+                                            <button onClick={() 
+                                            => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button>
                                             <button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100"><i data-lucide="trash-2" width="12"></i></button>
-                                          </div>
+                                      
+                                        </div>
                                         <img src={generateQRUrl(p.id)} className="w-24 mx-auto mb-2 mix-blend-multiply cursor-pointer hover:scale-110 transition-transform duration-200 border-2 border-transparent hover:border-indigo-200 rounded-lg p-1" loading="lazy" onClick={() => downloadSingleQR(p)} title="Klik untuk download QR" />
-                                         <p className="font-bold text-xs truncate text-slate-800">{p.nama}</p>
+                                 
+                                        <p className="font-bold text-xs truncate text-slate-800">{p.nama}</p>
                                         <p className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 inline-block mt-1">{p.kategori}</p>
-                                        {p.kelas && <p className="text-sm font-black text-red-600 mt-1 uppercase tracking-tighter">{p.kelas}</p>}
+                                        {p.kelas 
+                                        && <p className="text-sm font-black text-red-600 mt-1 uppercase tracking-tighter">{p.kelas}</p>}
                                     </div>
                                 ))}
+                         
                             </div>
                          </div>
                     </div>
@@ -1395,17 +1545,22 @@
                 return (
                     <div className="min-h-screen bg-indigo-600 p-4 flex flex-col items-center justify-center relative">
                         <button onClick={handleBackToMenu} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
-                        <div className="bg-white p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center animate-bounce-in relative overflow-hidden">
+                        <div className="bg-white 
+                        p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center animate-bounce-in relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500"></div>
                             <div className="mb-6">
+                          
                                 <h2 className="text-2xl font-black text-slate-800 font-fredoka mb-1">{safeUser.nama}</h2>
                                 <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">{safeUser.role}</span>
                             </div>
-                               <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
+                   
+                            <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
                                 <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-4 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Scan Me</div>
+                               
                                 <img src={qrUrl} alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
                             </div>
                             <p className="text-slate-400 text-xs font-bold w-3/4 mx-auto leading-relaxed">Tunjukkan QR Code ini kepada petugas sebagai identitas.</p>
+                      
                         </div>
                      </div>
                 );
@@ -1415,79 +1570,109 @@
             if (view === 'manage_broadcast') return (
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
+           
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
                         
                         {/* FORM INPUT BROADCAST */}
+                      
                         <div className="bg-white rounded-3xl shadow-lg p-6 border-2 border-indigo-100 mb-6">
                              <div className="flex items-center gap-3 mb-4 text-indigo-600">
                                 <div className="bg-indigo-100 p-2 rounded-lg"><i data-lucide="megaphone" width="24"></i></div>
+                    
                                 <h2 className="font-black text-xl">Buat Broadcast</h2>
                              </div>
                              <div className="space-y-3">
+                          
                                 <div>
                                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Judul</label>
-                                    <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" placeholder="Contoh: Pengumuman Penting" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
+                                    <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" placeholder="Contoh: Pengumuman Penting" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: 
+                                    e.target.value})} />
                                 </div>
                                 <div>
+                                   
                                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Isi Pesan</label>
                                     <textarea className="w-full border-2 p-3 rounded-xl font-medium text-slate-600 h-28 focus:outline-none focus:border-indigo-400" placeholder="Tulis pesan lengkap disini..." value={broadcastForm.message} onChange={e => setBroadcastForm({...broadcastForm, message: e.target.value})} />
                                 </div>
+     
                                 <div className="flex gap-2">
                                     <div className="flex-1">
+                                  
                                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tipe</label>
                                         <select className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400" value={broadcastForm.type} onChange={e => setBroadcastForm({...broadcastForm, type: e.target.value})}>
+                                  
                                             <option value="info">ℹ️ Info (Biru)</option>
                                             <option value="urgent">⚠️ Penting (Merah)</option>
+                                        
                                         </select>
                                     </div>
                                     <div className="flex-1">
+                           
                                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Jadwal (Opsional)</label>
                                         <input type="datetime-local" className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400 text-xs" value={broadcastForm.schedule} onChange={e => setBroadcastForm({...broadcastForm, schedule: e.target.value})} />
+                       
                                     </div>
                                 </div>
                                 
+                       
                                 <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg mt-2 flex items-center justify-center gap-2">
                                     <i data-lucide="send" width="18"></i> 
-                                    {broadcastForm.schedule ? 'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
+                                    {broadcastForm.schedule ?
+                                    'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
                                 </button>
                                 {broadcastForm.schedule && <p className="text-center text-[10px] text-slate-400 font-bold">Akan muncul otomatis pada: {new Date(broadcastForm.schedule).toLocaleString('id-ID')}</p>}
-                             </div>
+                     
+                            </div>
                         </div>
 
                         {/* LIST ARSIP / HISTORY */}
                         <div>
+               
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest mb-3">Arsip / Riwayat Pesan</h3>
                             <div className="space-y-3">
-                                {broadcastHistory.length === 0 ? (
+                                {broadcastHistory.length === 0 ?
+                                (
                                     <div className="text-center p-8 opacity-50 border-2 border-dashed border-slate-300 rounded-xl">
                                         <p className="font-bold text-sm text-slate-400">Belum ada riwayat broadcast.</p>
+           
                                     </div>
                                 ) : (
                                     broadcastHistory.map((item) => (
+   
                                         <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
-                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" width="16"></i></button>
+                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i 
+                                            data-lucide="trash-2" width="16"></i></button>
                                             
                                             <div className="flex items-center gap-2 mb-2">
-                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ? 'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
+       
+                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ?
+                                                'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
                                                 {item.scheduledAt && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="clock" width="10"></i> Terjadwal</span>}
+                             
                                             </div>
 
                                             <h4 className="font-bold text-slate-800 text-sm mb-1">{item.title}</h4>
+                                     
                                             <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.message}</p>
                                             
-                                            <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                                            <div 
+                                            className="flex justify-between items-center pt-2 border-t border-slate-50">
                                                 <span className="text-[10px] text-slate-400 font-bold"><i data-lucide="user" width="10" className="inline mr-1"/>{item.sender}</span>
+                                        
                                                 <div className="text-right">
                                                     <span className="text-[10px] text-slate-400 font-bold block">{item.timestamp}</span>
+                                   
                                                     {item.scheduledAt && <span className="text-[9px] text-amber-600 font-bold block">Jadwal: {new Date(item.scheduledAt).toLocaleString('id-ID')}</span>}
                                                 </div>
+                           
                                             </div>
                                         </div>
                                     ))
+       
                                 )}
                             </div>
                         </div>
                     </div>
+   
                 </div>
             );
             // ------------------------------------
@@ -1496,9 +1681,11 @@
                 <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
                     <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-lg border-2 border-indigo-100 text-center">
                         <h2 className="text-xl font-black text-slate-800 mb-6">Ganti Password</h2>
+  
                         <input type="text" className="w-full p-3 border-2 border-slate-200 rounded-xl mb-4 font-bold text-center" placeholder="Password Baru..." value={selfPassword} onChange={e => setSelfPassword(e.target.value)} />
                         <button onClick={handleChangeSelfPassword} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold mb-3">Simpan Password</button>
                         <button onClick={handleBackToMenu} className="text-slate-400 font-bold text-xs">Batal</button>
+ 
                     </div>
                 </div>
             );
@@ -1506,23 +1693,29 @@
                  if (connectionError) {
                      return (
                          <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
-                             <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm border-4 border-rose-100">
+                     
+                            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm border-4 border-rose-100">
                                 <div className="text-rose-500 mb-4"><i data-lucide="alert-octagon" width="48" height="48" className="mx-auto"></i></div>
                                 <h2 className="text-xl font-black text-slate-700 mb-2">Gagal Terhubung</h2>
+          
                                 <p className="text-sm text-slate-500 mb-4 font-bold">Koneksi ke Database gagal.</p>
                                 <div className="bg-slate-100 p-3 rounded-xl text-xs text-left mb-4 overflow-auto max-h-32 border border-slate-200"><code>{connectionError}</code></div>
+                             
                                 <button onClick={() => window.location.reload()} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Coba Lagi</button>
                             </div>
                          </div>
                      )
+             
                  }
                  return (
                     <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
                         <div className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-xl">
+                      
                             <div className="animate-spin w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full mx-auto mb-4"></div>
                             <h1 className="text-xl font-black text-slate-700 mb-1">Memuat Data...</h1>
                         </div>
                     </div>
+        
                 );
             }
             
