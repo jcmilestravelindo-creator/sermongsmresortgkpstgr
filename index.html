@@ -206,10 +206,14 @@
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
+            
+            // --- FIX: EMPTY DEFAULT THEME TO AVOID FLASH OF OLD CONTENT ---
             const defaultTheme = {
-                title: "Terpanggil dan siap melayani Tuhan",
-                weeks: [ { date: "", topic: "Contoh Tema Minggu 1", content: "Isi bahan ajar...", themeVerse: 'Yohanes 3:16', memoryVerse: 'Yohanes 3:16' } ]
+                title: "", 
+                weeks: [] 
             };
+            // -------------------------------------------------------------
+
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
                 if (!config.autoMode) return config.isOpen; 
@@ -978,23 +982,37 @@
                                 <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
                                 <div className="relative z-10">
                                     <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
-                                    <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
-                                    <div className={`grid gap-3 ${gridCols}`}>
-                                        {displayWeeks.map((week, idx) => (
-                                            <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-3 rounded-2xl border flex flex-col h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
-                                                <div className={`mb-2 border-b pb-1 ${idx % 2 === 0 ? 'border-sky-200' : 'border-indigo-200'}`}>
-                                                    <span className={`text-[10px] font-black uppercase tracking-wider block ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}</span>
-                                                    <h4 className={`font-bold text-sm leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
-                                                </div>
-                                                <div className="flex-1 space-y-2 mb-2">
-                                                    {week.themeVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Ayat Tema</p><p className="text-xs font-bold text-slate-700">{week.themeVerse}</p></div>)}
-                                                    {week.memoryVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Hafalan</p><p className="text-xs font-bold text-slate-700">{week.memoryVerse}</p></div>)}
-                                                </div>
-                                                <p className="text-slate-600 italic font-medium text-[10px] leading-relaxed line-clamp-3">"{week.content}"</p>
-                                                <div className="mt-2 text-center"><span className="text-[10px] font-bold text-sky-500 bg-white px-2 py-1 rounded-full shadow-sm">Klik untuk Detail</span></div>
+                                    
+                                    {/* MODIFIED: Show loading text if themeData is null */}
+                                    {themeData ? (
+                                        <>
+                                            <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
+                                            <div className={`grid gap-3 ${gridCols}`}>
+                                                {displayWeeks.map((week, idx) => (
+                                                    <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-3 rounded-2xl border flex flex-col h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
+                                                        <div className={`mb-2 border-b pb-1 ${idx % 2 === 0 ? 'border-sky-200' : 'border-indigo-200'}`}>
+                                                            <span className={`text-[10px] font-black uppercase tracking-wider block ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}</span>
+                                                            <h4 className={`font-bold text-sm leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
+                                                        </div>
+                                                        <div className="flex-1 space-y-2 mb-2">
+                                                            {week.themeVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Ayat Tema</p><p className="text-xs font-bold text-slate-700">{week.themeVerse}</p></div>)}
+                                                            {week.memoryVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Hafalan</p><p className="text-xs font-bold text-slate-700">{week.memoryVerse}</p></div>)}
+                                                        </div>
+                                                        <p className="text-slate-600 italic font-medium text-[10px] leading-relaxed line-clamp-3">"{week.content}"</p>
+                                                        <div className="mt-2 text-center"><span className="text-[10px] font-bold text-sky-500 bg-white px-2 py-1 rounded-full shadow-sm">Klik untuk Detail</span></div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
+                                        </>
+                                    ) : (
+                                        <div className="text-center py-10 opacity-50">
+                                            <div className="animate-pulse flex flex-col items-center">
+                                                <div className="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
+                                                <div className="h-20 bg-slate-100 rounded w-full"></div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                 </div>
                                 {(isAdmin || isPanitia) && (
                                     <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
