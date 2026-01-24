@@ -18,23 +18,16 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .bg-school-sunday { background: radial-gradient(circle at 50% 0%, #e0f2fe 0%, #f8fafc 100%); background-attachment: fixed; }
-            .glass-panel { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 10px 40px -10px rgba(30, 58, 138, 0.15); }
-            .btn-playful { @apply transition-all duration-200 border-b-4 active:translate-y-1 active:border-b-0 active:mb-1; }
-            .btn-blue { @apply bg-sky-500 border-sky-700 text-white hover:bg-sky-600; }
-            .btn-yellow { @apply bg-amber-400 border-amber-600 text-amber-900 hover:bg-amber-500; }
-            .btn-red { @apply bg-rose-500 border-rose-700 text-white hover:bg-rose-600; }
-            .btn-white { @apply bg-white border-slate-200 text-slate-700 hover:bg-slate-50; }
-        }
+    <style>
         body { 
             touch-action: manipulation;
             font-family: 'Nunito', sans-serif;
@@ -44,6 +37,14 @@
         h1, h2, h3, h4 { font-family: 'Fredoka', sans-serif; }
         .animate-bounce-in { animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
         @keyframes bounceIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .bg-school-sunday { background: radial-gradient(circle at 50% 0%, #e0f2fe 0%, #f8fafc 100%); background-attachment: fixed; }
+        .btn-playful { transition: all 0.2s; border-bottom-width: 4px; }
+        .btn-playful:active { transform: translateY(4px); border-bottom-width: 0px; margin-bottom: 4px; }
+        .btn-blue { @apply bg-sky-500 border-sky-700 text-white hover:bg-sky-600; }
+        .btn-yellow { @apply bg-amber-400 border-amber-600 text-amber-900 hover:bg-amber-500; }
+        .btn-red { @apply bg-rose-500 border-rose-700 text-white hover:bg-rose-600; }
+        .btn-white { @apply bg-white border-slate-200 text-slate-700 hover:bg-slate-50; }
+        .glass-panel { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 10px 40px -10px rgba(30, 58, 138, 0.15); }
         .bell-ring { animation: ring 4s ease-in-out infinite; transform-origin: 50% 0%; }
         @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(30deg); } 30% { transform: rotate(-28deg); } 50% { transform: rotate(34deg); } 70% { transform: rotate(-32deg); } 90% { transform: rotate(30deg); } 100% { transform: rotate(0); } }
         
@@ -58,11 +59,15 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         
+        // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW fail', err));
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => console.log('SW registered: ', registration))
+                    .catch(registrationError => console.log('SW registration failed: ', registrationError));
             });
         }
+        // ---------------------------------------
 
         let firebaseConfig;
         try {
@@ -97,13 +102,13 @@
 
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
-        
         // --- GLOBAL: INSTALL PROMPT LOGIC ---
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
         });
+        // ------------------------------------
 
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
@@ -181,17 +186,11 @@
             const [attendanceMode, setAttendanceMode] = useState(false);
             const [sessionConfig, setSessionConfig] = useState({ isOpen: true, autoMode: false, openTime: '07:00', closeTime: '12:00' });
             const [filterManual, setFilterManual] = useState("");
-            
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
             const sessionConfigRef = useRef(sessionConfig);
 
-            // GLOBAL HELPERS
-            const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
-            const isAdmin = safeUser.role === 'admin';
-            const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
-            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
-
+            // --- BARU: STATE UNTUK FILTER TANGGAL (ARCHIVE) ---
             const getSafeDateId = () => {
                 const d = new Date();
                 const year = d.getFullYear();
@@ -200,6 +199,7 @@
                 return `${year}-${month}-${day}`;
             };
             const [viewDate, setViewDate] = useState(getSafeDateId());
+            // ------------------------------------------------
 
             useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
@@ -210,6 +210,7 @@
                 title: "Terpanggil dan siap melayani Tuhan",
                 weeks: [ { date: "", topic: "Contoh Tema Minggu 1", content: "Isi bahan ajar...", themeVerse: 'Yohanes 3:16', memoryVerse: 'Yohanes 3:16' } ]
             };
+            
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
                 if (!config.autoMode) return config.isOpen; 
@@ -230,10 +231,8 @@
             const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
-            
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
-            
             const setView = (newView) => {
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
@@ -246,6 +245,7 @@
                 setSelectedWeek(null);
                 setScanResult(null); 
                 setViewRaw(newView);
+                // Reset view date when returning to menu or changing views
                 setViewDate(getSafeDateId());
             };
             const handleBackToMenu = () => {
@@ -264,6 +264,7 @@
                         }
                         if (auth.currentUser) {
                             setUserAuth(auth.currentUser);
+                            
                             setIsConnected(true);
                         }
                     } catch (error) {
@@ -276,7 +277,6 @@
                 if (savedUser) { try { setCurrentUser(JSON.parse(savedUser));
                 setViewRaw('menu'); } catch(e){} }
             }, []);
-
             useEffect(() => {
                 const db = window.db; const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
                 if (!userAuth || !db || !collection) return;
@@ -309,6 +309,8 @@
                     }
                 });
                 
+                // UPDATE: Menggunakan viewDate (bisa berubah) bukan static todayStr
+                // const todayStr = getSafeDateId(); 
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
                 try {
@@ -317,6 +319,7 @@
                         const data = snap.docs.map(d => d.data());
                         setLiveAttendance(data);
                     }, (err) => {
+                        // Jika permission error atau collection kosong, set kosong
                         setLiveAttendance([]);
                     });
                 } catch(e) {}
@@ -337,7 +340,7 @@
                     unsubscribeAttendance();
                     unsubscribeConfig();
                 };
-            }, [userAuth, viewDate]);
+            }, [userAuth, viewDate]); // Dependency ditambah viewDate agar fetch ulang saat tanggal ganti
 
             const saveToCloud = (path, data) => {
                 const db = window.db;
@@ -509,7 +512,8 @@
                 }
                 setIsInstallModalOpen(false);
             };
-            
+            // --------------------------
+
             // --- FUNGSI IMPORT USER (EXCEL/CSV) ---
             const handleImportUsers = async (e) => {
                 const file = e.target.files[0];
@@ -522,8 +526,10 @@
                     username = String(username).trim();
                     password = String(password).trim();
                     role = role ? role.toLowerCase().trim() : 'peserta';
+                    
                     await saveToCloud(`users/${username}`, { username, password, nama: nama || username, role });
                 };
+
                 if (file.name.endsWith('.csv')) {
                     const reader = new FileReader();
                     reader.onload = async (ev) => {
@@ -546,6 +552,7 @@
                     const json = window.XLSX.utils.sheet_to_json(sheet);
                     let count = 0;
                     for (const row of json) {
+                        // Support berbagai case key
                         const username = row['Username'] || row['username'] || Object.values(row)[0];
                         const password = row['Password'] || row['password'] || Object.values(row)[1];
                         const nama = row['Nama'] || row['nama'] || Object.values(row)[2];
@@ -564,6 +571,8 @@
                     alert(`Berhasil import ${count} user via Excel!`);
                 }
             };
+            
+            // --- FUNGSI EXPORT KEHADIRAN (EXCEL) ---
             const handleExportAttendance = () => {
                 if (!window.XLSX) return alert("Library Excel belum dimuat.");
                 if (liveAttendance.length === 0) return alert("Tidak ada data untuk diexport.");
@@ -574,6 +583,7 @@
                 XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
             };
 
+            // --- FUNGSI RESET DATA HARIAN ---
             const handleResetDailyData = async () => {
                 if (!currentUser) return;
                 const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal: ${viewDate}.\nData yang dihapus tidak bisa kembali!`);
@@ -582,6 +592,7 @@
                     const { collection, getDocs, deleteDoc } = window.fs;
                     const basePath = `artifacts/${appId}/public/data`;
                     const targetCollection = collection(db, `${basePath}/attendance/${viewDate}/records`);
+                    
                     try {
                         const snapshot = await getDocs(targetCollection);
                         if (snapshot.empty) {
@@ -595,7 +606,9 @@
                     }
                 }
             };
-            
+            // ------------------------------------
+
+            // --- COMPONENT DEFINITIONS ---
             const LogoutModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
@@ -725,7 +738,7 @@
                         alert("Password Admin Berhasil Direset!"); 
                         setView('menu');
                     } else { alert("Gagal koneksi: " + err.message);
-                    }
+}
                 });
             };
             const initiateAdminReset = (u) => setAdminResetConfig({ show: true, user: u, newPass: '' });
@@ -840,6 +853,13 @@
                 handleBackToMenu();
             };
             
+            // --- GLOBAL VARIABLES ---
+            const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
+            const isAdmin = safeUser.role === 'admin';
+            const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
+            // UPDATE: Menambahkan Pembimbing dan Pendeta ke dalam kategori isPeserta (jika diperlukan) atau logika akses lain
+            // Disini Pembimbing dan Pendeta dianggap memiliki akses setara GSM/Peserta dalam hal view dasar
+            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
 
             // --- VIEW LOGIC ---
 
@@ -852,26 +872,15 @@
                             <p className="text-slate-400 font-bold text-xs mt-1">GKPS Resort Tangerang</p>
                         </div>
                         <form onSubmit={handleLogin} className="space-y-4">
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Username</label><input name="username" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder:text-slate-400" placeholder="Ketik username..." required/></div>
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Password</label><input type="password" name="password" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder:text-slate-400" placeholder="***" required/></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Username</label><input name="username" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-Ketik username..." required/></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Password</label><input type="password" name="password" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-***" required/></div>
                             <button type="submit" className="w-full btn-playful btn-blue font-black py-4 rounded-2xl text-lg shadow-lg shadow-sky-200 mt-2">MASUK YUK!</button>
                             <button type="button" onClick={() => setView('forgot_password')} className="text-sky-600 font-bold text-xs hover:text-sky-800 underline text-right block w-full mt-2">Lupa Password?</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
                              {isConnected ?
-                             <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                            <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
-                        
-                        {/* COPYRIGHT SECTION ADDED HERE */}
-                        <div className="mt-4 text-center">
-                            <p className="text-[10px] text-slate-400 font-bold font-fredoka">
-                                &copy; {new Date().getFullYear()} SM GKPS Resort Tangerang
-                            </p>
-                            <p className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-0.5">
-                                Pamasuk Ham Ma Au
-                            </p>
-                        </div>
-
                     </div>
                 </div>
             );
@@ -924,7 +933,7 @@
                                     <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
                                     <div className={`grid gap-3 ${gridCols}`}>
                                         {displayWeeks.map((week, idx) => (
-                                        <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-3 rounded-2xl border flex flex-col h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
+                                         <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-3 rounded-2xl border flex flex-col h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
                                                 <div className={`mb-2 border-b pb-1 ${idx % 2 === 0 ? 'border-sky-200' : 'border-indigo-200'}`}>
                                                     <span className={`text-[10px] font-black uppercase tracking-wider block ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}</span>
                                                     <h4 className={`font-bold text-sm leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
@@ -955,7 +964,7 @@
                                 <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4">
                                     <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
                                     <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Input Absen</h3><p className="text-xs text-slate-400 font-bold">Catat Kehadiran Manual</p></div>
-                                </button>
+                                 </button>
                             )}
 
                             {/* UPDATE: Logika tombol Data Kehadiran untuk GSM, Petugas, Pembimbing, Pendeta */}
@@ -988,7 +997,7 @@
                                      )}
 
                                     <button onClick={() => setView('manage_broadcast')} className="w-full btn-playful bg-slate-700 text-white border-b-4 border-slate-900 p-3 rounded-xl flex items-center gap-3 shadow-lg shadow-slate-300 mb-3">
-                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="megaphone" width="18"></i></div>
+                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="megaphone" width="18"></i></div>
                                         <div className="text-left text-xs"><h3 className="font-bold text-sm">Broadcast Notifikasi</h3><p className="text-[10px] text-slate-200 opacity-90">Kirim Info ke Semua Layar</p></div>
                                     </button>
                                 
@@ -1017,6 +1026,7 @@
                     <BroadcastPopup />
                 </div>
             );
+            }
             
             if (view === 'attendance_manager') {
                 let filteredParticipants = [];
@@ -1041,9 +1051,9 @@
                                         <span className="font-bold text-sm text-indigo-800">Mode Otomatis</span>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input type="checkbox" className="sr-only peer" checked={sessionConfig.autoMode} onChange={e => setSessionConfig({...sessionConfig, autoMode: e.target.checked})} />
-                                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                                         </label>
-                                    </div>
+                                     </div>
                                     
                                     {sessionConfig.autoMode ? (
                                         <div className="flex gap-2">
@@ -1067,7 +1077,7 @@
                         </div>
 
                         <div className="p-4 pb-20 space-y-3">
-                            {filteredParticipants.length === 0 && isPeserta ? (
+                             {filteredParticipants.length === 0 && isPeserta ? (
                                 <div className="text-center p-8 opacity-50">
                                     <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
                                     <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
@@ -1083,14 +1093,14 @@
                                             </div>
                                             <div className="grid grid-cols-4 gap-2">
                                                 <button onClick={() => handleManualAttendance(p, 'Hadir')} className="bg-emerald-50 text-emerald-600 border-b-2 border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold">Hadir</button>
-                                                <button onClick={() => handleManualAttendance(p, 'Izin')} className="bg-orange-50 text-orange-600 border-b-2 border-orange-200 hover:bg-orange-100 py-2 rounded-lg text-xs font-bold">Izin</button>
+                                                 <button onClick={() => handleManualAttendance(p, 'Izin')} className="bg-orange-50 text-orange-600 border-b-2 border-orange-200 hover:bg-orange-100 py-2 rounded-lg text-xs font-bold">Izin</button>
                                                 <button onClick={() => handleManualAttendance(p, 'Sakit')} className="bg-blue-50 text-blue-600 border-b-2 border-blue-200 hover:bg-blue-100 py-2 rounded-lg text-xs font-bold">Sakit</button>
                                                 <button onClick={() => handleManualAttendance(p, 'Alpha')} className="bg-red-50 text-red-600 border-b-2 border-red-200 hover:bg-red-100 py-2 rounded-lg text-xs font-bold">Alpha</button>
                                             </div>
-                                       </div>
+                                         </div>
                                     )
                                 })
-                            )}
+                             )}
                         </div>
                     </div>
                 );
@@ -1102,7 +1112,7 @@
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
                     <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
                         <div className="flex items-center justify-between mb-4">
-                            <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
+                             <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
                              <div className="text-right">
                                 <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
                                 <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
@@ -1130,7 +1140,7 @@
                         {liveAttendance.length === 0 ? (
                             <div className="text-center mt-10 opacity-50">
                                 <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
-                                <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
+                                 <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -1161,8 +1171,7 @@
                                 <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ? 'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
                                 <p className="text-center text-sm text-slate-500 font-bold mb-4">{scanResult.msg}</p>
                                 {scanResult.success && scanResult.p && (<div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">{scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}<div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div><div className="flex gap-4"><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p></div></div></div>)}
-                                <button onClick={() => { setScanResult(null);
-                                startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
+                                <button onClick={() => { setScanResult(null); startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
                             </div>
                         )}
                     </div>
@@ -1193,14 +1202,14 @@
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Hafalan (Isi Lengkap)</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-xs h-16" value={week.memoryVerse} onChange={e => handleWeekChange(index, 'memoryVerse', e.target.value)} placeholder="Tulis ayat hafalan disini..." /></div>
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." /></div>
                                     </div>
-                                  </div>
+                                 </div>
                             ))}
                         </div>
                         <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
                         <div className="sticky bottom-4 mt-6 space-y-2"><button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button></div>
                     </div>
                 </div>
-              );
+             );
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
@@ -1208,7 +1217,7 @@
                         
                         {/* UPDATE: FITUR IMPORT USER */}
                         <div className="bg-white rounded-xl shadow p-4 mb-4 border-2 border-dashed border-indigo-200 text-center">
-                            <div className="text-center relative hover:bg-indigo-50 transition rounded-lg p-2 cursor-pointer">
+                             <div className="text-center relative hover:bg-indigo-50 transition rounded-lg p-2 cursor-pointer">
                                 <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
                                 <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
                                 <span className="text-sm font-bold text-indigo-600 block">Import User (Excel/CSV)</span>
@@ -1246,9 +1255,9 @@
                                     <div className="flex gap-2">
                                         <button onClick={() => startEditUser(u)} className="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition" title="Edit Data"><i data-lucide="pencil" width="16"></i></button>
                                         <button onClick={() => initiateAdminReset(u)} className="text-amber-500 bg-amber-50 p-2 rounded-lg hover:bg-amber-100 transition" title="Reset Password"><i data-lucide="key-round" width="16"></i></button>
-                                        {u.username !== 'admin' && (<button onClick={() => initiateDelete(`users/${u.username}`)} className="text-rose-500 bg-rose-50 p-2 rounded-lg hover:bg-rose-100 transition" title="Hapus User"><i data-lucide="trash-2" width="16"></i></button>)}
+                                         {u.username !== 'admin' && (<button onClick={() => initiateDelete(`users/${u.username}`)} className="text-rose-500 bg-rose-50 p-2 rounded-lg hover:bg-rose-100 transition" title="Hapus User"><i data-lucide="trash-2" width="16"></i></button>)}
                                     </div>
-                                </div>
+                                 </div>
                             ))}
                         </div>
                     </div>
@@ -1266,7 +1275,7 @@
                             <div className="mb-6 space-y-4">
                                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition">
                                     <input type="file" accept=".csv" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                    <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
+                                     <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
                                     <span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span>
                                     <span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span>
                                 </div>
@@ -1284,7 +1293,7 @@
                                             <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                         <div className="flex gap-2">
-                                            <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
+                                             <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
                                             {editingId && <button onClick={() => { setEditingId(null);
                                             setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
                                         </div>
@@ -1295,14 +1304,13 @@
                             {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
                             
                             <div className="grid grid-cols-2 gap-3">
-                                {participants.map(p => 
-                                (
+                                {participants.map(p => (
                                     <div key={p.id} className={`border p-3 rounded text-center bg-white shadow-sm hover:shadow-md transition relative ${editingId === p.id ? 'border-amber-400 bg-amber-50' : ''}`}>
                                         <div className="absolute top-2 right-2 flex gap-1">
                                             <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button>
                                             <button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button>
                                             <button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100"><i data-lucide="trash-2" width="12"></i></button>
-                                        </div>
+                                         </div>
                                         <img src={generateQRUrl(p.id)} className="w-24 mx-auto mb-2 mix-blend-multiply cursor-pointer hover:scale-110 transition-transform duration-200 border-2 border-transparent hover:border-indigo-200 rounded-lg p-1" loading="lazy" onClick={() => downloadSingleQR(p)} title="Klik untuk download QR" />
                                         <p className="font-bold text-xs truncate text-slate-800">{p.nama}</p>
                                         <p className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 inline-block mt-1">{p.kategori}</p>
@@ -1328,7 +1336,7 @@
                                 <h2 className="text-2xl font-black text-slate-800 font-fredoka mb-1">{safeUser.nama}</h2>
                                 <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">{safeUser.role}</span>
                             </div>
-                            <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
+                             <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
                                 <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-4 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Scan Me</div>
                                 <img src={qrUrl} alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
                             </div>
@@ -1355,7 +1363,7 @@
                                     <option value="urgent">Penting/Darurat (Merah)</option>
                                 </select>
                                 <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg">KIRIM SEKARANG</button>
-                             </div>
+                              </div>
                         </div>
                     </div>
                 </div>
@@ -1364,7 +1372,7 @@
                 <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
                     <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-lg border-2 border-indigo-100 text-center">
                         <h2 className="text-xl font-black text-slate-800 mb-6">Ganti Password</h2>
-                        <input type="text" className="w-full p-3 border-2 border-slate-200 rounded-xl mb-4 font-bold text-center" placeholder="Password Baru..." value={selfPassword} onChange={e => setSelfPassword(e.target.value)} />
+                         <input type="text" className="w-full p-3 border-2 border-slate-200 rounded-xl mb-4 font-bold text-center" placeholder="Password Baru..." value={selfPassword} onChange={e => setSelfPassword(e.target.value)} />
                         <button onClick={handleChangeSelfPassword} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold mb-3">Simpan Password</button>
                         <button onClick={handleBackToMenu} className="text-slate-400 font-bold text-xs">Batal</button>
                     </div>
@@ -1402,3 +1410,4 @@
     </script>
 </body>
 </html>
+
