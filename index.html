@@ -3,868 +3,1411 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bonataon Marga Manihuruk Boru Bere / Panagolan 2026</title>
+    <title>SM GKPS Resort Tangerang</title>
     
+    <link rel="manifest" href="manifest.json">
+    
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#F0F9FF">
+    
+    <link rel="apple-touch-icon" href="https://img.icons8.com/color/480/church.png">
+    <link rel="icon" type="image/png" href="https://img.icons8.com/color/48/church.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:wght@700;800;900&family=Cinzel:wght@400;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"></script>
-      
+
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
     <style>
-        :root {
-            --emerald-900: #064e3b;
-            --emerald-600: #10b981;
-            --emerald-50: #ecfdf5;
-            --emerald-500: #34d399;
-            --amber-500: #f59e0b;
-            --slate-900: #0f172a;
-            --slate-800: #1e293b;
-            --gold-gradient: linear-gradient(135deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
-            --royal-gradient: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
-        }
-          
         body { 
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background: #0f172a;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.25) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%);
-            background-attachment: fixed;
-            min-height: 100vh;
-            color: #1e293b;
-            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            font-family: 'Nunito', sans-serif;
+            background-color: #F0F9FF; 
+            overscroll-behavior-y: none;
         }
-
-        .royal-font { font-family: 'Cinzel', serif; }
-          
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: blur(25px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.4);
-        }
-          
-        .header-bg {
-            background: var(--royal-gradient);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .header-bg::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
-            opacity: 0.05;
-            pointer-events: none;
-        }
-
-        .nav-btn {
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            min-height: 85px;
-            border-radius: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.6rem;
-            border: 1px solid rgba(226, 232, 240, 0.8);
-            background: white;
-            color: #64748b;
-        }
-        .nav-btn.active {
-            background-color: white;
-            color: var(--emerald-600);
-            border-color: var(--emerald-500);
-            transform: translateY(-6px) scale(1.02);
-            box-shadow: 0 20px 25px -5px rgba(16, 185, 129, 0.2);
-        }
-
-        .logo-frame {
-            background: white;
-            border-radius: 1.25rem;
-            box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            transition: transform 0.3s;
-        }
+        h1, h2, h3, h4 { font-family: 'Fredoka', sans-serif; }
+        .animate-bounce-in { animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        @keyframes bounceIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .bg-school-sunday { background: radial-gradient(circle at 50% 0%, #e0f2fe 0%, #f8fafc 100%); background-attachment: fixed; }
+        .btn-playful { transition: all 0.2s; border-bottom-width: 4px; }
+        .btn-playful:active { transform: translateY(4px); border-bottom-width: 0px; margin-bottom: 4px; }
+        .btn-blue { @apply bg-sky-500 border-sky-700 text-white hover:bg-sky-600; }
+        .btn-yellow { @apply bg-amber-400 border-amber-600 text-amber-900 hover:bg-amber-500; }
+        .btn-red { @apply bg-rose-500 border-rose-700 text-white hover:bg-rose-600; }
+        .btn-white { @apply bg-white border-slate-200 text-slate-700 hover:bg-slate-50; }
+        .glass-panel { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 10px 40px -10px rgba(30, 58, 138, 0.15); }
+        .bell-ring { animation: ring 4s ease-in-out infinite; transform-origin: 50% 0%; }
+        @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(30deg); } 30% { transform: rotate(-28deg); } 50% { transform: rotate(34deg); } 70% { transform: rotate(-32deg); } 90% { transform: rotate(30deg); } 100% { transform: rotate(0); } }
         
-        .form-input {
-            background-color: #f1f5f9;
-            border: 2px solid transparent;
-            transition: all 0.3s;
-            font-weight: 600;
-        }
-        .form-input:focus {
-            background-color: #ffffff;
-            border-color: var(--emerald-600);
-            outline: none;
-            transform: translateY(-2px);
-        }
-        .form-input.valid {
-            border-color: var(--emerald-500);
-            background-color: #f0fdf4;
-        }
-
-        @keyframes modalUp { 
-            from { opacity: 0; transform: translateY(40px) scale(0.9); } 
-            to { opacity: 1; transform: translateY(0) scale(1); } 
-        }
-
-        .vip-ticket {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .gold-text {
-            background: var(--gold-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-weight: 900;
-        }
-        .ticket-perforation::before, .ticket-perforation::after {
-            content: "";
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 30px;
-            height: 30px;
-            background: #0f172a;
-            border-radius: 50%;
-            z-index: 10;
-        }
-        .ticket-perforation::before { left: -15px; }
-        .ticket-perforation::after { right: -15px; }
-
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-
-        .live-dot {
-            width: 8px;
-            height: 8px;
-            background: #ef4444;
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse-red 2s infinite;
-        }
-
-        @keyframes pulse-red {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
-
-        #notification-container {
-            position: fixed;
-            top: 2rem;
-            right: 2rem;
-            z-index: 10000;
-            pointer-events: none;
-        }
-        
-        #qrReader {
-            width: 100% !important;
-            height: 100% !important;
-            border-radius: 2rem;
-        }
-        
-        #qrReader video {
-            object-fit: cover !important;
-            border-radius: 2rem;
-        }
+        #reader { width: 100%; border-radius: 20px; overflow: hidden; background: black; min-height: 300px; }
+        #reader video { object-fit: cover; border-radius: 20px; }
+        #reader__scan_region img { display: none; } 
+        #reader__dashboard_section_csr span, #reader__dashboard_section_swaplink { display: none !important; }
     </style>
-</head>
-<body class="antialiased">
-
-    <div id="notification-container" class="flex flex-col gap-4"></div>
-
-    <div id="app" class="relative z-10 w-full max-w-4xl mx-auto min-h-screen md:my-10 md:rounded-[3rem] overflow-hidden flex flex-col glass-panel shadow-2xl">
-          
-        <div id="loading" class="absolute inset-0 z-[9999] bg-slate-50 flex flex-col justify-center items-center px-6 text-center">
-            <img src="logo tugu manihuruk.png" alt="Logo" class="w-32 h-32 animate-bounce mb-8 object-contain">
-            <h2 class="text-3xl font-black text-emerald-900 mb-2 royal-font uppercase">BONATAON 2026</h2>
-            <div id="loadingText" class="flex items-center gap-3 text-emerald-600 font-bold mt-4 bg-emerald-50 px-6 py-3 rounded-full shadow-sm">
-                <i class="fas fa-circle-notch fa-spin"></i> Menghubungkan ke Server...
-            </div>
-        </div>
-
-        <header class="header-bg p-10 pb-24 shadow-2xl relative z-20">
-            <div class="flex justify-between items-start relative z-10">
-                <div class="flex items-center gap-6">
-                    <div id="adminTrigger" class="logo-frame w-16 h-16 md:w-24 md:h-24 p-2 border-2 border-white/20">
-                        <img src="logo tugu manihuruk.png" alt="Logo" class="w-full h-full object-contain">
-                    </div>
-                    <div>
-                        <h1 class="text-lg md:text-2xl font-black text-white royal-font tracking-wide uppercase leading-tight">
-                            BONATAON MARGA MANIHURUK<br><span class="text-emerald-300">BORU BERE / PANAGOLAN 2026</span>
-                        </h1>
-                        <div id="roleBadge" class="hidden inline-block mt-3 px-4 py-1.5 bg-amber-400 text-amber-900 text-[10px] font-black rounded-full uppercase tracking-widest shadow-xl border border-amber-300"></div>
-                        <div id="authStatus" class="inline-block mt-2 px-3 py-1 bg-white/20 text-white text-[9px] rounded-lg">Connecting...</div>
-                    </div>
-                </div>
-                <div id="liveClock" class="text-right text-white hidden md:block backdrop-blur-md bg-white/10 p-3 rounded-2xl border border-white/10"></div>
-            </div>
-              
-            <div class="grid grid-cols-3 gap-6 mt-10 relative z-10">
-                <div class="bg-white/10 backdrop-blur-xl rounded-[2rem] p-4 border border-white/20 text-center shadow-lg">
-                    <div class="text-2xl md:text-4xl font-black text-white" id="statRegistered">0</div>
-                    <div class="text-[10px] font-extrabold text-emerald-200 uppercase tracking-widest mt-1">Peserta</div>
-                </div>
-                <div class="bg-white/10 backdrop-blur-xl rounded-[2rem] p-4 border border-white/20 text-center shadow-lg">
-                    <div class="text-2xl md:text-4xl font-black text-white" id="statPresent">0</div>
-                    <div class="text-[10px] font-extrabold text-emerald-200 uppercase tracking-widest mt-1">Hadir</div>
-                </div>
-                <div class="bg-white/10 backdrop-blur-xl rounded-[2rem] p-4 border border-white/20 text-center shadow-lg">
-                    <div class="text-2xl md:text-4xl font-black text-white" id="statGifts">0</div>
-                    <div class="text-[10px] font-extrabold text-amber-100 uppercase tracking-widest mt-1">Berkat</div>
-                </div>
-            </div>
-        </header>
-
-        <nav id="mainNav" class="flex px-6 -mt-12 relative z-30 gap-3 overflow-x-auto pb-6 no-scrollbar">
-            <button id="nav-register" class="nav-btn public-tab flex-1 min-w-[110px] shadow-2xl">
-                <i class="fas fa-user-plus text-emerald-600"></i><span class="text-[10px] font-black uppercase tracking-widest">Daftar</span>
-            </button>
-            <button id="nav-find" class="nav-btn public-tab flex-1 min-w-[110px] shadow-2xl">
-                <i class="fas fa-search text-emerald-600"></i><span class="text-[10px] font-black uppercase tracking-widest">Undangan</span>
-            </button>
-            <button id="nav-scan" class="nav-btn admin-tab staff-tab hidden flex-1 min-w-[110px] shadow-2xl">
-                <i class="fas fa-qrcode text-emerald-600"></i><span class="text-[10px] font-black uppercase tracking-widest">Absensi</span>
-            </button>
-            <button id="nav-gift" class="nav-btn admin-tab staff-tab hidden flex-1 min-w-[110px] shadow-2xl">
-                <i class="fas fa-gift text-emerald-600"></i><span class="text-[10px] font-black uppercase tracking-widest">Berkat</span>
-            </button>
-            <button id="nav-report" class="nav-btn admin-tab hidden flex-1 min-w-[110px] shadow-2xl">
-                <i class="fas fa-chart-line text-emerald-600"></i><span class="text-[10px] font-black uppercase tracking-widest">Report</span>
-            </button>
-            <button id="nav-data" class="nav-btn admin-tab hidden flex-1 min-w-[110px] shadow-2xl">
-                <i class="fas fa-shield-halved text-emerald-600"></i><span class="text-[10px] font-black uppercase tracking-widest">Admin</span>
-            </button>
-            <button id="nav-logout" class="hidden min-w-[110px] bg-red-50 text-red-600 border border-red-100 shadow-xl nav-btn">
-                <i class="fas fa-power-off"></i><span class="text-[10px] font-black uppercase tracking-widest">Keluar</span>
-            </button>
-        </nav>
-
-        <main class="flex-1 p-6 md:p-12 overflow-y-auto bg-slate-50/50 pb-28">
-            <div id="content-area"></div>
-        </main>
-          
-        <footer class="py-6 px-10 border-t border-slate-200 bg-white absolute bottom-0 w-full z-20">
-            <div class="flex justify-between items-center text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest">
-                <div>© 2026 PANITIA BONATAON</div>
-                <div class="text-emerald-900">MANIHURUK BERSATU</div>
-            </div>
-        </footer>
-    </div>
-
-    <div id="modal-container"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, push, onValue, set, update, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        // IMPORT AUTHENTICATION (PENTING)
-        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-        // --- KONFIGURASI FIREBASE ANDA ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyD1jqsGb3gIGEhg8qo37oMAANNcKDdDuFU",
-            authDomain: "bonataon-2026.firebaseapp.com",
-            databaseURL: "https://bonataon-2026-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "bonataon-2026",
-            storageBucket: "bonataon-2026.firebasestorage.app",
-            messagingSenderId: "392578784070",
-            appId: "1:392578784070:web:f85870afad7f202a592347"
-        };
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-        const auth = getAuth(app);
-
-        // --- SISTEM AUTO-LOGIN ---
-        // Aplikasi akan login otomatis agar bisa baca/tulis database
-        const APP_USER = "admin@test.com"; 
-        const APP_PASS = "password123"; 
-
-        function initAppAuth() {
-            const statusEl = document.getElementById('authStatus');
-            const loadingText = document.getElementById('loadingText');
-            
-            signInWithEmailAndPassword(auth, APP_USER, APP_PASS)
-            .then((userCredential) => {
-                console.log("Aplikasi Terhubung ke Database sebagai: " + userCredential.user.email);
-                if(statusEl) { statusEl.innerText = "Connected ✓"; statusEl.classList.replace("bg-white/20", "bg-emerald-500"); }
-                if(loadingText) loadingText.innerHTML = '<i class="fas fa-check"></i> Siap Digunakan!';
-                
-                // Load data setelah login berhasil
-                startDataListeners();
-                setTimeout(() => document.getElementById('loading').classList.add('hidden'), 1500);
-            })
-            .catch((error) => {
-                console.error("Gagal Login Aplikasi:", error);
-                if(loadingText) {
-                    loadingText.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Gagal Koneksi Server';
-                    loadingText.classList.replace('text-emerald-600', 'text-red-600');
-                    loadingText.classList.replace('bg-emerald-50', 'bg-red-50');
-                }
-                alert("PENTING: Gagal login ke Firebase. Pastikan user 'admin@test.com' sudah dibuat di menu Authentication.");
+        // --- PWA SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => console.log('SW registered: ', registration))
+                    .catch(registrationError => console.log('SW registration failed: ', registrationError));
             });
         }
+        // ---------------------------------------
 
-        // --- GLOBAL STATE ---
-        let state = {
-            participants: [],
-            attendance: [],
-            gifts: [],
-            staff: [],
-            tab: 'register',
-            scanner: null,
-            isAdmin: false,
-            isStaff: false,
-            adminPass: "123456",
-            recoveryKey: "BONA2026",
-            activeUser: null,
-            tempUser: null,
-            reportSearch: "",
-            adminSearch: "",
-            filterStatus: "Semua",
-            charts: {},
-            isProcessingScan: false
-        };
-
-        // --- UTILITIES ---
-        const showToast = (title, body, type = 'success') => {
-            const container = document.getElementById('notification-container');
-            if(!container) return;
-            const toast = document.createElement('div');
-            const borderColor = type === 'error' ? 'border-red-500' : 'border-emerald-500';
-            const iconBg = type === 'error' ? 'bg-red-500' : 'bg-emerald-500';
-            const icon = type === 'error' ? 'fa-triangle-exclamation' : 'fa-bell';
-            
-            toast.className = `glass-panel p-5 rounded-3xl shadow-2xl border-l-4 ${borderColor} flex items-center gap-4 animate-[modalUp_0.4s]`;
-            toast.innerHTML = `
-                <div class="w-12 h-12 ${iconBg} text-white rounded-2xl flex items-center justify-center text-xl flex-shrink-0 shadow-lg"><i class="fas ${icon}"></i></div>
-                <div>
-                    <div class="text-xs font-black text-slate-800 uppercase tracking-tight">${title}</div>
-                    <div class="text-[10px] text-slate-500 font-bold uppercase mt-1 opacity-70">${body}</div>
-                </div>
-            `;
-            container.appendChild(toast);
-            setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; toast.style.transition = '0.5s ease'; setTimeout(() => toast.remove(), 500); }, 5000);
-        };
-
-        const openModal = (html, id = 'dynamicModal') => {
-            const container = document.getElementById('modal-container');
-            if(!container) return;
-            container.innerHTML = `
-                <div id="${id}" class="fixed inset-0 z-[9000] flex items-center justify-center p-6 overflow-y-auto">
-                    <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-xl" onclick="document.getElementById('${id}').classList.add('hidden')"></div>
-                    <div class="bg-white rounded-[3rem] w-full max-w-md relative z-10 p-10 shadow-2xl animate-[modalUp_0.4s]">
-                        ${html}
-                    </div>
-                </div>
-            `;
-        };
-
-        const closeModal = (id) => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); };
-
-        const updateDashboard = () => {
-            const sr = document.getElementById('statRegistered');
-            const sp = document.getElementById('statPresent');
-            const sg = document.getElementById('statGifts');
-            if(sr) sr.innerText = state.participants.length;
-            if(sp) sp.innerText = state.attendance.length;
-            if(sg) sg.innerText = state.gifts.length;
-            
-            if (state.tab === 'register') renderRegister();
-            if (state.tab === 'report') renderReport();
-            if (state.tab === 'data') renderAdmin();
-        };
-
-        const setupPinValidation = (inputId, hintId) => {
-            const input = document.getElementById(inputId);
-            const hint = document.getElementById(hintId);
-            if (!input || !hint) return;
-
-            input.oninput = (e) => {
-                let val = e.target.value;
-                val = val.replace(/\D/g, '');
-                e.target.value = val;
-
-                if (val.length >= 6) {
-                    hint.innerText = "PIN Valid ✓";
-                    hint.classList.remove('text-slate-400', 'text-red-500');
-                    hint.classList.add('text-emerald-500');
-                    input.classList.add('valid');
-                } else if (val.length > 0) {
-                    hint.innerText = `Kurang ${6 - val.length} digit lagi...`;
-                    hint.classList.remove('text-emerald-500', 'text-slate-400');
-                    hint.classList.add('text-red-500');
-                    input.classList.remove('valid');
-                } else {
-                    hint.innerText = "Min. 6 Digit Angka";
-                    hint.classList.remove('text-emerald-500', 'text-red-500');
-                    hint.classList.add('text-slate-400');
-                    input.classList.remove('valid');
-                }
-            };
-        };
-
-        // --- VIEWS ---
-        const renderRegister = () => {
-            const area = document.getElementById('content-area');
-            if(!area) return;
-            const recent = state.participants.slice(-10).reverse();
-            area.innerHTML = `
-                <div class="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl mb-10 border border-slate-100 animate-[modalUp_0.5s]">
-                    <div class="flex items-center gap-4 mb-10">
-                        <div class="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 text-xl shadow-inner"><i class="fas fa-id-card"></i></div>
-                        <div><h3 class="text-xl font-black text-slate-800 uppercase royal-font tracking-tight">Form Pendaftaran</h3><p class="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest">Silakan lengkapi data di bawah ini</p></div>
-                    </div>
-                    <div class="space-y-6">
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">Nama Lengkap</label><input id="inName" type="text" class="form-input w-full rounded-2xl p-5 font-black uppercase" placeholder="Masukkan Nama Anda"></div>
-                        <div class="grid grid-cols-2 gap-5">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">Kategori</label><select id="inStatus" class="form-input w-full rounded-2xl p-5 font-black uppercase"><option value="Orangtua">Orangtua</option><option value="Pemuda">Pemuda</option><option value="Sekolah Minggu">Sekolah Minggu</option><option value="Tamu">Tamu</option></select></div>
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">Marga</label><select id="inMarga" class="form-input w-full rounded-2xl p-5 font-black uppercase"><option value="Manihuruk">Manihuruk</option><option value="Boru">Boru</option><option value="Bere">Bere</option></select></div>
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">PIN Keamanan (6-8 Digit)</label>
-                            <input id="inPass" type="password" inputmode="numeric" maxlength="8" class="form-input w-full rounded-2xl p-5 font-black text-center text-3xl tracking-[0.5em]" placeholder="••••••••">
-                            <div id="pinHint" class="text-[9px] font-bold mt-2 pl-2 text-slate-400 uppercase tracking-widest transition-colors">Min. 6 Digit Angka</div>
-                        </div>
-                        <button id="btnReg" class="w-full bg-emerald-600 text-white rounded-[1.5rem] py-5 font-black shadow-xl hover:bg-emerald-700 transition-all uppercase tracking-[0.2em] mt-4 flex items-center justify-center gap-3"><i class="fas fa-paper-plane text-sm"></i> DAFTARKAN SAYA</button>
-                    </div>
-                </div>
-                <div class="px-2">
-                    <div class="flex justify-between items-center mb-6 px-4"><h5 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pendaftar Terkini</h5><div class="text-[9px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full">Total: ${state.participants.length}</div></div>
-                    <div class="space-y-3">
-                        ${recent.map(p => `<div class="bg-white p-5 rounded-[1.5rem] flex justify-between items-center shadow-lg border border-slate-100 animate-[modalUp_0.3s]"><div><div class="font-black text-sm text-slate-800 uppercase leading-tight">${p.name}</div><div class="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-wider">${p.marga}</div></div><div class="text-[9px] font-black bg-emerald-50 text-emerald-700 px-4 py-1.5 rounded-full uppercase border border-emerald-100 shadow-sm">${p.status}</div></div>`).join('') || '<div class="text-center py-16 text-slate-300 font-black text-xs uppercase tracking-widest border-2 border-dashed border-slate-100 rounded-[2.5rem]">Belum Ada Pendaftar</div>'}
-                    </div>
-                </div>
-            `;
-            const btnReg = document.getElementById('btnReg');
-            if(btnReg) btnReg.onclick = handleRegistration;
-            setupPinValidation('inPass', 'pinHint');
-        };
-
-        const handleRegistration = () => {
-            const nameEl = document.getElementById('inName'), passEl = document.getElementById('inPass'), statEl = document.getElementById('inStatus'), margaEl = document.getElementById('inMarga');
-            const n = nameEl.value.trim().toUpperCase(), p = passEl.value, s = statEl.value, m = margaEl.value;
-            
-            if (!n) { showToast("Nama Kosong", "Harap masukkan nama lengkap Anda.", "error"); nameEl.focus(); return; }
-            if (p.length < 6) { showToast("PIN Tidak Valid", "PIN harus terdiri dari minimal 6 digit angka.", "error"); passEl.focus(); return; }
-
-            const code = `MN-${Date.now().toString().slice(-8)}`;
-            const data = { name: n, status: s, marga: m, password: p, qrCode: code, registeredAt: new Date().toLocaleString() };
-            
-            push(ref(db, 'participants'), data)
-            .then(() => { 
-                showToast("Pendaftaran Berhasil!", `${n} telah resmi terdaftar.`); 
-                showTicket(data); 
-                nameEl.value = ''; passEl.value = ''; 
-            })
-            .catch((err) => {
-                showToast("Gagal Menyimpan", "Cek koneksi internet atau login.", "error");
-                console.error(err);
-            });
-        };
-
-        window.showTicket = async (user) => {
-            state.activeUser = user;
-            const html = `
-                <div id="vipTicketCard" class="vip-ticket rounded-[3rem] p-10 shadow-2xl border border-white/10 relative overflow-hidden">
-                    <div class="relative z-10 text-center">
-                        <div class="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl overflow-hidden"><img src="logo tugu manihuruk.png" class="w-14 h-14 object-contain"></div>
-                        <div class="inline-block bg-white/10 backdrop-blur-md border border-white/20 text-white text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest mb-2">OFFICIAL INVITATION</div>
-                        <h2 class="royal-font text-3xl font-black gold-text uppercase leading-none mt-2">BONATAON 2026</h2>
-                        <div class="my-10">
-                            <p class="text-slate-500 text-[10px] font-black uppercase mb-2 tracking-[0.3em]">Tamu Kehormatan</p>
-                            <h1 class="text-2xl font-black text-white leading-tight uppercase mb-4">${user.name}</h1>
-                            <div class="inline-flex gap-2 text-[9px] text-emerald-400 font-black uppercase tracking-widest bg-white/5 px-4 py-2 rounded-full border border-white/5">${user.marga} • ${user.status}</div>
-                        </div>
-                        <div class="ticket-perforation bg-white p-8 rounded-[2.5rem] shadow-2xl relative">
-                            <div id="qrLoading" class="w-48 h-48 mx-auto flex items-center justify-center bg-slate-50 rounded-2xl"><i class="fas fa-circle-notch fa-spin text-emerald-600 text-2xl"></i></div>
-                            <img id="ticQR" src="" class="w-52 h-52 object-contain mx-auto hidden rounded-xl">
-                            <div class="text-center mt-6"><div class="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Registration Code</div><div class="text-xl font-mono font-black text-slate-900 bg-slate-50 py-2 rounded-xl">${user.qrCode}</div></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-8 flex flex-col gap-4">
-                    <button id="btnEditSelf" class="w-full py-5 rounded-[1.5rem] bg-amber-500 text-white font-black text-sm shadow-xl flex items-center justify-center gap-3 hover:bg-amber-600 transition-all uppercase tracking-widest"><i class="fas fa-user-edit"></i> PERBAIKI PROFIL</button>
-                    <button id="btnDlTicket" class="w-full py-5 rounded-[1.5rem] bg-slate-900 text-white font-black text-sm shadow-xl flex items-center justify-center gap-3 hover:bg-black transition-all uppercase tracking-widest"><i class="fas fa-download"></i> SIMPAN TIKET</button>
-                    <button onclick="document.getElementById('ticketModal').classList.add('hidden')" class="text-slate-400 text-[10px] font-black py-2 uppercase tracking-[0.4em]">Tutup</button>
-                </div>
-            `;
-            openModal(html, 'ticketModal');
-            const qrImg = document.getElementById('ticQR'), qrLoader = document.getElementById('qrLoading');
-            try { 
-                const url = await QRCode.toDataURL(user.qrCode, { errorCorrectionLevel: 'H', margin: 2, width: 800, color: { dark: "#064e3b", light: "#ffffff" } }); 
-                if(qrImg) qrImg.src = url; 
-                if(qrImg) qrImg.onload = () => { if (qrLoader) qrLoader.classList.add('hidden'); qrImg.classList.remove('hidden'); }; 
-            } catch (e) { console.error(e); }
-            const editBtn = document.getElementById('btnEditSelf');
-            const dlBtn = document.getElementById('btnDlTicket');
-            if(editBtn) editBtn.onclick = () => openEditUserModal(user);
-            if(dlBtn) dlBtn.onclick = handleDownloadTicket;
-        };
-
-        const openEditUserModal = (user) => {
-            closeModal('ticketModal');
-            const html = `
-                <h3 class="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3 royal-font uppercase tracking-tight"><i class="fas fa-user-pen text-emerald-600"></i> Perbarui Profil</h3>
-                <div class="space-y-6">
-                    <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">Nama Lengkap</label><input id="editName" type="text" value="${user.name}" class="form-input w-full rounded-2xl p-4 font-black uppercase"></div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">Kategori</label><select id="editStatus" class="form-input w-full rounded-2xl p-4 font-black"><option value="Orangtua" ${user.status==='Orangtua'?'selected':''}>Orangtua</option><option value="Pemuda" ${user.status==='Pemuda'?'selected':''}>Pemuda</option><option value="Sekolah Minggu" ${user.status==='Sekolah Minggu'?'selected':''}>Sekolah Minggu</option><option value="Tamu" ${user.status==='Tamu'?'selected':''}>Tamu</option></select></div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">Marga</label><select id="editMarga" class="form-input w-full rounded-2xl p-4 font-black"><option value="Manihuruk" ${user.marga==='Manihuruk'?'selected':''}>Manihuruk</option><option value="Boru" ${user.marga==='Boru'?'selected':''}>Boru</option><option value="Bere" ${user.marga==='Bere'?'selected':''}>Bere</option></select></div>
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">PIN Keamanan</label>
-                        <input id="editPass" type="password" inputmode="numeric" maxlength="8" value="${user.password}" class="form-input w-full rounded-2xl p-4 font-black text-center text-3xl tracking-[0.5em]">
-                        <div id="editPinHint" class="text-[9px] font-bold mt-2 pl-2 text-emerald-500 uppercase tracking-widest transition-colors">PIN Valid ✓</div>
-                    </div>
-                    <div class="pt-6 grid grid-cols-2 gap-4"><button onclick="document.getElementById('editUserModal').classList.add('hidden')" class="py-4 border-2 border-slate-100 rounded-2xl font-black text-slate-400 text-xs uppercase">Batal</button><button id="btnSaveEdit" class="py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-xl text-xs uppercase">Simpan</button></div>
-                </div>
-            `;
-            openModal(html, 'editUserModal');
-            setupPinValidation('editPass', 'editPinHint');
-            
-            const saveBtn = document.getElementById('btnSaveEdit');
-            if(saveBtn) {
-                saveBtn.onclick = () => {
-                    const n = document.getElementById('editName').value.trim().toUpperCase(), s = document.getElementById('editStatus').value, m = document.getElementById('editMarga').value, p = document.getElementById('editPass').value;
-                    if (!n) return showToast("Nama Kosong", "Gagal menyimpan: Nama tidak boleh kosong.", "error");
-                    if (p.length < 6) return showToast("PIN Invalid", "Gagal menyimpan: PIN minimal 6 digit.", "error");
-                    
-                    const uId = user.firebaseId || state.participants.find(x => x.qrCode === user.qrCode)?.firebaseId;
-                    if(!uId) return alert("Data tidak ditemukan");
-                    update(ref(db, 'participants/' + uId), { name: n, status: s, marga: m, password: p }).then(() => { 
-                        showToast("Profil Diperbarui", `Data untuk ${n} berhasil disimpan.`); 
-                        closeModal('editUserModal'); 
-                        if(state.tab !== 'data') window.showTicket({...user, name: n, status: s, marga: m, password: p, firebaseId: uId}); 
-                    });
+        let firebaseConfig;
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            } else {
+                firebaseConfig = {
+                    apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
+                    authDomain: "asggkpstgr.firebaseapp.com",
+                    projectId: "asggkpstgr",
+                    storageBucket: "asggkpstgr.firebasestorage.app",
+                    messagingSenderId: "681951652798",
+                    appId: "1:681951652798:web:aa7344c5e2c376f753a7ef",
+                    measurementId: "G-5P5JQ7KHLE"
                 };
             }
-        };
+        } catch (e) { console.error("Firebase config parse error", e); }
 
-        const handleDownloadTicket = () => {
-            const card = document.getElementById('vipTicketCard');
-            if(!card) return;
-            html2canvas(card, { scale: 3, backgroundColor: '#0f172a' }).then(canvas => {
-                const link = document.createElement('a'); link.download = `Tiket_Bonataon_${state.activeUser.name}.png`; link.href = canvas.toDataURL(); link.click();
-            });
-        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.db = db;
+        window.auth = auth;
+        window.signInAnonymously = signInAnonymously;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.fs = { collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs };
+    </script>
+</head>
+<body class="bg-school-sunday text-slate-800 select-none min-h-screen">
 
-        const renderAdminLogin = () => {
-            const html = `
-                <div class="text-center mb-8"><div class="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner transform rotate-12"><i class="fas fa-lock text-3xl"></i></div><h3 class="text-2xl font-black text-slate-800 tracking-tight uppercase royal-font">Akses Panitia</h3><p class="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-[0.2em]">Verifikasi Keamanan</p></div>
-                <input type="password" id="adminPassword" placeholder="••••••••" maxlength="12" class="form-input w-full rounded-2xl p-5 text-center text-4xl font-black mb-6 tracking-[0.5em] shadow-inner">
-                <button id="btnLoginAdmin" class="w-full py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black hover:bg-emerald-700 transition-all shadow-xl uppercase tracking-widest">MASUK</button>
-                <div class="mt-6 text-center"><button id="btnForgotAdmin" class="text-xs font-black text-emerald-600 uppercase tracking-widest underline underline-offset-8">Lupa PIN Admin?</button></div>
-            `;
-            openModal(html, 'adminModal');
-            const loginBtn = document.getElementById('btnLoginAdmin');
-            if(loginBtn) {
-                loginBtn.onclick = () => {
-                    const pin = document.getElementById('adminPassword').value;
-                    if (pin === state.adminPass) { state.isAdmin = true; state.isStaff = false; closeModal('adminModal'); refreshUI(); setTab('report'); } 
-                    else { const staff = state.staff.find(s => s.pin === pin); if (staff) { state.isStaff = true; state.isAdmin = false; closeModal('adminModal'); refreshUI(); setTab('scan'); } else { alert("PIN Salah!"); } }
-                };
-            }
-            const forgotBtn = document.getElementById('btnForgotAdmin');
-            if(forgotBtn) forgotBtn.onclick = renderAdminRecovery;
-        };
+    <div id="root"></div>
 
-        const renderAdminRecovery = () => {
-            closeModal('adminModal');
-            const html = `
-                <div class="text-center mb-8">
-                    <div class="w-20 h-20 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner"><i class="fas fa-shield-halved text-3xl"></i></div>
-                    <h3 class="text-2xl font-black text-slate-800 uppercase royal-font tracking-tight">Recovery Admin</h3>
-                    <p class="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest">Gunakan Kode Pemulihan Anda</p>
-                </div>
-                <div class="space-y-6">
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">Kode Pemulihan</label>
-                        <input id="recKey" type="text" placeholder="BONA2026" class="form-input w-full rounded-2xl p-4 font-black uppercase tracking-widest text-center border-slate-200">
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">PIN Admin Baru</label>
-                        <input id="recNewPin" type="password" inputmode="numeric" maxlength="12" placeholder="••••••••" class="form-input w-full rounded-2xl p-4 font-black text-center text-2xl tracking-[0.5em]">
-                        <div id="recPinHint" class="text-[9px] font-bold mt-2 pl-2 text-slate-400 uppercase tracking-widest">Min. 6 Digit Angka</div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4 pt-4">
-                        <button onclick="closeModal('recoveryModal'); renderAdminLogin();" class="py-5 border-2 border-slate-100 rounded-2xl font-black text-slate-400 text-xs uppercase tracking-widest">Batal</button>
-                        <button id="btnSubmitRecovery" class="py-5 bg-emerald-600 text-white rounded-2xl font-black shadow-xl text-xs uppercase tracking-widest">Reset PIN</button>
+    <script type="text/babel">
+        const { useState, useEffect, useLayoutEffect, useRef } = React;
+        // --- GLOBAL: INSTALL PROMPT LOGIC ---
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+        // ------------------------------------
+
+        const AdminResetModal = ({ config, setConfig, onConfirm }) => {
+            React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
+            if (!config.show) return null;
+            return (
+                <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                    <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-indigo-100">
+                        <button onClick={() => setConfig({ ...config, show: false })} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" width="24"></i></button>
+                        <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-indigo-50"><i data-lucide="key-round" className="text-indigo-500 w-8 h-8"></i></div>
+                        <h3 className="text-xl font-black text-slate-800 mb-1 font-fredoka">Reset Password</h3>
+                        <p className="text-sm text-slate-500 mb-6">User: <b>{config.user?.username}</b></p>
+                        <input type="text" placeholder="Masukkan Password Baru..." className="w-full p-4 border-2 border-slate-200 rounded-xl mb-4 focus:outline-none focus:border-indigo-400 bg-slate-50 font-bold text-slate-700 text-center" value={config.newPass} onChange={e => setConfig({...config, newPass: e.target.value})} autoFocus />
+                        <button onClick={onConfirm} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg">Simpan Password</button>
                     </div>
                 </div>
-            `;
-            openModal(html, 'recoveryModal');
-            setupPinValidation('recNewPin', 'recPinHint');
-            
-            document.getElementById('btnSubmitRecovery').onclick = () => {
-                const key = document.getElementById('recKey').value.trim();
-                const newPin = document.getElementById('recNewPin').value;
-                if (key !== state.recoveryKey) { showToast("Recovery Gagal", "Kode Pemulihan Salah!", "error"); return; }
-                if (newPin.length < 6) { showToast("Input Invalid", "PIN Baru minimal 6 digit!", "error"); return; }
-                set(ref(db, 'settings/adminPin'), newPin).then(() => {
-                    showToast("PIN Berhasil Diperbarui", "Gunakan PIN baru untuk akses admin.");
-                    closeModal('recoveryModal'); renderAdminLogin();
-                }).catch(err => { alert("Gagal memperbarui PIN: " + err.message); });
-            };
+            );
         };
 
-        const refreshUI = () => {
-            const roleBadge = document.getElementById('roleBadge'), logoutBtn = document.getElementById('nav-logout'), navItems = document.querySelectorAll('.nav-btn');
-            if (state.isAdmin || state.isStaff) { if(roleBadge) { roleBadge.classList.remove('hidden'); roleBadge.innerText = state.isAdmin ? "Mode Administrator" : "Petugas Lapangan"; } if(logoutBtn) logoutBtn.classList.remove('hidden'); } 
-            else { if(roleBadge) roleBadge.classList.add('hidden'); if(logoutBtn) logoutBtn.classList.add('hidden'); }
-            navItems.forEach(btn => {
-                const isStaffT = btn.classList.contains('staff-tab'), isAdminT = btn.classList.contains('admin-tab'), isPublicT = btn.classList.contains('public-tab');
-                if (state.isAdmin) btn.classList.remove('hidden');
-                else if (state.isStaff) { if (isStaffT || isPublicT) btn.classList.remove('hidden'); else btn.classList.add('hidden'); }
-                else { if (isPublicT) btn.classList.remove('hidden'); else btn.classList.add('hidden'); }
-            });
-        };
-
-        const renderReport = () => {
-            const area = document.getElementById('content-area'), recentL = state.attendance.slice(-10).reverse();
-            if(!area) return;
-            area.innerHTML = `
-                <div class="space-y-8 animate-[modalUp_0.5s]">
-                    <div class="flex justify-between items-center px-4"><h3 class="text-2xl font-black text-slate-800 royal-font uppercase tracking-tight flex items-center gap-3"><span class="live-dot"></span> Live Monitoring</h3></div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100"><h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Demografi Peserta</h4><div class="relative aspect-square"><canvas id="catChart"></canvas></div></div>
-                        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col max-h-[400px]"><h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Log Kehadiran</h4><div class="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar">${recentL.map(l => `<div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-4"><div class="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-lg"><i class="fas fa-check text-xs"></i></div><div><div class="font-black text-slate-800 text-xs uppercase">${l.name}</div><div class="text-[9px] text-slate-400 font-bold mt-1">${l.timestamp}</div></div></div>`).join('') || '<div class="text-center py-20 text-slate-300 font-black text-[10px] uppercase">Belum Ada Data</div>'}</div></div>
-                    </div>
-                    <div class="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden">
-                        <div class="flex flex-wrap justify-between items-center gap-5 mb-8"><h4 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-3"><i class="fas fa-list-check text-emerald-600"></i> Detail Kehadiran</h4><div class="relative w-full md:w-64"><input type="text" id="repSearch" value="${state.reportSearch}" placeholder="CARI PESERTA..." class="form-input w-full rounded-2xl py-3 px-10 text-[10px] font-black uppercase shadow-sm"><i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-[10px]"></i></div></div>
-                        <div class="overflow-x-auto"><table class="w-full text-left text-[10px]"><thead class="bg-slate-50 text-slate-400 font-black uppercase tracking-widest border-b border-slate-100"><tr><th class="p-4">Peserta</th><th class="p-4">Kategori</th><th class="p-4">Status</th><th class="p-4">Waktu</th></tr></thead><tbody class="divide-y divide-slate-50">${state.participants.filter(p => p.name.toLowerCase().includes(state.reportSearch.toLowerCase())).map(p => { const log = state.attendance.find(a => a.qrCode === p.qrCode); return `<tr><td class="p-4"><div class="font-black text-slate-800 text-[11px] uppercase">${p.name}</div><div class="text-[8px] font-bold text-slate-400 mt-0.5">${p.marga}</div></td><td class="p-4 font-bold text-slate-500 uppercase">${p.status}</td><td class="p-4">${log ? '<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider">HADIR</span>' : '<span class="bg-slate-100 text-slate-300 px-3 py-1 rounded-full font-black text-[9px] uppercase tracking-wider">BELUM</span>'}</td><td class="p-4 font-mono font-bold text-slate-400">${log ? log.timestamp.split(',')[1] : '-'}</td></tr>`; }).join('')}</tbody></table></div>
-                    </div>
-                </div>
-            `;
-            const searchIn = document.getElementById('repSearch');
-            if(searchIn) searchIn.onkeyup = (e) => { state.reportSearch = e.target.value; renderReport(); };
-            
-            const chartCanvas = document.getElementById('catChart');
-            if(chartCanvas) {
-                const ctx = chartCanvas.getContext('2d');
-                const labels = ['Orangtua', 'Pemuda', 'Sekolah Minggu', 'Tamu'], data = labels.map(l => state.participants.filter(p => p.status === l).length);
-                if (state.charts.catChart) state.charts.catChart.destroy();
-                state.charts.catChart = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: ['#064e3b', '#10b981', '#34d399', '#f59e0b'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { weight: '800', size: 10 }, padding: 20 } } }, cutout: '70%' } });
-            }
-        };
-
-        const renderAdmin = () => {
-            const area = document.getElementById('content-area');
-            if(!area) return;
-            area.innerHTML = `
-                <div class="space-y-8 animate-[modalUp_0.5s]">
-                    <div class="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-slate-100">
-                        <div class="flex flex-wrap justify-between items-center gap-5 mb-10">
-                            <h3 class="text-xl font-black text-slate-800 flex items-center gap-3 tracking-tight uppercase royal-font"><i class="fas fa-crown text-emerald-600"></i> Admin Panel</h3>
-                            <div class="flex flex-wrap gap-3">
-                                <button id="btnExpAll" class="bg-amber-100 px-5 py-3 rounded-2xl text-amber-900 text-[10px] font-black uppercase tracking-widest shadow-md flex items-center gap-2 border border-amber-200"><i class="fas fa-file-export"></i> EKSPOR SEMUA DATA</button>
-                                <button id="btnExpPart" class="bg-emerald-50 px-5 py-3 rounded-2xl text-emerald-700 text-[10px] font-black uppercase tracking-widest shadow-sm">PENDAFTAR</button>
-                                <button id="btnExpAtt" class="bg-emerald-50 px-5 py-3 rounded-2xl text-emerald-700 text-[10px] font-black uppercase tracking-widest shadow-sm">ABSENSI</button>
-                                <button id="btnExpGift" class="bg-emerald-50 px-5 py-3 rounded-2xl text-emerald-700 text-[10px] font-black uppercase tracking-widest shadow-sm">BERKAT</button>
-                                <button id="btnResetAll" class="bg-red-50 px-5 py-3 rounded-2xl text-red-700 text-[10px] font-black uppercase tracking-widest shadow-sm">RESET SISTEM</button>
+        const WeekDetailModal = ({ week, onClose }) => {
+            React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [week]);
+            if (!week) return null;
+            return (
+                <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 backdrop-blur-md animate-bounce-in">
+                    <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto border-4 border-white/50 relative scrollbar-hide">
+                        <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 flex justify-between items-center border-b border-slate-100 z-10">
+                            <span className="text-xs font-black text-sky-500 uppercase tracking-widest bg-sky-50 px-3 py-1 rounded-full border border-sky-100">{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' }) : 'Minggu Ini'}</span>
+                            <button onClick={onClose} className="bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 p-2 rounded-full transition"><i data-lucide="x" width="20"></i></button>
+                        </div>
+                        <div className="p-6 pt-2">
+                            <div className="mb-6 mt-2"><h3 className="text-2xl font-black text-slate-800 font-fredoka leading-tight mb-1">{week.topic}</h3><div className="h-1.5 w-16 bg-gradient-to-r from-sky-400 to-indigo-500 rounded-full"></div></div>
+                            <div className="space-y-4">
+                                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-100 shadow-sm"><h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2"><div className="bg-indigo-200 p-1 rounded-md text-indigo-600"><i data-lucide="book" width="12"></i></div> Ayat Tema</h4><p className="font-bold text-indigo-900 text-lg leading-relaxed font-fredoka">{week.themeVerse}</p></div>
+                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-2xl border border-amber-100 shadow-sm"><h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3 flex items-center gap-2"><div className="bg-amber-200 p-1 rounded-md text-amber-700"><i data-lucide="heart" width="12"></i></div> Ayat Hafalan</h4><p className="font-bold text-amber-900 text-lg leading-relaxed italic font-serif">"{week.memoryVerse}"</p></div>
+                                <div className="pt-2"><h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="align-left" width="14"></i> Ringkasan Materi</h4><div className="text-slate-600 leading-relaxed font-medium whitespace-pre-wrap text-sm bg-slate-50 p-4 rounded-2xl border border-slate-100">{week.content || "Belum ada ringkasan materi."}</div></div>
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-10"><div class="relative"><input type="text" id="admSearch" value="${state.adminSearch}" placeholder="CARI PESERTA..." class="form-input w-full rounded-2xl py-4 px-12 text-xs font-black uppercase"><i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-300"></i></div><select id="admFilter" class="form-input rounded-2xl px-5 py-4 text-xs font-black bg-slate-50 border-slate-200"><option value="Semua">SEMUA KATEGORI</option><option value="Orangtua" ${state.filterStatus==='Orangtua'?'selected':''}>ORANGTUA</option><option value="Pemuda" ${state.filterStatus==='Pemuda'?'selected':''}>PEMUDA</option><option value="Sekolah Minggu" ${state.filterStatus==='Sekolah Minggu'?'selected':''}>SEKOLAH MINGGU</option><option value="Tamu" ${state.filterStatus==='Tamu'?'selected':''}>TAMU</option></select></div>
-                        <div class="overflow-x-auto rounded-3xl border border-slate-100 mb-12"><table class="w-full text-left text-[11px]"><thead class="bg-slate-50 text-slate-400 font-black uppercase tracking-widest border-b border-slate-100"><tr><th class="p-6">Informasi</th><th class="p-6">Kategori</th><th class="p-6 text-center">Aksi</th></tr></thead><tbody class="divide-y divide-slate-50">${state.participants.filter(p => p.name.toLowerCase().includes(state.adminSearch.toLowerCase()) && (state.filterStatus==='Semua' || p.status===state.filterStatus)).map(p => `<tr><td class="p-6"><div class="font-black text-slate-800 text-sm uppercase">${p.name}</div><div class="text-[9px] font-mono text-emerald-500 mt-1 font-bold">${p.qrCode}</div></td><td class="p-6"><span class="bg-slate-100 px-3 py-1 rounded-full font-black text-slate-500">${p.status}</span></td><td class="p-6 text-center flex justify-center gap-2">
-                            <button onclick="window.adminEditPart('${p.firebaseId}')" class="text-blue-500 hover:text-blue-600 w-9 h-9 flex items-center justify-center bg-blue-50 rounded-xl shadow-sm border border-blue-100" title="Edit Data"><i class="fas fa-pen text-xs"></i></button>
-                            <button onclick="window.adminResetPIN('${p.firebaseId}', '${p.name}')" class="text-amber-500 hover:text-amber-600 w-9 h-9 flex items-center justify-center bg-amber-50 rounded-xl shadow-sm border border-amber-100" title="Reset PIN"><i class="fas fa-key text-xs"></i></button>
-                            <button onclick="window.adminDeletePart('${p.firebaseId}')" class="text-red-400 hover:text-red-600 w-9 h-9 flex items-center justify-center bg-red-50 rounded-xl shadow-sm border border-red-100" title="Hapus"><i class="fas fa-trash text-xs"></i></button>
-                        </td></tr>`).join('')}</tbody></table></div>
-                        <div class="border-t border-slate-100 pt-12"><div class="flex items-center gap-3 mb-8"><div class="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg"><i class="fas fa-users-gear"></i></div><h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Manajemen Staff</h4></div><div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8"><div class="md:col-span-5"><input id="stfName" type="text" placeholder="NAMA LENGKAP" class="form-input w-full rounded-2xl p-4 text-[11px] font-black uppercase shadow-inner"></div><div class="md:col-span-3"><input id="stfPin" type="password" maxlength="6" placeholder="PIN (6 DIG)" class="form-input w-full rounded-2xl p-4 text-[11px] font-black text-center shadow-inner"></div><div class="md:col-span-4"><button id="btnAddStaff" class="w-full h-full bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-black transition-all shadow-xl py-4 md:py-0">TAMBAH</button></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${state.staff.map(s => `<div class="bg-slate-50 p-5 rounded-[1.5rem] border border-slate-100 flex justify-between items-center shadow-sm"><div><div class="font-black text-slate-800 text-[11px] uppercase tracking-wide">${s.name}</div><div class="text-[9px] text-emerald-600 font-black uppercase mt-1 bg-emerald-50 px-2 py-0.5 rounded-full inline-block border border-emerald-100">PIN: ${s.pin}</div></div><button onclick="window.adminRemoveStaff('${s.firebaseId}')" class="text-red-400 hover:text-red-600 w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-inner border border-slate-100"><i class="fas fa-trash-can text-xs"></i></button></div>`).join('') || '<div class="col-span-full text-center py-10 text-slate-300 font-black text-[10px] uppercase">Belum Ada Petugas</div>'}</div></div>
+                        <div className="sticky bottom-0 bg-white/90 backdrop-blur p-4 border-t border-slate-100"><button onClick={onClose} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold text-lg shadow-lg">Tutup Informasi</button></div>
                     </div>
                 </div>
-            `;
-            const searchIn = document.getElementById('admSearch');
-            const filterIn = document.getElementById('admFilter');
-            const staffAdd = document.getElementById('btnAddStaff');
-            const expAllBtn = document.getElementById('btnExpAll');
-            const expBtn = document.getElementById('btnExpPart');
-            const expAttBtn = document.getElementById('btnExpAtt');
-            const expGiftBtn = document.getElementById('btnExpGift');
-            const resetBtn = document.getElementById('btnResetAll');
+            );
+        };
+
+        const CloudAttendance = () => {
+            const [view, setViewRaw] = useState('login');
+            const [currentUser, setCurrentUser] = useState(null); 
+            const [users, setUsers] = useState([]); 
+            const [participants, setParticipants] = useState([]);
+            const [isConnected, setIsConnected] = useState(false);
+            const [userAuth, setUserAuth] = useState(null);
             
-            if(searchIn) searchIn.onkeyup = (e) => { state.adminSearch = e.target.value; renderAdmin(); };
-            if(filterIn) filterIn.onchange = (e) => { state.filterStatus = e.target.value; renderAdmin(); };
-            if(staffAdd) staffAdd.onclick = handleAddStaff;
+            const [scanResult, setScanResult] = useState(null);
+            const scannerRef = useRef(null);
+            const isScanning = useRef(false);
+            const [themeData, setThemeData] = useState(null);
+            const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
+            const [selectedWeek, setSelectedWeek] = useState(null);
+            const [showAddForm, setShowAddForm] = useState(false);
+            const [formData, setFormData] = useState({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
+            const [isDownloading, setIsDownloading] = useState(false);
+            const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false); 
+            const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+            const [deleteConfig, setDeleteConfig] = useState({ show: false, path: null });
+            const [adminResetConfig, setAdminResetConfig] = useState({ show: false, user: null, newPass: '' });
+            const [notification, setNotification] = useState(null);
+            const [activeBroadcast, setActiveBroadcast] = useState(null);
+            const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+            const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
             
-            if(expAllBtn) expAllBtn.onclick = () => {
-                if(!state.participants.length && !state.attendance.length && !state.gifts.length) { return alert("Tidak ada data untuk diekspor."); }
-                exportToCSV(state.participants, "01_Data_Pendaftar_Lengkap");
-                setTimeout(() => exportToCSV(state.attendance, "02_Data_Absensi_Hadir"), 500);
-                setTimeout(() => exportToCSV(state.gifts, "03_Data_Penerima_Berkat"), 1000);
-                showToast("Ekspor Massal", "Ketiga file sedang diunduh secara berurutan.");
+            const [editingId, setEditingId] = useState(null);
+            const [newUser, setNewUser] = useState({ username: '', password: '', role: 'petugas', nama: '' });
+            const [selfPassword, setSelfPassword] = useState('');
+            const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
+            const [connectionError, setConnectionError] = useState(null);
+            const [liveAttendance, setLiveAttendance] = useState([]);
+            const [attendanceMode, setAttendanceMode] = useState(false);
+            const [sessionConfig, setSessionConfig] = useState({ isOpen: true, autoMode: false, openTime: '07:00', closeTime: '12:00' });
+            const [filterManual, setFilterManual] = useState("");
+            const attendanceModeRef = useRef(attendanceMode);
+            const liveAttendanceRef = useRef(liveAttendance);
+            const sessionConfigRef = useRef(sessionConfig);
+
+            // --- BARU: STATE UNTUK FILTER TANGGAL (ARCHIVE) ---
+            const getSafeDateId = () => {
+                const d = new Date();
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            const [viewDate, setViewDate] = useState(getSafeDateId());
+            // ------------------------------------------------
+
+            useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
+            useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
+            useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
+            const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
+            const defaultTheme = {
+                title: "Terpanggil dan siap melayani Tuhan",
+                weeks: [ { date: "", topic: "Contoh Tema Minggu 1", content: "Isi bahan ajar...", themeVerse: 'Yohanes 3:16', memoryVerse: 'Yohanes 3:16' } ]
+            };
+            
+            const checkSessionStatus = () => {
+                const config = sessionConfigRef.current;
+                if (!config.autoMode) return config.isOpen; 
+                
+                const now = new Date();
+                const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                const [openH, openM] = config.openTime.split(':').map(Number);
+                const [closeH, closeM] = config.closeTime.split(':').map(Number);
+                
+                const startMinutes = openH * 60 + openM;
+                const endMinutes = closeH * 60 + closeM;
+
+                return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+            };
+            const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator();
+            const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain);
+            gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
+            const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
+            useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
+            useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
+            const setView = (newView) => {
+                setEditingId(null);
+                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+                setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
+                setSelfPassword('');
+                setResetForm({ username: '', newPassword: '', token: '' }); 
+                setIsLogoutModalOpen(false); setIsInstallModalOpen(false);
+                setDeleteConfig({ show: false, path: null });
+                setAdminResetConfig({ show: false, user: null, newPass: '' });
+                setSelectedWeek(null);
+                setScanResult(null); 
+                setViewRaw(newView);
+                // Reset view date when returning to menu or changing views
+                setViewDate(getSafeDateId());
+            };
+            const handleBackToMenu = () => {
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                currentUser ? setViewRaw('menu') : setViewRaw('login');
             };
 
-            if(expBtn) expBtn.onclick = () => exportToCSV(state.participants, "Pendaftar");
-            if(expAttBtn) expAttBtn.onclick = () => exportToCSV(state.attendance, "Absensi_Kehadiran");
-            if(expGiftBtn) expGiftBtn.onclick = () => exportToCSV(state.gifts, "Berkat_Diterima");
-            
-            if(resetBtn) resetBtn.onclick = () => { if (confirm("Ketik 'RESET' untuk menghapus data?")) { const v = prompt("Ketik RESET:"); if (v === 'RESET') { Promise.all([set(ref(db, 'participants'), null), set(ref(db, 'attendance'), null), set(ref(db, 'gifts'), null)]).then(() => alert("Bersih!")); } } };
-        };
+            useEffect(() => {
+                const initAuth = async () => {
+                    const { signInAnonymously, signInWithCustomToken, auth } = window;
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                        if (auth.currentUser) {
+                            setUserAuth(auth.currentUser);
+                            
+                            setIsConnected(true);
+                        }
+                    } catch (error) {
+                        console.error("Auth Error:", error);
+                        setConnectionError(error.message);
+                    }
+                };
+                initAuth();
+                const savedUser = localStorage.getItem('gkps_user');
+                if (savedUser) { try { setCurrentUser(JSON.parse(savedUser));
+                setViewRaw('menu'); } catch(e){} }
+            }, []);
+            useEffect(() => {
+                const db = window.db; const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
+                if (!userAuth || !db || !collection) return;
+                
+                const publicDataPath = `artifacts/${appId}/public/data`;
 
-        const handleAddStaff = () => {
-            const nameEl = document.getElementById('stfName');
-            const pinEl = document.getElementById('stfPin');
-            const n = nameEl.value.trim().toUpperCase(), p = pinEl.value;
-            if (!n || p.length < 6) return alert("Validasi Gagal!");
-            push(ref(db, 'staff'), { name: n, pin: p }).then(() => { showToast("Staff Ditambah", n); nameEl.value = ''; pinEl.value = ''; });
-        };
+                const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), (snap) => {
+                    const loadedUsers = snap.docs.map(d => d.data());
+                    if (loadedUsers.length === 0) {
+                        saveToCloud(`users/admin`, { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' });
+                    } else { setUsers(loadedUsers); }
+                }, (err) => console.error("Users Sync Error", err));
 
-        const exportToCSV = (data, name) => {
-            if(!data.length) return; 
-            const cleanData = data.map(({ firebaseId, password, ...rest }) => rest);
-            const headers = Object.keys(cleanData[0] || {}), rows = cleanData.map(o => headers.map(h => `"${o[h]}"`).join(","));
-            const content = "\ufeff" + headers.join(",") + "\n" + rows.join("\n"), blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${name}_Bonataon2026.csv`; link.click();
-        };
+                const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())));
+                const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ?
+                snap.data() : null), (err) => console.error("Theme Sync Error", err));
+                const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
+                    const data = snap.data();
+                    if (data) {
+                        const now = Date.now();
+                        let timestamp = 0;
+                        if (data.id && data.id.startsWith('NOTIF-')) timestamp = parseInt(data.id.split('-')[1]);
+                        if (timestamp > 0 && (now - timestamp > 7200000)) return;
+                    
+                        setActiveBroadcast(data);
+                        if (localStorage.getItem('last_broadcast_id') !== data.id) {
+                            setShowBroadcastModal(true);
+                            playNotificationSound();
+                        }
+                    }
+                });
+                
+                // UPDATE: Menggunakan viewDate (bisa berubah) bukan static todayStr
+                // const todayStr = getSafeDateId(); 
+                const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
+                let unsubscribeAttendance = () => {};
+                try {
+                    const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
+                    unsubscribeAttendance = onSnapshot(q, (snap) => {
+                        const data = snap.docs.map(d => d.data());
+                        setLiveAttendance(data);
+                    }, (err) => {
+                        // Jika permission error atau collection kosong, set kosong
+                        setLiveAttendance([]);
+                    });
+                } catch(e) {}
 
-        window.adminEditPart = (id) => { const user = state.participants.find(p => p.firebaseId === id); if(user) openEditUserModal(user); };
+                const configPath = `artifacts/${appId}/public/data/config/session`;
+                let unsubscribeConfig = () => {};
+                try {
+                    unsubscribeConfig = onSnapshot(doc(db, configPath), (snap) => {
+                        if(snap.exists()) setSessionConfig(snap.data());
+                    });
+                } catch(e) {}
 
-        window.adminResetPIN = (id, name) => {
-            const html = `
-                <div class="text-center mb-8">
-                    <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6"><i class="fas fa-key text-2xl"></i></div>
-                    <h3 class="text-xl font-black text-slate-800 uppercase royal-font">Reset PIN Peserta</h3>
-                    <p class="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest">${name}</p>
-                </div>
-                <div class="space-y-6">
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-2">PIN Baru (6-8 Digit)</label>
-                        <input id="newPartPin" type="password" inputmode="numeric" maxlength="8" placeholder="••••••••" class="form-input w-full rounded-2xl p-4 font-black text-center text-3xl tracking-[0.5em] shadow-inner">
-                        <div id="resetPinHint" class="text-[9px] font-bold mt-2 pl-2 text-slate-400 uppercase tracking-widest">Min. 6 Digit Angka</div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4 pt-4">
-                        <button onclick="closeModal('resetPinModal')" class="py-4 border-2 border-slate-100 rounded-2xl font-black text-slate-400 text-[10px] uppercase tracking-widest">Batal</button>
-                        <button id="btnConfirmReset" class="py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-xl text-[10px] uppercase tracking-widest">Simpan</button>
-                    </div>
-                </div>
-            `;
-            openModal(html, 'resetPinModal');
-            setupPinValidation('newPartPin', 'resetPinHint');
-            
-            document.getElementById('btnConfirmReset').onclick = () => {
-                const pin = document.getElementById('newPartPin').value;
-                if (pin.length < 6) { showToast("Input Invalid", "PIN minimal 6 digit!", "error"); return; }
-                update(ref(db, 'participants/' + id), { password: pin }).then(() => {
-                    showToast("PIN Berhasil Direset", `PIN untuk ${name} telah diperbarui.`); closeModal('resetPinModal');
-                }).catch(err => alert("Gagal: " + err.message));
-            };
-        };
+                return () => {
+                    unsubscribeUsers();
+                    unsubscribeParticipants(); 
+                    unsubscribeTheme();
+                    unsubscribeAnnouncements();
+                    unsubscribeAttendance();
+                    unsubscribeConfig();
+                };
+            }, [userAuth, viewDate]); // Dependency ditambah viewDate agar fetch ulang saat tanggal ganti
 
-        window.adminDeletePart = (id) => { if (confirm("Hapus?")) remove(ref(db, 'participants/' + id)); };
-        window.adminRemoveStaff = (id) => { if (confirm("Hapus Staff?")) remove(ref(db, 'staff/' + id)); };
-
-        const renderScan = (type) => {
-            const area = document.getElementById('content-area');
-            if(!area) return;
-            area.innerHTML = `
-                <div class="bg-white rounded-[2.5rem] p-10 shadow-2xl text-center border border-slate-100 animate-[modalUp_0.5s]">
-                    <h3 class="font-black mb-8 text-slate-800 tracking-tight uppercase royal-font text-2xl">SCAN ${type === 'scan' ? 'KEHADIRAN' : 'BERKAT'}</h3>
-                    <div id="scanMsg" class="hidden p-5 rounded-2xl mb-8 text-white font-black shadow-xl animate-bounce"></div>
-                    <div class="relative rounded-[2.5rem] overflow-hidden bg-black aspect-square max-w-sm mx-auto mb-10 shadow-2xl border-4 border-emerald-500/20"><div id="qrReader"></div></div>
-                    <button id="btnManual" class="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs shadow-2xl flex items-center justify-center gap-4 hover:bg-black transition-all uppercase tracking-widest"><i class="fas fa-keyboard"></i> INPUT MANUAL</button>
-                </div>
-            `;
-            state.scanner = new Html5Qrcode("qrReader");
-            state.scanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (text) => handleScanProcess(text.trim().toUpperCase(), type)).catch(e => console.error(e));
-            const manualBtn = document.getElementById('btnManual');
-            if(manualBtn) manualBtn.onclick = () => { const code = prompt("Masukkan Kode (MN-XXXX):"); if (code) handleScanProcess(code.trim().toUpperCase(), type); };
-        };
-
-        const handleScanProcess = (code, type) => {
-            if (state.isProcessingScan) return; state.isProcessingScan = true;
-            const msg = document.getElementById('scanMsg'), p = state.participants.find(x => x.qrCode === code);
-            if (!p) { 
-                if(msg) { msg.innerText = "TIDAK TERDAFTAR!"; msg.className = "p-5 rounded-2xl mb-8 bg-red-600 text-white font-black block"; setTimeout(() => { if(msg) msg.classList.add('hidden'); state.isProcessingScan = false; }, 3000); } else { state.isProcessingScan = false; }
-                return; 
-            }
-            const path = type === 'scan' ? 'attendance' : 'gifts', list = type === 'scan' ? state.attendance : state.gifts;
-            if (list.some(l => l.qrCode === code)) { 
-                if(msg) { msg.innerText = "SUDAH TERDATA!"; msg.className = "p-5 rounded-2xl mb-8 bg-amber-500 text-white font-black block"; setTimeout(() => { if(msg) msg.classList.add('hidden'); state.isProcessingScan = false; }, 3000); } else { state.isProcessingScan = false; }
-                return; 
-            }
-            push(ref(db, path), { name: p.name, qrCode: code, timestamp: new Date().toLocaleString() }).then(() => { 
-                if(msg) { msg.innerText = `SUKSES: ${p.name}!`; msg.className = "p-5 rounded-2xl mb-8 bg-emerald-600 text-white font-black block"; showToast("Berhasil!", p.name); setTimeout(() => { if(msg) msg.classList.add('hidden'); state.isProcessingScan = false; }, 3000); } else { state.isProcessingScan = false; }
-            });
-        };
-
-        const setTab = async (t) => {
-            if (state.scanner) { try { await state.scanner.stop(); } catch (e) {} state.scanner = null; }
-            state.tab = t;
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.id === `nav-${t}`));
-            if (t === 'register') renderRegister();
-            else if (t === 'find') {
-                const area = document.getElementById('content-area');
-                if(!area) return;
-                area.innerHTML = `
-                    <div class="bg-white rounded-[2.5rem] p-10 md:p-16 shadow-2xl text-center border border-slate-100 animate-[modalUp_0.4s]">
-                        <div class="w-24 h-24 bg-emerald-50 rounded-[2rem] flex items-center justify-center mx-auto mb-10 text-emerald-600 text-4xl shadow-inner"><i class="fas fa-magnifying-glass"></i></div>
-                        <h3 class="font-black text-2xl mb-10 text-slate-800 uppercase royal-font tracking-tight">Temukan Undangan</h3>
-                        <div class="space-y-6"><input id="findIn" type="text" placeholder="Masukkan Nama Lengkap Anda" class="form-input w-full rounded-2xl p-6 text-center font-black uppercase text-lg shadow-inner"><button id="btnFind" class="w-full bg-emerald-700 text-white rounded-[1.5rem] py-6 font-black hover:bg-emerald-800 transition-all shadow-2xl uppercase tracking-[0.2em]">CARI TIKET</button></div>
-                    </div>
-                `;
-                const findBtn = document.getElementById('btnFind');
-                if(findBtn) {
-                    findBtn.onclick = () => {
-                        const q = document.getElementById('findIn').value.trim().toLowerCase();
-                        const found = state.participants.filter(p => p.name.toLowerCase().includes(q));
-                        if (!found.length) return alert("Data tidak ditemukan!");
-                        if (found.length === 1) handleTicketAuth(found[0]); else alert("Ketik Nama Lebih Lengkap!");
-                    };
+            const saveToCloud = (path, data) => {
+                const db = window.db;
+                const { doc, setDoc } = window.fs || {};
+                if (!db || !doc) return Promise.reject("Database belum siap");
+                const basePath = `artifacts/${appId}/public/data`;
+                let finalRef;
+                if (path.startsWith('users/')) finalRef = doc(db, `${basePath}/users`, path.split('/')[1]);
+                else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
+                else if (path.startsWith('announcements/active')) finalRef = doc(db, `${basePath}/announcements`, 'active');
+                else if (path.startsWith('theme/')) finalRef = doc(db, `${basePath}/theme`, path.split('/')[1]);
+                else if (path.startsWith('config/')) finalRef = doc(db, `${basePath}/config`, path.split('/')[1]);
+                else if (path.startsWith('attendance/')) {
+                    const parts = path.split('/');
+                    finalRef = doc(db, `${basePath}/attendance/${parts[1]}/records`, parts[3]);
                 }
+                else return Promise.reject("Invalid path");
+                return setDoc(finalRef, data, { merge: true });
+            };
+
+            const deleteFromCloud = (path) => {
+                 const db = window.db;
+                 const { doc, deleteDoc } = window.fs || {};
+                 if (!db) return;
+                 const basePath = `artifacts/${appId}/public/data`;
+                 let finalRef;
+                 if (path.startsWith('users/')) finalRef = doc(db, `${basePath}/users`, path.split('/')[1]);
+                 else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
+                 if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
+            };
+            const handleResetAllData = async () => {
+                if (!currentUser) return;
+                const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
+                if (confirmPass === null) return;
+                if (confirmPass === currentUser.password) {
+                    const db = window.db;
+                    const { collection, getDocs, deleteDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const clearCollection = async (collName) => {
+                        const snapshot = await getDocs(collection(db, `${basePath}/${collName}`));
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+                    };
+                    try {
+                        await clearCollection('participants');
+                        alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
+                    } catch(e) { alert("Gagal reset: " + e.message);
+                    }
+                } else { alert("Password Salah! Reset Database Dibatalkan.");
+                }
+            };
+            useEffect(() => { 
+                if (view === 'scan' && !scanResult) { 
+                    setTimeout(startScanner, 300); 
+                    return () => stopScanner(); 
+                } 
+            }, [view, scanResult]);
+
+            const startScanner = () => { 
+                if (isScanning.current) return;
+                if (scannerRef.current) scannerRef.current.clear().catch(()=>{}); 
+                
+                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 }, false);
+                scanner.render((decodedText) => { 
+                    handleScanSuccess(decodedText);
+                    scanner.clear().then(() => {
+                        isScanning.current = false;
+                        scannerRef.current = null;
+                    }).catch((err) => { console.error("Failed to clear scanner", err); });
+                }, (error) => {});
+                scannerRef.current = scanner; 
+                isScanning.current = true;
+            };
+
+            const stopScanner = () => { 
+                if (scannerRef.current) { 
+                    try { scannerRef.current.clear().catch(err => console.log(err));
+                    } catch(e){} 
+                    scannerRef.current = null;
+                    isScanning.current = false;
+                } 
+            };
+            const handleScanSuccess = (qrId) => {
+                const isModeLive = attendanceModeRef.current;
+                const currentLiveData = liveAttendanceRef.current;
+                const isOpen = checkSessionStatus();
+
+                const p = participants.find(item => item.id === qrId);
+                if (p) {
+                    if (isModeLive) {
+                        if (!isOpen) {
+                            setScanResult({ success: false, msg: `⛔ ABSENSI SEDANG DITUTUP!` });
+                            playErrorSound();
+                            return;
+                        }
+
+                        const todayStr = getSafeDateId();
+                        const alreadyPresent = currentLiveData.find(item => item.id === p.id);
+
+                        if (alreadyPresent) {
+                            setScanResult({ success: false, msg: `⚠️ ${p.nama} SUDAH ABSEN (${alreadyPresent.status}) jam ${alreadyPresent.jam}!` });
+                            playErrorSound();
+                        } else {
+                            const now = new Date();
+                            const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                            const attendanceData = {
+                                id: p.id,
+                                nama: p.nama,
+                                kategori: p.kategori,
+                                kelas: p.kelas || '-',
+                                jam: jam,
+                                status: 'Hadir',
+                                timestamp: now.getTime(),
+                                scanner: currentUser.nama
+                            };
+                            saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
+                            setScanResult({ success: true, msg: `✅ ${p.nama} BERHASIL ABSEN!`, p: p, time: jam });
+                            playNotificationSound();
+                        }
+                    } else {
+                        setScanResult({ success: true, msg: `✅ DITEMUKAN: ${p.nama}`, p: p });
+                        playNotificationSound();
+                    }
+                } else {
+                    setScanResult({ success: false, msg: '❌ QR Tidak Terdaftar di Database!' });
+                    playErrorSound();
+                }
+            };
+            const handleManualAttendance = (p, status) => {
+                const isOpen = checkSessionStatus();
+                if (isPeserta && !isOpen) {
+                    alert("⛔ MAAF, ABSENSI SEDANG DITUTUP!\nSilakan hubungi admin atau tunggu jam buka.");
+                    playErrorSound();
+                    return; 
+                }
+
+                const todayStr = getSafeDateId();
+                const now = new Date();
+                const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                const attendanceData = {
+                    id: p.id,
+                    nama: p.nama,
+                    kategori: p.kategori,
+                    kelas: p.kelas || '-',
+                    jam: jam,
+                    status: status,
+                    timestamp: now.getTime(),
+                    scanner: currentUser.nama + ' (Manual)'
+                };
+                saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
+            };
+
+            const handleSaveConfig = () => {
+                saveToCloud('config/session', sessionConfig).then(() => alert("Pengaturan Sesi Disimpan!"));
+            };
+
+            // --- FUNGSI INSTALL PWA ---
+            const handleInstall = () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('User accepted the A2HS prompt');
+                        }
+                        deferredPrompt = null;
+                    });
+                } else {
+                    alert("Untuk menginstall:\n1. Buka menu browser (titik tiga)\n2. Pilih 'Tambahkan ke Layar Utama' atau 'Install App'");
+                }
+                setIsInstallModalOpen(false);
+            };
+            // --------------------------
+
+            // --- FUNGSI IMPORT USER (EXCEL/CSV) ---
+            const handleImportUsers = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const saveRow = async (row) => {
+                    // Format: Username, Password, Nama, Role
+                    let [username, password, nama, role] = row;
+                    if(!username || !password) return;
+                    username = String(username).trim();
+                    password = String(password).trim();
+                    role = role ? role.toLowerCase().trim() : 'peserta';
+                    
+                    await saveToCloud(`users/${username}`, { username, password, nama: nama || username, role });
+                };
+
+                if (file.name.endsWith('.csv')) {
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                        const rows = ev.target.result.split('\n').slice(1);
+                        let count = 0;
+                        for (const rowStr of rows) {
+                            if (!rowStr.trim()) continue;
+                            const row = rowStr.split(',').map(s => s.trim());
+                            await saveRow(row);
+                            count++;
+                        }
+                        alert(`Berhasil import ${count} user via CSV!`);
+                    };
+                    reader.readAsText(file);
+                } else if (file.name.match(/\.(xlsx|xls)$/)) {
+                    if (!window.XLSX) return alert("Library Excel belum dimuat. Pastikan Anda terhubung ke internet.");
+                    const data = await file.arrayBuffer();
+                    const workbook = window.XLSX.read(data);
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = window.XLSX.utils.sheet_to_json(sheet);
+                    let count = 0;
+                    for (const row of json) {
+                        // Support berbagai case key
+                        const username = row['Username'] || row['username'] || Object.values(row)[0];
+                        const password = row['Password'] || row['password'] || Object.values(row)[1];
+                        const nama = row['Nama'] || row['nama'] || Object.values(row)[2];
+                        const role = row['Role'] || row['role'] || Object.values(row)[3];
+
+                        if (username && password) {
+                            await saveToCloud(`users/${username}`, {
+                                username: String(username),
+                                password: String(password),
+                                nama: nama || username,
+                                role: role ? role.toLowerCase() : 'peserta'
+                            });
+                            count++;
+                        }
+                    }
+                    alert(`Berhasil import ${count} user via Excel!`);
+                }
+            };
+            
+            // --- FUNGSI EXPORT KEHADIRAN (EXCEL) ---
+            const handleExportAttendance = () => {
+                if (!window.XLSX) return alert("Library Excel belum dimuat.");
+                if (liveAttendance.length === 0) return alert("Tidak ada data untuk diexport.");
+                
+                const worksheet = XLSX.utils.json_to_sheet(liveAttendance);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
+                XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
+            };
+
+            // --- FUNGSI RESET DATA HARIAN ---
+            const handleResetDailyData = async () => {
+                if (!currentUser) return;
+                const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal: ${viewDate}.\nData yang dihapus tidak bisa kembali!`);
+                if (confirmation === "HAPUS") {
+                    const db = window.db;
+                    const { collection, getDocs, deleteDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const targetCollection = collection(db, `${basePath}/attendance/${viewDate}/records`);
+                    
+                    try {
+                        const snapshot = await getDocs(targetCollection);
+                        if (snapshot.empty) {
+                            return alert("Data sudah kosong.");
+                        }
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+                        alert(`Berhasil mereset data absensi tanggal ${viewDate}.`);
+                    } catch (e) {
+                        alert("Gagal reset: " + e.message);
+                    }
+                }
+            };
+            // ------------------------------------
+
+            // --- COMPONENT DEFINITIONS ---
+            const LogoutModal = () => (
+                <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="log-out" className="text-red-600 w-8 h-8"></i></div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Konfirmasi Keluar</h3>
+                        <p className="text-slate-600 mb-6">Yakin ingin keluar aplikasi?</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setIsLogoutModalOpen(false)} className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Batal</button>
+                            <button onClick={performLogout} className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg">Ya, Keluar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+            const BroadcastPopup = () => {
+                if (!activeBroadcast || !showBroadcastModal) return null;
+                const isUrgent = activeBroadcast.type === 'urgent';
+                return (
+                    <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                        <div className={`bg-white rounded-3xl shadow-2xl w-full max-w-sm text-center border-4 relative overflow-hidden ${isUrgent ? 'border-red-400' : 'border-sky-400'}`}>
+                            <div className={`h-20 w-full absolute top-0 left-0 ${isUrgent ? 'bg-red-100' : 'bg-sky-100'}`}></div>
+                            <div className="relative z-10 p-6 pt-0">
+                                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 bg-white mt-8 ${isUrgent ? 'border-red-100' : 'border-sky-100'}`}>
+                                    <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
+                                </div>
+                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ? 'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-left">
+                                    <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{activeBroadcast.message}</p>
+                                    <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center text-xs text-slate-400 font-bold uppercase"><span><i data-lucide="user" width="12" className="inline mr-1"/>{activeBroadcast.sender}</span><span>{activeBroadcast.timestamp.split(' ')[1]}</span></div>
+                                </div>
+                                <button onClick={handleCloseBroadcast} className={`w-full py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ? 'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const DeleteConfirmModal = () => (
+                <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-rose-100">
+                        <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="trash-2" className="text-rose-600 w-8 h-8"></i></div>
+                        <h3 className="text-xl font-black text-slate-800 mb-2 font-fredoka">Hapus Data Ini?</h3>
+                        <p className="text-slate-600 mb-6 font-medium">Data yang dihapus tidak bisa dikembalikan loh!</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeleteConfig({ show: false, path: null })} className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Jangan</button>
+                            <button onClick={performDelete} className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-rose-500 hover:bg-rose-600 transition shadow-lg shadow-rose-200">Hapus Aja</button>
+                        </div>
+                    </div>
+                </div>
+            );
+            const InstallModal = () => (
+                <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                    <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-white/50 relative">
+                        <button onClick={() => setIsInstallModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" width="24"></i></button>
+                        <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-50"><i data-lucide="download" className="text-sky-500 w-8 h-8"></i></div>
+                        <h3 className="text-xl font-black text-slate-800 mb-4 font-fredoka">Pasang Aplikasi</h3>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2.
+                        Pilih <b>"Tambahkan ke Layar Utama"</b> atau <b>"Install App"</b>.</p></div>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-4 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="apple" width="16"></i> iPhone (Safari)</h4><p className="text-xs text-slate-500">1.
+                        Klik tombol <b>Share</b> (kotak panah atas) di bawah.</p><p className="text-xs text-slate-500">2.
+                        Geser & pilih <b>"Add to Home Screen"</b> (Tambah ke Utama).</p></div>
+                        <button onClick={handleInstall} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Install Sekarang!</button>
+                    </div>
+                </div>
+            );
+            // --- HANDLERS ---
+            const handleLogin = (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const usernameInput = form.username.value;
+                const passwordInput = form.password.value;
+                if (usernameInput === 'admin' && passwordInput === 'admin123') {
+                    const emergencyAdmin = { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' };
+                    setCurrentUser(emergencyAdmin);
+                    localStorage.setItem('gkps_user', JSON.stringify(emergencyAdmin));
+                    setView('menu');
+                    setNotification(`Selamat Datang, Super Admin!`);
+                    setTimeout(() => setNotification(null), 3000);
+                    return;
+                }
+                const foundUser = users.find(u => u.username === usernameInput && u.password === passwordInput);
+                if (foundUser) {
+                    setCurrentUser(foundUser);
+                    localStorage.setItem('gkps_user', JSON.stringify(foundUser));
+                    setView('menu');
+                    setNotification(`Selamat Datang, ${foundUser.nama}!`);
+                    setTimeout(() => setNotification(null), 3000);
+                } else {
+                    alert("Username atau Password Salah!");
+                    playErrorSound();
+                }
+            };
+            const handleLogoutClick = () => setIsLogoutModalOpen(true);
+            const performLogout = () => {
+                setCurrentUser(null);
+                localStorage.removeItem('gkps_user');
+                setIsLogoutModalOpen(false);
+                setView('login');
+            };
+
+            const initiateDelete = (path) => setDeleteConfig({ show: true, path });
+            const performDelete = () => {
+                if (deleteConfig.path) {
+                    deleteFromCloud(deleteConfig.path);
+                    setDeleteConfig({ show: false, path: null });
+                }
+            };
+            const handleResetPassword = () => {
+                if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
+                    playErrorSound();
+                    return alert("Kode Otorisasi SALAH! Harap masukkan kode yang benar.");
+                }
+                if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
+                saveToCloud(`users/${resetForm.username}`, { 
+                    username: resetForm.username, 
+                    password: resetForm.newPassword,
+                    role: 'admin', 
+                    nama: 'Recovered Admin' 
+                }).then(() => {
+                    alert("Password Admin Berhasil Direset!");
+                    setView('login');
+                }).catch((err) => {
+                    console.error(err);
+                    if (err.message.includes("permissions") || err.message.includes("permission")) {
+                        const emergencyUser = { username: resetForm.username, password: resetForm.newPassword, role: 'admin', nama: 'Super Admin' };
+                        setCurrentUser(emergencyUser);
+                        localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
+                        alert("Password Admin Berhasil Direset!"); 
+                        setView('menu');
+                    } else { alert("Gagal koneksi: " + err.message);
+}
+                });
+            };
+            const initiateAdminReset = (u) => setAdminResetConfig({ show: true, user: u, newPass: '' });
+            const performAdminReset = () => {
+                if (!adminResetConfig.newPass || adminResetConfig.newPass.length < 3) return alert("Password minimal 3 karakter");
+                const updatedUser = { ...adminResetConfig.user, password: adminResetConfig.newPass };
+                saveToCloud(`users/${adminResetConfig.user.username}`, updatedUser);
+                setAdminResetConfig({ show: false, user: null, newPass: '' });
+                alert(`Password untuk ${adminResetConfig.user.username} berhasil direset!`);
+            };
+
+            const handleChangeSelfPassword = () => {
+                if(!selfPassword || selfPassword.length < 3) return alert("Password minimal 3 karakter!");
+                const updatedUser = { ...currentUser, password: selfPassword };
+                saveToCloud(`users/${currentUser.username}`, updatedUser);
+                setCurrentUser(updatedUser);
+                localStorage.setItem('gkps_user', JSON.stringify(updatedUser)); 
+                setSelfPassword('');
+                alert("Password berhasil diubah!");
+                handleBackToMenu();
+            };
+            const handleAddOrUpdateUser = () => {
+                if(!newUser.username || !newUser.password) return alert("Lengkapi data user!");
+                saveToCloud(`users/${newUser.username}`, newUser);
+                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+                setEditingId(null); alert(editingId ? "User diupdate!" : "User ditambahkan!");
+            };
+            const startEditUser = (u) => { setNewUser(u); setEditingId(u.username); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+            const handleAddOrUpdateParticipant = () => {
+                if(!formData.nama) return;
+                const id = editingId || `M-${Date.now()}`;
+                saveToCloud(`participants/${id}`, { id, nama: formData.nama, kategori: formData.kategori, kelas: formData.kelas });
+                setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setEditingId(null); if(editingId) setShowAddForm(false); alert("Tersimpan!");
+            };
+            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+            const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
+            const downloadSingleQR = async (p) => {
+                try {
+                    const scrollPos = window.scrollY;
+                    const res = await fetch(generateQRUrl(p.id)); const blob = await res.blob();
+                    const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+                    link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
+                    document.body.appendChild(link); link.click(); document.body.removeChild(link); window.scrollTo(0, scrollPos);
+                } catch (e) { window.open(generateQRUrl(p.id), '_blank');
+                }
+            };
+            const downloadAllQR = async () => {
+                if (participants.length === 0) return;
+                setIsDownloading(true); 
+                const scrollPos = window.scrollY;
+                for (const p of participants) { try {
+                    const res = await fetch(generateQRUrl(p.id));
+                    const blob = await res.blob(); const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob); link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click(); document.body.removeChild(link); await new Promise(r => setTimeout(r, 600));
+                } catch (e) {} }
+                window.scrollTo(0, scrollPos);
+                setIsDownloading(false); alert("Selesai!");
+            };
+            const handleCSV = (e) => {
+                const file = e.target.files[0];
+                if (!file) return; const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const lines = ev.target.result.split('\n').filter(l => l.trim());
+                    let count = 0;
+                    lines.slice(1).forEach((line, idx) => {
+                        const [nama, kategori, kelas] = line.split(',').map(s => s?.trim());
+                        if (nama) {
+                            const id = `GSM-${Date.now()}-${idx}`;
+                            saveToCloud(`participants/${id}`, { id, nama, kategori: kategori || 'Umum', kelas: kelas || '-' }); count++;
+                        }
+                    });
+                    alert(`Mengupload ${count} data...`);
+                }; reader.readAsText(file);
+            };
+
+            const handleSendBroadcast = () => {
+                if(!broadcastForm.title || !broadcastForm.message) return alert("Isi judul dan pesan!");
+                const id = `NOTIF-${Date.now()}`;
+                const data = { id, title: broadcastForm.title, message: broadcastForm.message, sender: currentUser.nama, timestamp: new Date().toLocaleString('id-ID'), type: broadcastForm.type };
+                saveToCloud('announcements/active', data);
+                alert("Notifikasi dikirim SEKARANG ke semua pengguna!");
+                setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
+            };
+            const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
+            const handleAddWeek = () => {
+                setEditThemeForm({
+                    ...editThemeForm,
+                    weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }]
+                });
+            };
+            const handleRemoveWeek = (index) => {
+                if(confirm("Yakin hapus materi minggu ini?")) {
+                    const newWeeks = [...editThemeForm.weeks];
+                    newWeeks.splice(index, 1);
+                    setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+                }
+            };
+            const handleWeekChange = (index, field, value) => {
+                const newWeeks = [...editThemeForm.weeks];
+                newWeeks[index][field] = value;
+                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+            };
+
+            const handleSaveTheme = () => {
+                if(!editThemeForm.title) return alert("Mohon isi judul bahan ajar!");
+                saveToCloud('theme/current', editThemeForm);
+                alert("Bahan Ajar berhasil diupdate!");
+                handleBackToMenu();
+            };
+            
+            // --- GLOBAL VARIABLES ---
+            const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
+            const isAdmin = safeUser.role === 'admin';
+            const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
+            // UPDATE: Menambahkan Pembimbing dan Pendeta ke dalam kategori isPeserta (jika diperlukan) atau logika akses lain
+            // Disini Pembimbing dan Pendeta dianggap memiliki akses setara GSM/Peserta dalam hal view dasar
+            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
+
+            // --- VIEW LOGIC ---
+
+            if (view === 'login') return (
+                <div key="view-login" className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
+                    <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
+                        <div className="text-center mb-8">
+                            <h1 className="text-3xl font-black text-sky-600 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Pamasuk Ham Ma Au</h1>
+                            <p className="text-slate-500 font-bold text-sm mt-1 bg-white/50 inline-block px-3 py-1 rounded-full">Sistem Daftar Hadir GSM</p>
+                            <p className="text-slate-400 font-bold text-xs mt-1">GKPS Resort Tangerang</p>
+                        </div>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Username</label><input name="username" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-Ketik username..." required/></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Password</label><input type="password" name="password" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-***" required/></div>
+                            <button type="submit" className="w-full btn-playful btn-blue font-black py-4 rounded-2xl text-lg shadow-lg shadow-sky-200 mt-2">MASUK YUK!</button>
+                            <button type="button" onClick={() => setView('forgot_password')} className="text-sky-600 font-bold text-xs hover:text-sky-800 underline text-right block w-full mt-2">Lupa Password?</button>
+                        </form>
+                        <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
+                             {isConnected ?
+                            <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                        </div>
+                    </div>
+                </div>
+            );
+            if (view === 'forgot_password') return (
+                <div className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
+                    <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-rose-50"><i data-lucide="key-round" className="text-rose-500 w-8 h-8"></i></div>
+                            <h1 className="text-2xl font-black text-rose-500 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Reset Password</h1>
+                            <p className="text-slate-500 font-bold text-xs mt-1">Khusus Akun Admin Utama</p>
+                        </div>
+                        <div className="space-y-3">
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username Admin</label><input className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Username Anda" value={resetForm.username} onChange={e => setResetForm({...resetForm, username: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Password Baru</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="***" value={resetForm.newPassword} onChange={e => setResetForm({...resetForm, newPassword: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Kode Otorisasi</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Kode Master Panitia" value={resetForm.token} onChange={e => setResetForm({...resetForm, token: e.target.value})} /></div>
+                            <button onClick={handleResetPassword} className="w-full btn-playful btn-orange py-3 rounded-xl font-black text-lg shadow-lg shadow-orange-100 mt-2">Reset Password</button>
+                            <button onClick={() => setView('login')} className="w-full text-slate-400 font-bold text-xs py-2 hover:text-slate-600 transition">Batal, kembali ke Login</button>
+                        </div>
+                    </div>
+                </div>
+            );
+            if (view === 'menu') {
+                const currentTheme = themeData || defaultTheme;
+                let displayWeeks = currentTheme.weeks || [];
+                if (!Array.isArray(displayWeeks)) displayWeeks = [];
+                const gridCols = displayWeeks.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
+
+                return (
+                <div key="view-menu" className="min-h-screen bg-school-sunday p-4 pt-8 pb-20 relative">
+                     {notification && (
+                        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-[150] w-full max-w-sm px-4 animate-shake">
+                            <div className="bg-yellow-300 border-4 border-yellow-500 text-yellow-900 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-4 animate-bounce-in"><div className="bg-white p-2 rounded-full shadow-sm"><i data-lucide="info" className="text-yellow-600"></i></div><span className="font-bold text-sm leading-tight font-fredoka">{notification}</span></div>
+                        </div>
+                    )}
+                
+                    <div className="max-w-md mx-auto glass-panel rounded-[32px] overflow-hidden border-2 border-white/60">
+                        <div className="bg-gradient-to-r from-sky-500 to-indigo-600 p-6 text-white relative">
+                            <div className="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="church" width="80" height="80"></i></div>
+                            <div className="flex justify-between items-center relative z-10">
+                                <div><p className="text-white/80 text-xs font-bold mb-1">Shalom,</p><h1 className="text-3xl font-black drop-shadow-md tracking-tight" style={{fontFamily: 'Fredoka, sans-serif'}}>{safeUser.nama}</h1><span className="text-[10px] font-black uppercase tracking-wider bg-white/25 inline-block px-3 py-1 rounded-full mt-2 border border-white/30 backdrop-blur-sm">{safeUser.role}</span></div>
+                                <button onClick={handleLogoutClick} className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl text-white transition flex items-center justify-center shadow-inner border border-white/30" title="Keluar"><i data-lucide="log-out" width="20"></i></button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 pb-0">
+                            <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
+                                <div className="relative z-10">
+                                    <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
+                                    <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
+                                    <div className={`grid gap-3 ${gridCols}`}>
+                                        {displayWeeks.map((week, idx) => (
+                                         <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-3 rounded-2xl border flex flex-col h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
+                                                <div className={`mb-2 border-b pb-1 ${idx % 2 === 0 ? 'border-sky-200' : 'border-indigo-200'}`}>
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider block ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>{week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}</span>
+                                                    <h4 className={`font-bold text-sm leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
+                                                </div>
+                                                <div className="flex-1 space-y-2 mb-2">
+                                                    {week.themeVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Ayat Tema</p><p className="text-xs font-bold text-slate-700">{week.themeVerse}</p></div>)}
+                                                    {week.memoryVerse && (<div className="bg-white/60 p-1.5 rounded-lg border border-black/5"><p className="text-[9px] font-bold text-slate-400 uppercase">Hafalan</p><p className="text-xs font-bold text-slate-700">{week.memoryVerse}</p></div>)}
+                                                </div>
+                                                <p className="text-slate-600 italic font-medium text-[10px] leading-relaxed line-clamp-3">"{week.content}"</p>
+                                                <div className="mt-2 text-center"><span className="text-[10px] font-bold text-sky-500 bg-white px-2 py-1 rounded-full shadow-sm">Klik untuk Detail</span></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {(isAdmin || isPanitia) && (
+                                    <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <button onClick={() => setView('my_barcode')} className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
+                                <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="qr-code" width="28" height="28"></i></div>
+                                <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
+                            </button>
+
+                            {isPeserta && (
+                                <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4">
+                                    <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
+                                    <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Input Absen</h3><p className="text-xs text-slate-400 font-bold">Catat Kehadiran Manual</p></div>
+                                 </button>
+                            )}
+
+                            {/* UPDATE: Logika tombol Data Kehadiran untuk GSM, Petugas, Pembimbing, Pendeta */}
+                            {(['gsm', 'petugas', 'pembimbing', 'pendeta'].includes(safeUser.role)) && (
+                                <button onClick={() => setView('live_report')} className="w-full btn-playful bg-emerald-500 border-b-4 border-emerald-700 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4 transform hover:scale-[1.01]">
+                                    <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="clipboard-list" width="24" height="24"></i></div>
+                                    <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Data Kehadiran</h3><p className="text-xs text-emerald-100 font-bold opacity-90">Cek List Peserta Hadir</p></div>
+                                </button>
+                            )}
+
+                             {!isPeserta && (
+                                <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
+                                    
+                                    <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-check" width="20"></i></div>
+                                        <div className="text-left"><h3 className="font-bold">Kelola Absensi</h3><p className="text-[10px] text-indigo-100 opacity-90">Input Manual & Setting Jam</p></div>
+                                    </button>
+
+                                    <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
+                                        <div className="text-left"><h3 className="font-bold">Scan QR Absensi</h3><p className="text-[10px] text-sky-100 opacity-90">Mode: Rekam Kehadiran</p></div>
+                                    </button>
+
+                                    {safeUser.role !== 'petugas' && (
+                                        <button onClick={() => { setView('live_report'); }} className="w-full btn-playful bg-emerald-500 text-white border-b-4 border-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                            <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-list" width="20"></i></div>
+                                            <div className="text-left"><h3 className="font-bold">Lihat Data Hadir</h3><p className="text-[10px] text-emerald-100 opacity-90">Laporan Realtime Hari Ini</p></div>
+                                        </button>
+                                     )}
+
+                                    <button onClick={() => setView('manage_broadcast')} className="w-full btn-playful bg-slate-700 text-white border-b-4 border-slate-900 p-3 rounded-xl flex items-center gap-3 shadow-lg shadow-slate-300 mb-3">
+                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="megaphone" width="18"></i></div>
+                                        <div className="text-left text-xs"><h3 className="font-bold text-sm">Broadcast Notifikasi</h3><p className="text-[10px] text-slate-200 opacity-90">Kirim Info ke Semua Layar</p></div>
+                                    </button>
+                                
+                                    {isAdmin && (<div className="grid grid-cols-1 gap-3 mb-3"><button onClick={() => setView('manage_users')} className="btn-playful btn-blue rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2 border-b-4 border-sky-700"><i data-lucide="user-cog"></i> Atur User</button></div>)}
+                                    {isAdmin && (<button onClick={() => setView('generate')} className="w-full btn-playful btn-white border-b-4 mb-3 p-3 rounded-xl flex items-center gap-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><i data-lucide="database" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold text-slate-700">Database Peserta</h3></div></button>)}
+                                    {isAdmin && (
+                                        <div className="mt-4 pt-4 border-t border-dashed border-slate-300 space-y-2">
+                                            <button onClick={handleResetAllData} className="w-full btn-playful bg-rose-100 text-rose-600 border-b-4 border-rose-200 hover:bg-rose-200 p-3 rounded-xl flex items-center justify-center gap-2">
+                                                <i data-lucide="users" width="14"></i>
+                                                <span className="font-black text-[10px]">RESET DATA PESERTA</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            
+                            <button onClick={() => setView('change_password')} className="w-full py-3 text-slate-400 text-xs font-bold hover:text-slate-600 transition flex items-center justify-center gap-2"><i data-lucide="lock" width="12"></i> Ganti Password Saya</button>
+                            <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
+                        </div>
+                    </div>
+                    
+                    <WeekDetailModal week={selectedWeek} onClose={() => setSelectedWeek(null)} />
+                    {isLogoutModalOpen && <LogoutModal />}
+                    {isInstallModalOpen && <InstallModal />}
+                    {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
+                    <BroadcastPopup />
+                </div>
+            );
             }
-            else if (t === 'scan' || t === 'gift') renderScan(t);
-            else if (t === 'report') renderReport();
-            else if (t === 'data') renderAdmin();
-        };
+            
+            if (view === 'attendance_manager') {
+                let filteredParticipants = [];
+                if (isPeserta) {
+                    const mySelf = participants.find(p => p.nama.toLowerCase() === safeUser.nama.toLowerCase());
+                    if (mySelf) filteredParticipants = [mySelf];
+                } else {
+                    filteredParticipants = participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()));
+                }
 
-        const handleTicketAuth = (user) => {
-            const html = `<h3 class="text-2xl font-black text-slate-800 text-center uppercase royal-font mb-4 tracking-tight">Verifikasi</h3><p class="text-[10px] text-slate-400 font-black text-center mb-8 uppercase tracking-widest">Masukkan PIN untuk <span class="text-emerald-600">${user.name}</span></p><input type="password" id="pinAuth" inputmode="numeric" maxlength="8" class="form-input w-full rounded-2xl p-6 text-center text-4xl font-black mb-8 tracking-[0.5em] shadow-inner" placeholder="••••••••"><div class="grid grid-cols-2 gap-4"><button onclick="document.getElementById('authModal').classList.add('hidden')" class="py-5 border-2 border-slate-100 rounded-2xl font-black text-slate-400 uppercase tracking-widest text-xs">Batal</button><button id="btnVerify" class="py-5 bg-emerald-600 text-white rounded-2xl font-black shadow-xl uppercase tracking-widest text-xs">KONFIRMASI</button></div>`;
-            openModal(html, 'authModal');
-            const verifyBtn = document.getElementById('btnVerify');
-            if(verifyBtn) {
-                verifyBtn.onclick = () => { const pin = document.getElementById('pinAuth').value; if (pin === user.password) { closeModal('authModal'); window.showTicket(user); } else alert("PIN Salah!"); };
+                return (
+                    <div className="min-h-screen bg-slate-50 relative">
+                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
+                            <div className="flex items-center gap-3 mb-4">
+                                <button onClick={handleBackToMenu} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
+                                <h2 className="font-black text-xl text-slate-800">Kelola Absensi</h2>
+                            </div>
+                            
+                            {!isPeserta && (
+                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-sm text-indigo-800">Mode Otomatis</span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only peer" checked={sessionConfig.autoMode} onChange={e => setSessionConfig({...sessionConfig, autoMode: e.target.checked})} />
+                                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                        </label>
+                                     </div>
+                                    
+                                    {sessionConfig.autoMode ? (
+                                        <div className="flex gap-2">
+                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} onChange={e => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
+                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Tutup</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.closeTime} onChange={e => setSessionConfig({...sessionConfig, closeTime: e.target.value})} /></div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
+                                            <span className="font-bold text-sm text-slate-600">Status Absensi</span>
+                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
+                                        </div>
+                                    )}
+                                    
+                                    <button onClick={handleSaveConfig} className="w-full bg-indigo-600 text-white text-xs font-bold py-3 rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200">Simpan Pengaturan</button>
+                                </div>
+                            )}
+
+                            {!isPeserta && (
+                                <input className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700" placeholder="Cari Nama Peserta..." value={filterManual} onChange={e => setFilterManual(e.target.value)} />
+                            )}
+                        </div>
+
+                        <div className="p-4 pb-20 space-y-3">
+                             {filteredParticipants.length === 0 && isPeserta ? (
+                                <div className="text-center p-8 opacity-50">
+                                    <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
+                                    <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
+                                </div>
+                            ) : (
+                                filteredParticipants.map(p => {
+                                    const statusData = liveAttendance.find(l => l.id === p.id);
+                                    return (
+                                     <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-bounce-in">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div><h4 className="font-bold text-slate-800">{p.nama}</h4><p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas || '-'}</p></div>
+                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ? 'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ? 'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
+                                            </div>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                <button onClick={() => handleManualAttendance(p, 'Hadir')} className="bg-emerald-50 text-emerald-600 border-b-2 border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold">Hadir</button>
+                                                 <button onClick={() => handleManualAttendance(p, 'Izin')} className="bg-orange-50 text-orange-600 border-b-2 border-orange-200 hover:bg-orange-100 py-2 rounded-lg text-xs font-bold">Izin</button>
+                                                <button onClick={() => handleManualAttendance(p, 'Sakit')} className="bg-blue-50 text-blue-600 border-b-2 border-blue-200 hover:bg-blue-100 py-2 rounded-lg text-xs font-bold">Sakit</button>
+                                                <button onClick={() => handleManualAttendance(p, 'Alpha')} className="bg-red-50 text-red-600 border-b-2 border-red-200 hover:bg-red-100 py-2 rounded-lg text-xs font-bold">Alpha</button>
+                                            </div>
+                                         </div>
+                                    )
+                                })
+                             )}
+                        </div>
+                    </div>
+                );
             }
+
+            if (view === 'live_report') {
+                const totalHadir = liveAttendance.length;
+                return (
+                <div className="min-h-screen bg-slate-50 relative flex flex-col">
+                    <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
+                        <div className="flex items-center justify-between mb-4">
+                             <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
+                             <div className="text-right">
+                                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
+                                <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
+                             </div>
+                        </div>
+                        
+                        {/* UPDATE: DATE PICKER & EXPORT BUTTON */}
+                        <div className="flex gap-2 items-center mb-2">
+                            <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 text-slate-600 text-xs font-bold p-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-indigo-400" />
+                            
+                            <button onClick={handleExportAttendance} className="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 border-2 border-green-200 flex-1 text-xs font-bold flex items-center justify-center gap-1">
+                                <i data-lucide="download" width="14"></i> Export Excel
+                            </button>
+                        </div>
+                        
+                        {/* UPDATE: RESET DATA BUTTON (Hanya jika bukan Peserta biasa dan ada datanya) */}
+                        {!isPeserta && liveAttendance.length > 0 && (
+                            <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
+                                <i data-lucide="trash-2" width="12"></i> Hapus Data Tanggal Ini
+                            </button>
+                        )}
+                        
+                     </div>
+                    <div className="flex-1 p-4 pb-20 overflow-y-auto">
+                        {liveAttendance.length === 0 ? (
+                            <div className="text-center mt-10 opacity-50">
+                                <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
+                                 <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {liveAttendance.map((item, idx) => (
+                                    <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-bounce-in">
+                                        <div className={`font-black text-xs p-3 rounded-xl min-w-[60px] text-center ${item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>{item.jam}<span className="block text-[8px] opacity-60 font-normal">WIB</span></div>
+                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ? 'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ? 'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                );
+            }
+
+            if (view === 'scan') {
+                const totalHadir = liveAttendance.length;
+                return (
+                <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
+                    <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                    {attendanceMode && (<button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span></button>)}
+                    <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
+                        <div id="reader" className="w-full h-auto bg-black"></div>
+                        {scanResult && (
+                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ? 'bg-white' : 'bg-red-50'}`}>
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i></div>
+                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ? 'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
+                                <p className="text-center text-sm text-slate-500 font-bold mb-4">{scanResult.msg}</p>
+                                {scanResult.success && scanResult.p && (<div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">{scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}<div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div><div className="flex gap-4"><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p></div></div></div>)}
+                                <button onClick={() => { setScanResult(null); startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">Arahkan kamera ke QR Code peserta untuk cek data & simpan kehadiran.</p>
+                </div>
+            );
+            }
+            if (view === 'edit_theme') return (
+                <div className="min-h-screen bg-slate-50 p-4 pb-20">
+                    <div className="max-w-md mx-auto">
+                        <div className="flex items-center justify-between mb-6">
+                            <button onClick={handleBackToMenu} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                            <h2 className="font-black text-xl text-slate-700">Edit Bahan Ajar</h2>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 space-y-4 mb-4">
+                            <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Judul Besar / Tema Bulanan</label><input className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" value={editThemeForm.title} onChange={e => setEditThemeForm({...editThemeForm, title: e.target.value})} placeholder="Contoh: Kasih Allah..." /></div>
+                        </div>
+                        <div className="space-y-4">
+                            {editThemeForm.weeks.map((week, index) => (
+                                <div key={index} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 relative group">
+                                    <button onClick={() => handleRemoveWeek(index)} className="absolute top-4 right-4 bg-rose-100 hover:bg-rose-200 text-rose-500 p-2 rounded-xl transition shadow-sm" title="Hapus Minggu Ini"><i data-lucide="trash-2" width="18"></i></button>
+                                    <h3 className="font-black text-indigo-500 text-sm uppercase tracking-widest mb-4">Minggu ke-{index + 1}</h3>
+                                    <div className="space-y-3">
+                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Tanggal (Opsional)</label><input type="date" className="w-full p-2 border rounded-lg font-bold text-slate-600 text-sm" value={week.date} onChange={e => handleWeekChange(index, 'date', e.target.value)} /></div>
+                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Topik / Judul Minggu Ini</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.topic} onChange={e => handleWeekChange(index, 'topic', e.target.value)} placeholder="Contoh: Minggu 1: Ketaatan" /></div>
+                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Tema (Singkat)</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" /></div>
+                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Hafalan (Isi Lengkap)</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-xs h-16" value={week.memoryVerse} onChange={e => handleWeekChange(index, 'memoryVerse', e.target.value)} placeholder="Tulis ayat hafalan disini..." /></div>
+                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." /></div>
+                                    </div>
+                                 </div>
+                            ))}
+                        </div>
+                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
+                        <div className="sticky bottom-4 mt-6 space-y-2"><button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button></div>
+                    </div>
+                </div>
+             );
+            if (view === 'manage_users') return (
+                <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
+                    <div className="max-w-md mx-auto">
+                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        
+                        {/* UPDATE: FITUR IMPORT USER */}
+                        <div className="bg-white rounded-xl shadow p-4 mb-4 border-2 border-dashed border-indigo-200 text-center">
+                             <div className="text-center relative hover:bg-indigo-50 transition rounded-lg p-2 cursor-pointer">
+                                <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
+                                <span className="text-sm font-bold text-indigo-600 block">Import User (Excel/CSV)</span>
+                                <span className="text-[10px] text-gray-400 block">Format: Username, Password, Nama, Role</span>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
+                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
+                             <div className="space-y-3">
+                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
+                                <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                                <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
+                                
+                                {/* UPDATE: MENAMBAHKAN OPSI PEMBIMBING DAN PENDETA */}
+                                <select className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 bg-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
+                                    <option value="petugas">Petugas</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="pengurus">Pengurus</option>
+                                    <option value="gsm">GSM</option>
+                                    <option value="pembimbing">Pembimbing</option>
+                                    <option value="pendeta">Pendeta</option>
+                                 </select>
+                                
+                                <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null);
+                                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+                                }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
+                            </div>
+                        </div>
+                        <div className="space-y-2 pb-10">
+                            <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest">User Terdaftar</h3>
+                            {users.map(u => (
+                                <div key={u.username} className={`bg-white p-4 rounded-2xl shadow-sm border-2 flex justify-between items-center ${editingId === u.username ? 'border-amber-400 bg-amber-50' : 'border-slate-100'}`}>
+                                    <div><p className="font-bold text-slate-700">{u.username}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama} • {u.role}</p></div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => startEditUser(u)} className="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition" title="Edit Data"><i data-lucide="pencil" width="16"></i></button>
+                                        <button onClick={() => initiateAdminReset(u)} className="text-amber-500 bg-amber-50 p-2 rounded-lg hover:bg-amber-100 transition" title="Reset Password"><i data-lucide="key-round" width="16"></i></button>
+                                         {u.username !== 'admin' && (<button onClick={() => initiateDelete(`users/${u.username}`)} className="text-rose-500 bg-rose-50 p-2 rounded-lg hover:bg-rose-100 transition" title="Hapus User"><i data-lucide="trash-2" width="16"></i></button>)}
+                                    </div>
+                                 </div>
+                            ))}
+                        </div>
+                    </div>
+                     {deleteConfig.show && <DeleteConfirmModal />}
+                    {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
+                </div>
+            );
+            if (view === 'generate') return (
+                <div key="view-generate" className="min-h-screen bg-slate-100 p-4">
+                    <div className="max-w-md mx-auto">
+                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        <div className="bg-white rounded-xl shadow p-6">
+                            <h2 className="font-bold text-xl mb-6 text-indigo-800 flex items-center gap-2"><i data-lucide="users"></i> Data Peserta</h2>
+                            
+                            <div className="mb-6 space-y-4">
+                                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition">
+                                    <input type="file" accept=".csv" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                     <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
+                                    <span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span>
+                                    <span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span>
+                                </div>
+                                
+                                <button onClick={() => setShowAddForm(!showAddForm)} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 py-2 rounded transition">+ Input Manual</button>
+                                
+                                {showAddForm && (
+                                    <div className="bg-slate-50 p-4 rounded border animate-bounce-in">
+                                        <h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ? 'Edit Peserta' : 'Tambah Peserta'}</h3>
+                                        <input className="w-full p-2 border rounded mb-2" placeholder="Nama Lengkap" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} />
+                                        <select className="w-full p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
+                                            <option>Anak Sekolah Minggu</option><option>GSM</option><option>Panitia</option><option>Umum</option><option>Kelas</option> 
+                                        </select>
+                                        <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
+                                            <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <div className="flex gap-2">
+                                             <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
+                                            {editingId && <button onClick={() => { setEditingId(null);
+                                            setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                {participants.map(p => (
+                                    <div key={p.id} className={`border p-3 rounded text-center bg-white shadow-sm hover:shadow-md transition relative ${editingId === p.id ? 'border-amber-400 bg-amber-50' : ''}`}>
+                                        <div className="absolute top-2 right-2 flex gap-1">
+                                            <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button>
+                                            <button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button>
+                                            <button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100"><i data-lucide="trash-2" width="12"></i></button>
+                                         </div>
+                                        <img src={generateQRUrl(p.id)} className="w-24 mx-auto mb-2 mix-blend-multiply cursor-pointer hover:scale-110 transition-transform duration-200 border-2 border-transparent hover:border-indigo-200 rounded-lg p-1" loading="lazy" onClick={() => downloadSingleQR(p)} title="Klik untuk download QR" />
+                                        <p className="font-bold text-xs truncate text-slate-800">{p.nama}</p>
+                                        <p className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 inline-block mt-1">{p.kategori}</p>
+                                        {p.kelas && <p className="text-sm font-black text-red-600 mt-1 uppercase tracking-tighter">{p.kelas}</p>}
+                                    </div>
+                                ))}
+                            </div>
+                         </div>
+                    </div>
+                    {deleteConfig.show && <DeleteConfirmModal />}
+                </div>
+            );
+            if (view === 'my_barcode') {
+                const p = participants.find(item => item.nama.toLowerCase() === safeUser.nama.toLowerCase());
+                const qrId = p ? p.id : safeUser.username;
+                const qrUrl = generateQRUrl(qrId);
+                return (
+                    <div className="min-h-screen bg-indigo-600 p-4 flex flex-col items-center justify-center relative">
+                        <button onClick={handleBackToMenu} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                        <div className="bg-white p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center animate-bounce-in relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500"></div>
+                            <div className="mb-6">
+                                <h2 className="text-2xl font-black text-slate-800 font-fredoka mb-1">{safeUser.nama}</h2>
+                                <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">{safeUser.role}</span>
+                            </div>
+                             <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
+                                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-4 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Scan Me</div>
+                                <img src={qrUrl} alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
+                            </div>
+                            <p className="text-slate-400 text-xs font-bold w-3/4 mx-auto leading-relaxed">Tunjukkan QR Code ini kepada petugas sebagai identitas.</p>
+                        </div>
+                     </div>
+                );
+            }
+            
+            if (view === 'manage_broadcast') return (
+                <div className="min-h-screen bg-slate-50 p-4">
+                    <div className="max-w-md mx-auto">
+                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        <div className="bg-white rounded-3xl shadow-lg p-6 border-2 border-indigo-100">
+                             <div className="flex items-center gap-3 mb-4 text-indigo-600">
+                                <i data-lucide="megaphone" width="24"></i>
+                                <h2 className="font-black text-xl">Broadcast Pesan</h2>
+                             </div>
+                             <div className="space-y-3">
+                                <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700" placeholder="Judul Pengumuman" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
+                                <textarea className="w-full border-2 p-3 rounded-xl font-medium text-slate-600 h-32" placeholder="Isi pesan notifikasi..." value={broadcastForm.message} onChange={e => setBroadcastForm({...broadcastForm, message: e.target.value})} />
+                                <select className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white" value={broadcastForm.type} onChange={e => setBroadcastForm({...broadcastForm, type: e.target.value})}>
+                                    <option value="info">Info (Biru)</option>
+                                    <option value="urgent">Penting/Darurat (Merah)</option>
+                                </select>
+                                <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg">KIRIM SEKARANG</button>
+                              </div>
+                        </div>
+                    </div>
+                </div>
+            );
+            if (view === 'change_password') return (
+                <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
+                    <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-lg border-2 border-indigo-100 text-center">
+                        <h2 className="text-xl font-black text-slate-800 mb-6">Ganti Password</h2>
+                         <input type="text" className="w-full p-3 border-2 border-slate-200 rounded-xl mb-4 font-bold text-center" placeholder="Password Baru..." value={selfPassword} onChange={e => setSelfPassword(e.target.value)} />
+                        <button onClick={handleChangeSelfPassword} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold mb-3">Simpan Password</button>
+                        <button onClick={handleBackToMenu} className="text-slate-400 font-bold text-xs">Batal</button>
+                    </div>
+                </div>
+            );
+            if (view === 'login' || !isConnected) {
+                 if (connectionError) {
+                     return (
+                         <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
+                             <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm border-4 border-rose-100">
+                                <div className="text-rose-500 mb-4"><i data-lucide="alert-octagon" width="48" height="48" className="mx-auto"></i></div>
+                                <h2 className="text-xl font-black text-slate-700 mb-2">Gagal Terhubung</h2>
+                                <p className="text-sm text-slate-500 mb-4 font-bold">Koneksi ke Database gagal.</p>
+                                <div className="bg-slate-100 p-3 rounded-xl text-xs text-left mb-4 overflow-auto max-h-32 border border-slate-200"><code>{connectionError}</code></div>
+                                <button onClick={() => window.location.reload()} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Coba Lagi</button>
+                            </div>
+                         </div>
+                     )
+                 }
+                 return (
+                    <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
+                        <div className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-xl">
+                            <div className="animate-spin w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <h1 className="text-xl font-black text-slate-700 mb-1">Memuat Data...</h1>
+                        </div>
+                    </div>
+                );
+            }
+            
+            return null;
         };
 
-        const startDataListeners = () => {
-            onValue(ref(db, 'participants'), s => { state.participants = s.val() ? Object.keys(s.val()).map(k => ({...s.val()[k], firebaseId: k})) : []; updateDashboard(); });
-            onValue(ref(db, 'attendance'), s => { state.attendance = s.val() ? Object.values(s.val()) : []; updateDashboard(); });
-            onValue(ref(db, 'gifts'), s => { state.gifts = s.val() ? Object.values(s.val()) : []; updateDashboard(); });
-            onValue(ref(db, 'staff'), s => { state.staff = s.val() ? Object.keys(s.val()).map(k => ({...s.val()[k], firebaseId: k})) : []; updateDashboard(); });
-            onValue(ref(db, 'settings/adminPin'), s => { if (s.val()) state.adminPass = s.val(); });
-        };
-
-        setInterval(() => { const el = document.getElementById('liveClock'); if (!el) return; const now = new Date(); el.innerHTML = `<div class="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">${now.toLocaleDateString('id-ID', {day:'numeric', month:'short'})}</div><div class="text-2xl font-black">${now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</div>`; }, 1000);
-
-        const trigger = document.getElementById('adminTrigger');
-        if(trigger) trigger.onclick = renderAdminLogin;
-        
-        const navReg = document.getElementById('nav-register'), navFind = document.getElementById('nav-find'), navScan = document.getElementById('nav-scan'), navGift = document.getElementById('nav-gift'), navRep = document.getElementById('nav-report'), navData = document.getElementById('nav-data'), navLogout = document.getElementById('nav-logout');
-
-        if(navReg) navReg.onclick = () => setTab('register');
-        if(navFind) navFind.onclick = () => setTab('find');
-        if(navScan) navScan.onclick = () => setTab('scan');
-        if(navGift) navGift.onclick = () => setTab('gift');
-        if(navRep) navRep.onclick = () => setTab('report');
-        if(navData) navData.onclick = () => setTab('data');
-        if(navLogout) navLogout.onclick = () => { if (confirm("Keluar?")) { state.isAdmin = false; state.isStaff = false; refreshUI(); setTab('register'); } };
-
-        // INITIALIZE
-        initAppAuth(); 
-        setTab('register'); 
-        refreshUI();
-
-        window.closeModal = closeModal;
-        window.renderAdminLogin = renderAdminLogin;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<CloudAttendance />);
     </script>
 </body>
 </html>
+
