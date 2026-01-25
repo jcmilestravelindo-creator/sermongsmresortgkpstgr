@@ -285,10 +285,20 @@
                     }
                 };
                 initAuth();
+
+                /* ========================================================================
+                   PERBAIKAN: MENONAKTIFKAN AUTO-LOGIN DARI LOCALSTORAGE
+                   Agar saat di-refresh, tidak muncul "flicker" tombol QR/Menu sebelum hilang.
+                   Aplikasi akan selalu mulai dari halaman Login saat di-refresh.
+                   ========================================================================
+                
                 const savedUser = localStorage.getItem('gkps_user');
                 if (savedUser) { try { setCurrentUser(JSON.parse(savedUser));
                 setViewRaw('menu'); } catch(e){} }
+                
+                */
             }, []);
+
             useEffect(() => {
                 const db = window.db; const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
                 if (!userAuth || !db || !collection) return;
