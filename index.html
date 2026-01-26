@@ -40,6 +40,9 @@
         .btn-playful { transition: all 0.2s; border-bottom-width: 4px; }
         .btn-playful:active { transform: translateY(4px); border-bottom-width: 0px; margin-bottom: 4px; }
         .glass-panel { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 10px 40px -10px rgba(30, 58, 138, 0.15); }
+        .bell-ring { animation: ring 4s ease-in-out infinite; transform-origin: 50% 0%; }
+        @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(30deg); } 30% { transform: rotate(-28deg); } 50% { transform: rotate(34deg); } 70% { transform: rotate(-32deg); } 90% { transform: rotate(30deg); } 100% { transform: rotate(0); } }
+        
         #reader { width: 100%; border-radius: 20px; overflow: hidden; background: black; min-height: 300px; }
         #reader video { object-fit: cover; border-radius: 20px; }
         #reader__scan_region img { display: none; } 
@@ -147,7 +150,6 @@
         };
 
         const CloudAttendance = () => {
-            // --- STATE DEFINITIONS ---
             const [dbReady, setDbReady] = useState(false);
             const [currentUser, setCurrentUser] = useState(() => {
                 try {
@@ -164,6 +166,7 @@
                 return 'login';
             });
 
+            // State definitions
             const [users, setUsers] = useState([]); 
             const [participants, setParticipants] = useState([]);
             const [isConnected, setIsConnected] = useState(false);
@@ -188,10 +191,11 @@
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
             const [broadcastHistory, setBroadcastHistory] = useState([]); 
             
-            // --- NOTEBOOK STATES ---
+            // --- POINT 1-4: NOTEBOOK STATE ---
             const [notes, setNotes] = useState([]);
             const [noteForm, setNoteForm] = useState({ id: null, title: '', content: '', type: 'Materi', date: '' });
-            
+            // ---------------------------------
+
             const [editingId, setEditingId] = useState(null);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'petugas', nama: '' });
             const [selfPassword, setSelfPassword] = useState('');
@@ -227,7 +231,6 @@
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
 
-            // --- INITIALIZATION ---
             useEffect(() => {
                 const checkDb = setInterval(() => {
                     if (window.db && window.fs) {
@@ -238,6 +241,7 @@
                 return () => clearInterval(checkDb);
             }, []);
 
+            // --- AUTHENTICATION ---
             useEffect(() => {
                 if (!dbReady) return;
                 const initAuth = async () => {
@@ -261,6 +265,7 @@
                                 await signInAnonymously(auth);
                             }
                         } catch (error) {
+                            console.error("Auth Error:", error);
                             setConnectionError(error.message);
                         }
                     };
@@ -270,9 +275,10 @@
                 initAuth();
             }, [dbReady, refreshKey]);
 
-            // --- DATA SYNC ---
+            // --- FIRESTORE LISTENERS ---
             useEffect(() => {
                 if (!dbReady || !userAuth) return;
+
                 const db = window.db; 
                 const { collection, doc, onSnapshot, query, orderBy } = window.fs;
                 const publicDataPath = `artifacts/${appId}/public/data`;
@@ -284,14 +290,19 @@
                     }, (err) => console.log("Users sync waiting..."));
 
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())), (err) => {});
+                
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null), (err) => {});
+
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
                         const now = Date.now();
                         let scheduledTime = data.scheduledAt ? new Date(data.scheduledAt).getTime() : 0;
                         if (scheduledTime > now) {
-                            if (scheduledTime - now < 86400000) setTimeout(() => { setActiveBroadcast(data); setShowBroadcastModal(true); playNotificationSound(); }, scheduledTime - now);
+                            const delay = scheduledTime - now;
+                            if (delay < 86400000) { 
+                                setTimeout(() => { setActiveBroadcast(data); setShowBroadcastModal(true); playNotificationSound(); }, delay);
+                            }
                             return; 
                         }
                         let timestamp = data.id && data.id.startsWith('NOTIF-') ? parseInt(data.id.split('-')[1]) : 0;
@@ -300,21 +311,28 @@
                         if (localStorage.getItem('last_broadcast_id') !== data.id) { setShowBroadcastModal(true); playNotificationSound(); }
                     }
                 }, (err) => {});
+
                 const unsubscribeBroadcastHistory = onSnapshot(collection(db, `${publicDataPath}/broadcast_history`), (snap) => {
-                        setBroadcastHistory(snap.docs.map(d => d.data()).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                        const hist = snap.docs.map(d => d.data()).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+                        setBroadcastHistory(hist);
                     }, (err) => {});
 
+                // Notebook Listener - Point 4 (Database Sync)
                 let unsubscribeNotebook = () => {};
                 if (currentUser) {
                     try {
+                        // NOTE: Using a public collection filtered by username logic as requested by design
                         const nbQuery = query(collection(db, `${publicDataPath}/notebook`), orderBy('timestamp', 'desc'));
                         unsubscribeNotebook = onSnapshot(nbQuery, (snap) => {
                             const allNotes = snap.docs.map(d => d.data());
-                            setNotes(allNotes.filter(n => n.username === currentUser.username));
-                        }, (err) => {});
-                    } catch(e) {}
+                            // Filter notes strictly for the logged-in user
+                            const myNotes = allNotes.filter(n => n.username === currentUser.username);
+                            setNotes(myNotes);
+                        }, (err) => console.log("Notebook sync error", err));
+                    } catch(e) { console.error("Notebook listener failed", e); }
                 }
 
+                // Attendance Listener
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
                 try {
@@ -373,6 +391,7 @@
                 setSelectedWeek(null);
                 setScanResult(null); 
                 setFilterUser("");
+                
                 localStorage.setItem('gkps_last_view', newView);
                 setViewRaw(newView);
                 setViewDate(getSafeDateId());
@@ -383,6 +402,7 @@
                 currentUser ? setView('menu') : setView('login');
             };
 
+            // --- DATABASE SAVE/DELETE LOGIC ---
             const saveToCloud = (path, data) => {
                 if (!dbReady) return Promise.reject("Database belum siap");
                 const db = window.db;
@@ -394,6 +414,7 @@
                 else if (path.startsWith('announcements/active')) finalRef = doc(db, `${basePath}/announcements`, 'active');
                 else if (path.startsWith('theme/')) finalRef = doc(db, `${basePath}/theme`, path.split('/')[1]);
                 else if (path.startsWith('config/')) finalRef = doc(db, `${basePath}/config`, path.split('/')[1]);
+                // POINT 4: Ensure notebook path logic exists
                 else if (path.startsWith('notebook/')) finalRef = doc(db, `${basePath}/notebook`, path.split('/')[1]);
                 else if (path.startsWith('attendance/')) {
                     const parts = path.split('/');
@@ -411,11 +432,358 @@
                  let finalRef;
                  if (path.startsWith('users/')) finalRef = doc(db, `${basePath}/users`, path.split('/')[1]);
                  else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
+                 // POINT 4: Ensure notebook delete logic exists
                  else if (path.startsWith('notebook/')) finalRef = doc(db, `${basePath}/notebook`, path.split('/')[1]);
                  if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
 
-            // --- ALL HANDLERS DEFINED HERE TO AVOID REFERENCE ERRORS ---
+            // --- HANDLERS FOR NOTEBOOK ---
+            const handleSaveNote = () => {
+                if (!noteForm.title || !noteForm.content) return alert("Judul dan isi tidak boleh kosong!");
+                const id = noteForm.id || `NOTE-${Date.now()}`;
+                const data = {
+                    id,
+                    username: currentUser.username, // Associate with current user
+                    title: noteForm.title,
+                    content: noteForm.content,
+                    type: noteForm.type,
+                    date: noteForm.date || new Date().toISOString().split('T')[0],
+                    timestamp: Date.now()
+                };
+                saveToCloud(`notebook/${id}`, data);
+                alert("Catatan berhasil disimpan!");
+                setView('notebook');
+            };
+
+            const handleEditNote = (note) => {
+                setNoteForm(note);
+                setView('notebook_edit');
+            };
+
+            const handleNewNote = () => {
+                setNoteForm({ id: null, title: '', content: '', type: 'Materi', date: new Date().toISOString().split('T')[0] });
+                setView('notebook_edit');
+            };
+
+            const handleDeleteNote = (noteId) => {
+                if(confirm("Yakin hapus catatan ini?")) {
+                    deleteFromCloud(`notebook/${noteId}`);
+                }
+            };
+            // -----------------------------
+
+            const handleResetAllData = async () => {
+                if (!currentUser) return;
+                const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
+                if (confirmPass === null) return;
+                if (confirmPass === currentUser.password) {
+                    const db = window.db;
+                    const { collection, getDocs, deleteDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const clearCollection = async (collName) => {
+                        const snapshot = await getDocs(collection(db, `${basePath}/${collName}`));
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+                    };
+                    try {
+                        await clearCollection('participants');
+                        alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
+                    } catch(e) { alert("Gagal reset: " + e.message);
+                    }
+                } else { alert("Password Salah! Reset Database Dibatalkan.");
+                }
+            };
+
+            // Scanner Logic
+            useEffect(() => { 
+                if (view === 'scan' && !scanResult) { 
+                    setTimeout(startScanner, 300); 
+                    return () => stopScanner(); 
+                } 
+            }, [view, scanResult]);
+
+            const startScanner = () => { 
+                if (isScanning.current) return;
+                if (scannerRef.current) scannerRef.current.clear().catch(()=>{}); 
+                
+                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 }, false);
+                scanner.render((decodedText) => { 
+                    handleScanSuccess(decodedText);
+                    scanner.clear().then(() => {
+                        isScanning.current = false;
+                        scannerRef.current = null;
+                    }).catch((err) => { console.error("Failed to clear scanner", err); });
+                }, (error) => {});
+                scannerRef.current = scanner; 
+                isScanning.current = true;
+            };
+
+            const stopScanner = () => { 
+                if (scannerRef.current) { 
+                    try { scannerRef.current.clear().catch(err => console.log(err));
+                    } catch(e){} 
+                    scannerRef.current = null;
+                    isScanning.current = false;
+                } 
+            };
+
+            const handleScanSuccess = (qrId) => {
+                const isModeLive = attendanceModeRef.current;
+                const currentLiveData = liveAttendanceRef.current;
+                const isOpen = checkSessionStatus();
+
+                const p = participants.find(item => item.id === qrId);
+                if (p) {
+                    if (isModeLive) {
+                        if (!isOpen) {
+                            setScanResult({ success: false, msg: `⛔ ABSENSI SEDANG DITUTUP!` });
+                            playErrorSound();
+                            return;
+                        }
+
+                        const todayStr = getSafeDateId();
+                        const alreadyPresent = currentLiveData.find(item => item.id === p.id);
+
+                        if (alreadyPresent) {
+                            setScanResult({ success: false, msg: `⚠️ ${p.nama} SUDAH ABSEN (${alreadyPresent.status}) jam ${alreadyPresent.jam}!` });
+                            playErrorSound();
+                        } else {
+                            const now = new Date();
+                            const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                            const attendanceData = {
+                                id: p.id,
+                                nama: p.nama,
+                                kategori: p.kategori,
+                                kelas: p.kelas || '-',
+                                jam: jam,
+                                status: 'Hadir',
+                                timestamp: now.getTime(),
+                                scanner: currentUser.nama
+                            };
+                            saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
+                            setScanResult({ success: true, msg: `✅ ${p.nama} BERHASIL ABSEN!`, p: p, time: jam });
+                            playNotificationSound();
+                        }
+                    } else {
+                        setScanResult({ success: true, msg: `✅ DITEMUKAN: ${p.nama}`, p: p });
+                        playNotificationSound();
+                    }
+                } else {
+                    setScanResult({ success: false, msg: '❌ QR Tidak Terdaftar di Database!' });
+                    playErrorSound();
+                }
+            };
+
+            const handleManualAttendance = (p, status) => {
+                const isOpen = checkSessionStatus();
+                if (isPeserta && !isOpen) {
+                    alert("⛔ MAAF, ABSENSI SEDANG DITUTUP!\nSilakan hubungi admin atau tunggu jam buka.");
+                    playErrorSound();
+                    return; 
+                }
+
+                const todayStr = getSafeDateId();
+                const now = new Date();
+                const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                const attendanceData = {
+                    id: p.id,
+                    nama: p.nama,
+                    kategori: p.kategori,
+                    kelas: p.kelas || '-',
+                    jam: jam,
+                    status: status,
+                    timestamp: now.getTime(),
+                    scanner: currentUser.nama + ' (Manual)'
+                };
+                saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
+            };
+
+            const handleSaveConfig = () => {
+                saveToCloud('config/session', sessionConfig).then(() => alert("Pengaturan Sesi Disimpan!"));
+            };
+
+            const handleInstall = () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        deferredPrompt = null;
+                    });
+                } else {
+                    alert("Untuk menginstall:\n1. Buka menu browser (titik tiga)\n2. Pilih 'Tambahkan ke Layar Utama' atau 'Install App'");
+                }
+                setIsInstallModalOpen(false);
+            };
+
+            const handleImportUsers = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const saveRow = async (row) => {
+                    let [username, password, nama, role] = row;
+                    if(!username || !password) return;
+                    username = String(username).trim();
+                    password = String(password).trim();
+                    role = role ? role.toLowerCase().trim() : 'peserta';
+                    await saveToCloud(`users/${username}`, { username, password, nama: nama || username, role });
+                };
+                if (file.name.endsWith('.csv')) {
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                        const rows = ev.target.result.split('\n').slice(1);
+                        let count = 0;
+                        for (const rowStr of rows) {
+                            if (!rowStr.trim()) continue;
+                            const row = rowStr.split(',').map(s => s.trim());
+                            await saveRow(row);
+                            count++;
+                        }
+                        alert(`Berhasil import ${count} user via CSV!`);
+                    };
+                    reader.readAsText(file);
+                } else if (file.name.match(/\.(xlsx|xls)$/)) {
+                    if (!window.XLSX) return alert("Library Excel belum dimuat. Pastikan Anda terhubung ke internet.");
+                    const data = await file.arrayBuffer();
+                    const workbook = window.XLSX.read(data);
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = window.XLSX.utils.sheet_to_json(sheet);
+                    let count = 0;
+                    for (const row of json) {
+                        const username = row['Username'] || row['username'] || Object.values(row)[0];
+                        const password = row['Password'] || row['password'] || Object.values(row)[1];
+                        const nama = row['Nama'] || row['nama'] || Object.values(row)[2];
+                        const role = row['Role'] || row['role'] || Object.values(row)[3];
+
+                        if (username && password) {
+                            await saveToCloud(`users/${username}`, {
+                                username: String(username),
+                                password: String(password),
+                                nama: nama || username,
+                                role: role ? role.toLowerCase() : 'peserta'
+                            });
+                            count++;
+                        }
+                    }
+                    alert(`Berhasil import ${count} user via Excel!`);
+                }
+            };
+
+            const handleExportAttendance = () => {
+                if (!window.XLSX) return alert("Library Excel belum dimuat.");
+                if (liveAttendance.length === 0) return alert("Tidak ada data untuk diexport.");
+                const dataToExport = liveAttendance.map(item => {
+                    const newItem = { ...item };
+                    if (newItem.timestamp) {
+                        const date = new Date(newItem.timestamp);
+                        newItem['Waktu Scan'] = date.toLocaleDateString('id-ID', {
+                            day: '2-digit', month: '2-digit', year: 'numeric'
+                        }) + ' ' + date.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                    } else {
+                        newItem['Waktu Scan'] = '-';
+                    }
+                    delete newItem.timestamp; 
+                    return newItem;
+                });
+                const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
+                XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
+            };
+
+            const handleResetDailyData = async () => {
+                if (!currentUser) return;
+                const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal: ${viewDate}.\nData yang dihapus tidak bisa kembali!`);
+                if (confirmation === "HAPUS") {
+                    const db = window.db;
+                    const { collection, getDocs, deleteDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const targetCollection = collection(db, `${basePath}/attendance/${viewDate}/records`);
+                    try {
+                        const snapshot = await getDocs(targetCollection);
+                        if (snapshot.empty) {
+                            return alert("Data sudah kosong.");
+                        }
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+                        alert(`Berhasil mereset data absensi tanggal ${viewDate}.`);
+                    } catch (e) {
+                        alert("Gagal reset: " + e.message);
+                    }
+                }
+            };
+
+            // --- UI COMPONENTS ---
+            const LogoutModal = () => (
+                <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="log-out" className="text-red-600 w-8 h-8"></i></div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Konfirmasi Keluar</h3>
+                        <p className="text-slate-600 mb-6">Yakin ingin keluar aplikasi?</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setIsLogoutModalOpen(false)} className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Batal</button>
+                            <button onClick={performLogout} className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg">Ya, Keluar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const BroadcastPopup = () => {
+                if (!activeBroadcast || !showBroadcastModal) return null;
+                const isUrgent = activeBroadcast.type === 'urgent';
+                return (
+                    <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                        <div className={`bg-white rounded-3xl shadow-2xl w-full max-w-sm text-center border-4 relative overflow-hidden ${isUrgent ? 'border-red-400' : 'border-sky-400'}`}>
+                            <div className={`h-20 w-full absolute top-0 left-0 ${isUrgent ? 'bg-red-100' : 'bg-sky-100'}`}></div>
+                            <div className="relative z-10 p-6 pt-0">
+                                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 bg-white mt-8 ${isUrgent ? 'border-red-100' : 'border-sky-100'}`}>
+                                     <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
+                                </div>
+                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ?
+                                'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-left">
+                                    <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{activeBroadcast.message}</p>
+                                    <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center text-xs text-slate-400 font-bold uppercase"><span><i data-lucide="user" width="12" className="inline mr-1"/>{activeBroadcast.sender}</span><span>{activeBroadcast.timestamp.split(' ')[1]}</span></div>
+                                </div>
+                                <button onClick={handleCloseBroadcast} className={`w-full 
+                                py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ?
+                                'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const DeleteConfirmModal = () => (
+                <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-rose-100">
+                        <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="trash-2" className="text-rose-600 w-8 h-8"></i></div>
+                        <h3 className="text-xl font-black text-slate-800 mb-2 font-fredoka">Hapus Data Ini?</h3>
+                        <p className="text-slate-600 mb-6 font-medium">Data yang dihapus tidak bisa dikembalikan loh!</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setDeleteConfig({ show: false, path: null })} className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Jangan</button>
+                            <button onClick={performDelete} className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-rose-500 hover:bg-rose-600 transition shadow-lg shadow-rose-200">Hapus Aja</button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const InstallModal = () => (
+                <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
+                    <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-white/50 relative">
+                        <button onClick={() => setIsInstallModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" width="24"></i></button>
+                        <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-50"><i data-lucide="download" className="text-sky-500 w-8 h-8"></i></div>
+                        <h3 className="text-xl font-black text-slate-800 mb-4 font-fredoka">Pasang Aplikasi</h3>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center 
+                        gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2.
+                        Pilih <b>"Tambahkan ke Layar Utama"</b> atau <b>"Install App"</b>.</p></div>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-4 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="apple" width="16"></i> iPhone (Safari)</h4><p className="text-xs text-slate-500">1.
+                        Klik tombol <b>Share</b> (kotak panah atas) di bawah.</p><p className="text-xs text-slate-500">2.
+                        Geser & pilih <b>"Add to Home Screen"</b> (Tambah ke Utama).</p></div>
+                        <button onClick={handleInstall} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Install Sekarang!</button>
+                    </div>
+                </div>
+            );
+
+            // --- ACTION HANDLERS ---
             const handleLogin = (e) => {
                 e.preventDefault();
                 const form = e.target;
@@ -452,27 +820,6 @@
                 setViewRaw('login'); 
             };
 
-            const handleSaveNote = () => {
-                if (!noteForm.title || !noteForm.content) return alert("Judul dan isi tidak boleh kosong!");
-                const id = noteForm.id || `NOTE-${Date.now()}`;
-                const data = {
-                    id,
-                    username: currentUser.username,
-                    title: noteForm.title,
-                    content: noteForm.content,
-                    type: noteForm.type,
-                    date: noteForm.date || new Date().toISOString().split('T')[0],
-                    timestamp: Date.now()
-                };
-                saveToCloud(`notebook/${id}`, data);
-                alert("Catatan berhasil disimpan!");
-                setView('notebook');
-            };
-
-            const handleEditNote = (note) => { setNoteForm(note); setView('notebook_edit'); };
-            const handleNewNote = () => { setNoteForm({ id: null, title: '', content: '', type: 'Materi', date: new Date().toISOString().split('T')[0] }); setView('notebook_edit'); };
-            const handleDeleteNote = (noteId) => { if(confirm("Yakin hapus catatan ini?")) deleteFromCloud(`notebook/${noteId}`); };
-
             const initiateDelete = (path) => setDeleteConfig({ show: true, path });
             const performDelete = () => {
                 if (deleteConfig.path) {
@@ -482,16 +829,29 @@
             };
 
             const handleResetPassword = () => {
-                if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') return alert("Kode Otorisasi SALAH!");
+                if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
+                    playErrorSound();
+                    return alert("Kode Otorisasi SALAH! Harap masukkan kode yang benar.");
+                }
                 if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
-                saveToCloud(`users/${resetForm.username}`, { username: resetForm.username, password: resetForm.newPassword, role: 'admin', nama: 'Recovered Admin' })
-                .then(() => { alert("Password Admin Berhasil Direset!"); setView('login'); })
-                .catch((err) => {
-                    const emergencyUser = { username: resetForm.username, password: resetForm.newPassword, role: 'admin', nama: 'Super Admin' };
-                    setCurrentUser(emergencyUser);
-                    localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
-                    alert("Password Admin Berhasil Direset!"); 
-                    setView('menu');
+                saveToCloud(`users/${resetForm.username}`, { 
+                    username: resetForm.username, 
+                    password: resetForm.newPassword,
+                    role: 'admin', 
+                    nama: 'Recovered Admin' 
+                }).then(() => {
+                    alert("Password Admin Berhasil Direset!");
+                    setView('login');
+                }).catch((err) => {
+                    console.error(err);
+                    if (err.message.includes("permissions") || err.message.includes("permission")) {
+                        const emergencyUser = { username: resetForm.username, password: resetForm.newPassword, role: 'admin', nama: 'Super Admin' };
+                        setCurrentUser(emergencyUser);
+                        localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
+                        alert("Password Admin Berhasil Direset!"); 
+                        setView('menu');
+                    } else { alert("Gagal koneksi: " + err.message);
+                    }
                 });
             };
 
@@ -531,7 +891,8 @@
                 setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setEditingId(null); if(editingId) setShowAddForm(false); alert("Tersimpan!");
             };
 
-            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
             const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
             const downloadSingleQR = async (p) => {
@@ -541,7 +902,8 @@
                     const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
                     link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
                     document.body.appendChild(link); link.click(); document.body.removeChild(link); window.scrollTo(0, scrollPos);
-                } catch (e) { window.open(generateQRUrl(p.id), '_blank'); }
+                } catch (e) { window.open(generateQRUrl(p.id), '_blank');
+                }
             };
 
             const downloadAllQR = async () => {
@@ -580,37 +942,84 @@
                 if(!broadcastForm.title || !broadcastForm.message) return alert("Isi judul dan pesan!");
                 const id = `NOTIF-${Date.now()}`;
                 const now = new Date();
-                const data = { id, title: broadcastForm.title, message: broadcastForm.message, sender: currentUser.nama, timestamp: now.toLocaleString('id-ID'), createdAt: now.getTime(), type: broadcastForm.type, scheduledAt: broadcastForm.schedule || null };
+                
+                const data = { 
+                    id, 
+                    title: broadcastForm.title, 
+                    message: broadcastForm.message, 
+                    sender: currentUser.nama, 
+                    timestamp: now.toLocaleString('id-ID'), 
+                    createdAt: now.getTime(),
+                    type: broadcastForm.type,
+                    scheduledAt: broadcastForm.schedule || null
+                };
                 saveToCloud('announcements/active', data);
-                const db = window.db; const { doc, setDoc } = window.fs;
+                const db = window.db;
+                const { doc, setDoc } = window.fs;
                 const historyRef = doc(db, `artifacts/${appId}/public/data/broadcast_history`, id);
                 setDoc(historyRef, data);
-                alert("Notifikasi berhasil dikirim!");
+                let msg = "Notifikasi berhasil dikirim!";
+                if (broadcastForm.schedule) {
+                    msg = `Notifikasi DIJADWALKAN otomatis pada: ${new Date(broadcastForm.schedule).toLocaleString('id-ID')}`;
+                }
+                alert(msg);
                 setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
             };
 
             const handleDeleteHistory = async (historyId) => {
                 if(!confirm("Hapus arsip ini?")) return;
-                const db = window.db; const { doc, deleteDoc } = window.fs;
+                const db = window.db;
+                const { doc, deleteDoc } = window.fs;
                 await deleteDoc(doc(db, `artifacts/${appId}/public/data/broadcast_history`, historyId));
             };
 
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
-            const handleAddWeek = () => { setEditThemeForm({ ...editThemeForm, weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }] }); };
-            const handleRemoveWeek = (index) => { if(confirm("Hapus minggu ini?")) { const newWeeks = [...editThemeForm.weeks]; newWeeks.splice(index, 1); setEditThemeForm({ ...editThemeForm, weeks: newWeeks }); } };
-            const handleWeekChange = (index, field, value) => { const newWeeks = [...editThemeForm.weeks]; newWeeks[index][field] = value; setEditThemeForm({ ...editThemeForm, weeks: newWeeks }); };
-            const handleSaveTheme = () => { if(!editThemeForm.title) return alert("Isi judul!"); saveToCloud('theme/current', editThemeForm); alert("Tersimpan!"); handleBackToMenu(); };
-            const handleResetAllData = async () => { if(currentUser.password === prompt("Masukkan Password untuk konfirmasi:")) { const db = window.db; const { collection, getDocs, deleteDoc } = window.fs; const snap = await getDocs(collection(db, `artifacts/${appId}/public/data/participants`)); await Promise.all(snap.docs.map(d => deleteDoc(d.ref))); alert("Reset Berhasil"); } else alert("Password Salah"); };
 
+            const handleAddWeek = () => {
+                setEditThemeForm({ ...editThemeForm, weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }] });
+            };
+
+            const handleRemoveWeek = (index) => {
+                if(confirm("Yakin hapus materi minggu ini?")) {
+                    const newWeeks = [...editThemeForm.weeks];
+                    newWeeks.splice(index, 1);
+                    setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+                }
+            };
+
+            const handleWeekChange = (index, field, value) => {
+                const newWeeks = [...editThemeForm.weeks];
+                newWeeks[index][field] = value;
+                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+            };
+
+            const handleSaveTheme = () => {
+                if(!editThemeForm.title) return alert("Mohon isi judul bahan ajar!");
+                saveToCloud('theme/current', editThemeForm);
+                alert("Bahan Ajar berhasil diupdate!");
+                handleBackToMenu();
+            };
+            
             const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
             const isAdmin = safeUser.role === 'admin';
             const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
             const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
 
             // --- LOADING SCREEN ---
-            if (!dbReady) return (<div className="min-h-screen flex items-center justify-center bg-school-sunday"><div className="spinner"></div></div>);
+            if (!dbReady) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
+                        <div className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-xl">
+                            <div className="spinner mx-auto mb-4"></div>
+                            <h1 className="text-xl font-black text-slate-700 mb-1">Menghubungkan Database...</h1>
+                            <p className="text-xs text-slate-400">Mohon tunggu sebentar</p>
+                        </div>
+                    </div>
+                );
+            }
 
             // --- RENDER VIEWS ---
+            
             if (view === 'login') return (
                 <div key="view-login" className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -627,9 +1036,12 @@
                             <button type="button" onClick={() => setView('forgot_password')} className="text-sky-600 font-bold text-xs hover:text-sky-800 underline text-right block w-full mt-2">Lupa Password?</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
-                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                            {isConnected ? 
+                            <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
-                        <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">&copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang</div>
+                        <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
+                            &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
+                        </div>
                     </div>
                 </div>
             );
@@ -668,7 +1080,6 @@
                     )}
                 
                     <div className="max-w-md mx-auto glass-panel rounded-[32px] overflow-hidden border-2 border-white/60">
-                        {/* HEADER WITH REFRESH BUTTON */}
                         <div className="bg-gradient-to-r from-sky-500 to-indigo-600 p-6 text-white relative">
                             <div className="absolute top-0 right-0 p-4 opacity-10 flex items-center gap-4">
                                 <img src="logotema.png" className="w-24 h-24 object-contain" alt="Logo GKPS" />
@@ -696,6 +1107,7 @@
                                         <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
                                         <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
                                         <div className={`grid gap-3 ${gridCols}`}>
+                                        
                                         {displayWeeks.map((week, idx) => (
                                                 <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-4 rounded-2xl border flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
                                                     <div className="mb-4">
@@ -726,6 +1138,7 @@
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
                             </button>
 
+                            {/* POINT 1: MENU BUTTON UNTUK NOTEBOOK */}
                             <button onClick={() => setView('notebook')} className="w-full btn-playful bg-amber-400 border-b-4 border-amber-600 text-amber-900 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4 transform hover:scale-[1.01]">
                                 <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="book" width="24" height="24"></i></div>
                                 <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Notebook & Renungan</h3><p className="text-xs text-amber-900/70 font-bold opacity-90">Catatan Materi & Refleksi Harian</p></div>
@@ -807,7 +1220,7 @@
             );
             }
 
-            // --- NOTEBOOK LIST VIEW ---
+            // --- POINT 2: HALAMAN LIST CATATAN ---
             if (view === 'notebook') {
                 const [filterType, setFilterType] = useState('All');
                 const filteredNotes = notes.filter(n => filterType === 'All' ? true : n.type === filterType);
@@ -880,7 +1293,7 @@
                 );
             }
 
-            // --- NOTEBOOK EDIT VIEW ---
+            // --- POINT 3: HALAMAN EDITOR CATATAN ---
             if (view === 'notebook_edit') {
                 return (
                     <div className="min-h-screen bg-slate-50 relative flex flex-col">
