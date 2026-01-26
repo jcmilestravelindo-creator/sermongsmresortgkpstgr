@@ -209,8 +209,6 @@
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
             const [broadcastHistory, setBroadcastHistory] = useState([]); 
-            const [notes, setNotes] = useState([]); // State untuk Notebook
-            const [noteForm, setNoteForm] = useState({ id: null, title: '', content: '', type: 'Materi', date: '' });
             
             const [editingId, setEditingId] = useState(null);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'petugas', nama: '' });
@@ -310,7 +308,7 @@
                 if (!dbReady || !userAuth) return;
 
                 const db = window.db; 
-                const { collection, doc, onSnapshot, query, orderBy, where } = window.fs;
+                const { collection, doc, onSnapshot, query, orderBy } = window.fs;
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
                 // 1. Users Listener
@@ -404,20 +402,6 @@
                     }, (err) => {});
                 } catch(e) {}
 
-                // 8. Notebook Listener (Filtered by Current Username)
-                let unsubscribeNotebook = () => {};
-                if (currentUser) {
-                    try {
-                        const nbQuery = query(collection(db, `${publicDataPath}/notebook`), orderBy('timestamp', 'desc'));
-                        unsubscribeNotebook = onSnapshot(nbQuery, (snap) => {
-                            const allNotes = snap.docs.map(d => d.data());
-                            // Filter client-side for simplicity in this shared environment architecture
-                            const myNotes = allNotes.filter(n => n.username === currentUser.username);
-                            setNotes(myNotes);
-                        }, (err) => console.log("Notebook sync error", err));
-                    } catch(e) {}
-                }
-
                 return () => {
                     unsubscribeUsers();
                     unsubscribeParticipants(); 
@@ -426,9 +410,8 @@
                     unsubscribeBroadcastHistory();
                     unsubscribeAttendance();
                     unsubscribeConfig();
-                    unsubscribeNotebook();
                 };
-            }, [dbReady, userAuth, viewDate, refreshKey, currentUser]); // Added currentUser to deps
+            }, [dbReady, userAuth, viewDate, refreshKey]);
 
             // --- UTILITIES ---
             const checkSessionStatus = () => {
@@ -496,7 +479,6 @@
                     const parts = path.split('/');
                     finalRef = doc(db, `${basePath}/attendance/${parts[1]}/records`, parts[3]);
                 }
-                else if (path.startsWith('notebook/')) finalRef = doc(db, `${basePath}/notebook`, path.split('/')[1]); // Add Notebook path
                 else return Promise.reject("Invalid path");
                 return setDoc(finalRef, data, { merge: true });
             };
@@ -509,44 +491,10 @@
                  let finalRef;
                  if (path.startsWith('users/')) finalRef = doc(db, `${basePath}/users`, path.split('/')[1]);
                  else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
-                 else if (path.startsWith('notebook/')) finalRef = doc(db, `${basePath}/notebook`, path.split('/')[1]); // Add notebook delete
                  if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
 
             // --- SPECIFIC HANDLERS ---
-            const handleSaveNote = () => {
-                if (!noteForm.title || !noteForm.content) return alert("Judul dan isi tidak boleh kosong!");
-                const id = noteForm.id || `NOTE-${Date.now()}`;
-                const data = {
-                    id,
-                    username: currentUser.username,
-                    title: noteForm.title,
-                    content: noteForm.content,
-                    type: noteForm.type,
-                    date: noteForm.date || new Date().toISOString().split('T')[0],
-                    timestamp: Date.now()
-                };
-                saveToCloud(`notebook/${id}`, data);
-                alert("Catatan tersimpan!");
-                setView('notebook');
-            };
-
-            const handleEditNote = (note) => {
-                setNoteForm(note);
-                setView('notebook_edit');
-            };
-
-            const handleNewNote = () => {
-                setNoteForm({ id: null, title: '', content: '', type: 'Materi', date: new Date().toISOString().split('T')[0] });
-                setView('notebook_edit');
-            };
-
-            const handleDeleteNote = (noteId) => {
-                if(confirm("Yakin hapus catatan ini?")) {
-                    deleteFromCloud(`notebook/${noteId}`);
-                }
-            };
-
             const handleResetAllData = async () => {
                 if (!currentUser) return;
                 const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
@@ -1217,11 +1165,6 @@
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
                             </button>
 
-                            <button onClick={() => setView('notebook')} className="w-full btn-playful bg-amber-400 border-b-4 border-amber-600 text-amber-900 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4 transform hover:scale-[1.01]">
-                                <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="notebook-pen" width="24" height="24"></i></div>
-                                <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Notebook & Renungan</h3><p className="text-xs text-amber-900/70 font-bold opacity-90">Catatan Materi & Refleksi Harian</p></div>
-                            </button>
-
                             {isPeserta && (
                                 <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4">
                                     <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
@@ -1298,143 +1241,6 @@
             );
             }
             
-            // --- NOTEBOOK LIST VIEW ---
-            if (view === 'notebook') {
-                const [filterType, setFilterType] = useState('All');
-                
-                const filteredNotes = notes.filter(n => filterType === 'All' ? true : n.type === filterType);
-
-                return (
-                    <div className="min-h-screen bg-slate-50 relative flex flex-col">
-                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
-                            <div className="flex items-center justify-between mb-4">
-                                <button onClick={handleBackToMenu} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
-                                <h2 className="font-black text-xl text-slate-800">Notebook Saya</h2>
-                                <button onClick={handleNewNote} className="bg-amber-100 text-amber-700 p-2 rounded-xl hover:bg-amber-200 border-2 border-amber-200 shadow-sm"><i data-lucide="plus" width="20"></i></button>
-                            </div>
-                            
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                {['All', 'Materi', 'Renungan'].map(type => (
-                                    <button 
-                                        key={type}
-                                        onClick={() => setFilterType(type)}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition whitespace-nowrap border-2 ${
-                                            filterType === type 
-                                            ? 'bg-amber-500 border-amber-600 text-white' 
-                                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        {type === 'All' ? 'Semua Catatan' : type}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex-1 p-4 pb-20 overflow-y-auto">
-                            {filteredNotes.length === 0 ? (
-                                <div className="text-center mt-20 opacity-50">
-                                    <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <i data-lucide="notebook-pen" className="w-10 h-10 text-amber-400"></i>
-                                    </div>
-                                    <h3 className="font-bold text-slate-700 text-lg">Belum Ada Catatan</h3>
-                                    <p className="text-slate-400 text-xs mt-1">Yuk mulai tulis materi atau renungan harianmu!</p>
-                                    <button onClick={handleNewNote} className="mt-4 px-6 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-200 hover:bg-amber-600">Tulis Sekarang</button>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {filteredNotes.map((note) => (
-                                        <div key={note.id} onClick={() => handleEditNote(note)} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition cursor-pointer relative group animate-bounce-in">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider ${
-                                                    note.type === 'Materi' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'
-                                                }`}>
-                                                    {note.type}
-                                                </span>
-                                                <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded">
-                                                    {new Date(note.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                </span>
-                                            </div>
-                                            <h3 className="font-bold text-slate-800 text-lg mb-2 leading-tight line-clamp-2">{note.title}</h3>
-                                            <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">{note.content}</p>
-                                            
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteNote(note.id); }} 
-                                                className="absolute bottom-4 right-4 bg-rose-50 text-rose-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-rose-100 hover:text-rose-600"
-                                            >
-                                                <i data-lucide="trash-2" width="16"></i>
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
-
-            // --- NOTEBOOK EDIT VIEW ---
-            if (view === 'notebook_edit') {
-                return (
-                    <div className="min-h-screen bg-slate-50 relative flex flex-col">
-                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 flex justify-between items-center">
-                            <button onClick={() => setView('notebook')} className="text-slate-400 font-bold text-xs hover:text-slate-600">Batal</button>
-                            <h2 className="font-black text-lg text-slate-800">{noteForm.id ? 'Edit Catatan' : 'Catatan Baru'}</h2>
-                            <button onClick={handleSaveNote} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 flex items-center gap-2">
-                                <i data-lucide="save" width="14"></i> Simpan
-                            </button>
-                        </div>
-                        
-                        <div className="p-4 flex-1 overflow-y-auto">
-                            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-4">
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Judul Catatan</label>
-                                    <input 
-                                        className="w-full text-xl font-black text-slate-800 border-b-2 border-slate-100 focus:border-indigo-500 focus:outline-none py-2 bg-transparent placeholder-slate-300" 
-                                        placeholder="Tulis Judul..." 
-                                        value={noteForm.title} 
-                                        onChange={e => setNoteForm({...noteForm, title: e.target.value})} 
-                                        autoFocus
-                                    />
-                                </div>
-                                
-                                <div className="flex gap-4">
-                                    <div className="flex-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Kategori</label>
-                                        <select 
-                                            className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm text-slate-600 border border-slate-200 focus:outline-none focus:border-indigo-400"
-                                            value={noteForm.type}
-                                            onChange={e => setNoteForm({...noteForm, type: e.target.value})}
-                                        >
-                                            <option value="Materi">📚 Materi Khotbah</option>
-                                            <option value="Renungan">🙏 Renungan Harian</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Tanggal</label>
-                                        <input 
-                                            type="date" 
-                                            className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm text-slate-600 border border-slate-200 focus:outline-none focus:border-indigo-400"
-                                            value={noteForm.date}
-                                            onChange={e => setNoteForm({...noteForm, date: e.target.value})}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="pt-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-2 block">Isi Catatan</label>
-                                    <textarea 
-                                        className="w-full h-[50vh] p-4 bg-yellow-50/50 rounded-2xl font-medium text-slate-700 leading-relaxed border border-yellow-100 focus:outline-none focus:border-amber-300 resize-none text-sm" 
-                                        placeholder="Tuliskan poin-poin materi atau renunganmu disini..."
-                                        value={noteForm.content} 
-                                        onChange={e => setNoteForm({...noteForm, content: e.target.value})}
-                                    ></textarea>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
             if (view === 'attendance_manager') {
                 let filteredParticipants = [];
                 if (isPeserta) {
