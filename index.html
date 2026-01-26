@@ -12,7 +12,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#F0F9FF">
     
-    <!-- Menggunakan logotema.png juga untuk icon aplikasi jika tersedia, atau fallback ke default -->
     <link rel="apple-touch-icon" href="logotema.png">
     <link rel="icon" type="image/png" href="logotema.png">
 
@@ -40,10 +39,6 @@
         .bg-school-sunday { background: radial-gradient(circle at 50% 0%, #e0f2fe 0%, #f8fafc 100%); background-attachment: fixed; }
         .btn-playful { transition: all 0.2s; border-bottom-width: 4px; }
         .btn-playful:active { transform: translateY(4px); border-bottom-width: 0px; margin-bottom: 4px; }
-        .btn-blue { @apply bg-sky-500 border-sky-700 text-white hover:bg-sky-600; }
-        .btn-yellow { @apply bg-amber-400 border-amber-600 text-amber-900 hover:bg-amber-500; }
-        .btn-red { @apply bg-rose-500 border-rose-700 text-white hover:bg-rose-600; }
-        .btn-white { @apply bg-white border-slate-200 text-slate-700 hover:bg-slate-50; }
         .glass-panel { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.5); box-shadow: 0 10px 40px -10px rgba(30, 58, 138, 0.15); }
         .bell-ring { animation: ring 4s ease-in-out infinite; transform-origin: 50% 0%; }
         @keyframes ring { 0% { transform: rotate(0); } 10% { transform: rotate(30deg); } 30% { transform: rotate(-28deg); } 50% { transform: rotate(34deg); } 70% { transform: rotate(-32deg); } 90% { transform: rotate(30deg); } 100% { transform: rotate(0); } }
@@ -51,7 +46,6 @@
         #reader { width: 100%; border-radius: 20px; overflow: hidden; background: black; min-height: 300px; }
         #reader video { object-fit: cover; border-radius: 20px; }
         #reader__scan_region img { display: none; } 
-        #reader__dashboard_section_csr span, #reader__dashboard_section_swaplink { display: none !important; }
         
         /* Loading Spinner */
         .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #0ea5e9; animation: spin 1s ease infinite; }
@@ -63,22 +57,17 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         
-        // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // Pastikan sw.js ada atau biarkan error silent
                 navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW not found, skipping'));
             });
         }
-        // ---------------------------------------
 
         let firebaseConfig;
         try {
-            // Environment-provided config (for Gemini Canvas)
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             } else {
-                // Fallback / Default User Config
                 firebaseConfig = {
                     apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
                     authDomain: "asggkpstgr.firebaseapp.com",
@@ -91,21 +80,17 @@
             }
         } catch (e) { console.error("Firebase config parse error", e); }
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Expose to Window for React Access
         window.db = db;
         window.auth = auth;
         window.signInAnonymously = signInAnonymously;
         window.signInWithCustomToken = signInWithCustomToken;
         window.onAuthStateChanged = onAuthStateChanged;
-        // Pre-package Firestore functions to avoid import issues in babel
         window.fs = { collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs };
         
-        // Signal that Firebase is ready
         window.isFirebaseInitialized = true;
     </script>
 </head>
@@ -116,13 +101,13 @@
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
         
-        // --- GLOBAL: INSTALL PROMPT LOGIC ---
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
         });
 
+        // --- COMPONENTS ---
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
             if (!config.show) return null;
@@ -134,7 +119,7 @@
                         <h3 className="text-xl font-black text-slate-800 mb-1 font-fredoka">Reset Password</h3>
                         <p className="text-sm text-slate-500 mb-6">User: <b>{config.user?.username}</b></p>
                         <input type="text" placeholder="Masukkan Password Baru..." className="w-full p-4 border-2 border-slate-200 rounded-xl mb-4 focus:outline-none focus:border-indigo-400 bg-slate-50 font-bold text-slate-700 text-center" value={config.newPass} onChange={e => setConfig({...config, newPass: e.target.value})} autoFocus />
-                        <button onClick={onConfirm} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg">Simpan Password</button>
+                        <button onClick={onConfirm} className="w-full btn-playful bg-sky-500 text-white py-3 rounded-xl font-black text-lg shadow-lg">Simpan Password</button>
                     </div>
                 </div>
             );
@@ -158,17 +143,14 @@
                                 <div className="pt-2"><h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="align-left" width="14"></i> Ringkasan Materi</h4><div className="text-slate-600 leading-relaxed font-medium whitespace-pre-wrap text-sm bg-slate-50 p-4 rounded-2xl border border-slate-100">{week.content || "Belum ada ringkasan materi."}</div></div>
                             </div>
                         </div>
-                        <div className="sticky bottom-0 bg-white/90 backdrop-blur p-4 border-t border-slate-100"><button onClick={onClose} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold text-lg shadow-lg">Tutup Informasi</button></div>
+                        <div className="sticky bottom-0 bg-white/90 backdrop-blur p-4 border-t border-slate-100"><button onClick={onClose} className="w-full btn-playful bg-sky-500 text-white py-3 rounded-xl font-bold text-lg shadow-lg">Tutup Informasi</button></div>
                     </div>
                 </div>
             );
         };
 
         const CloudAttendance = () => {
-            // --- CORE FIX: Wait for DB to be ready before doing anything ---
             const [dbReady, setDbReady] = useState(false);
-
-            // --- State Initialization ---
             const [currentUser, setCurrentUser] = useState(() => {
                 try {
                     const saved = localStorage.getItem('gkps_user');
@@ -184,13 +166,12 @@
                 return 'login';
             });
 
-            // --- App Data States ---
+            // State definitions
             const [users, setUsers] = useState([]); 
             const [participants, setParticipants] = useState([]);
             const [isConnected, setIsConnected] = useState(false);
             const [userAuth, setUserAuth] = useState(null);
             
-            // --- UI/Feature States ---
             const [scanResult, setScanResult] = useState(null);
             const scannerRef = useRef(null);
             const isScanning = useRef(false);
@@ -210,6 +191,11 @@
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
             const [broadcastHistory, setBroadcastHistory] = useState([]); 
             
+            // --- POINT 1-4: NOTEBOOK STATE ---
+            const [notes, setNotes] = useState([]);
+            const [noteForm, setNoteForm] = useState({ id: null, title: '', content: '', type: 'Materi', date: '' });
+            // ---------------------------------
+
             const [editingId, setEditingId] = useState(null);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'petugas', nama: '' });
             const [selfPassword, setSelfPassword] = useState('');
@@ -221,7 +207,6 @@
             const [filterManual, setFilterManual] = useState("");
             const [filterUser, setFilterUser] = useState("");
             
-            // --- Refs & Helpers ---
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
             const sessionConfigRef = useRef(sessionConfig);
@@ -234,21 +219,18 @@
                 return `${year}-${month}-${day}`;
             };
             const [viewDate, setViewDate] = useState(getSafeDateId());
-            const [refreshKey, setRefreshKey] = useState(0); // Soft Refresh Trigger
+            const [refreshKey, setRefreshKey] = useState(0); 
             
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
-            // Use environment App ID if available
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             const defaultTheme = { title: "", weeks: [] };
 
-            // --- Effects for Refs ---
             useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
 
-            // --- INITIALIZATION CHECKER (Fixes White Screen on Refresh) ---
             useEffect(() => {
                 const checkDb = setInterval(() => {
                     if (window.db && window.fs) {
@@ -259,14 +241,11 @@
                 return () => clearInterval(checkDb);
             }, []);
 
-            // --- AUTHENTICATION & DATA SYNC ---
+            // --- AUTHENTICATION ---
             useEffect(() => {
-                if (!dbReady) return; // Don't run logic until DB is ready
-
+                if (!dbReady) return;
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth, onAuthStateChanged } = window;
-                    
-                    // Listen to auth state changes
                     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
                         if (user) {
                             setUserAuth(user);
@@ -275,11 +254,9 @@
                         } else {
                             setUserAuth(null);
                             setIsConnected(false);
-                            // Auto Re-login if needed
                             attemptSignIn(); 
                         }
                     });
-
                     const attemptSignIn = async () => {
                         try {
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -292,16 +269,11 @@
                             setConnectionError(error.message);
                         }
                     };
-
-                    if (!auth.currentUser) {
-                        attemptSignIn();
-                    }
-
+                    if (!auth.currentUser) attemptSignIn();
                     return () => unsubscribeAuth();
                 };
-
                 initAuth();
-            }, [dbReady, refreshKey]); // Re-run if dbReady becomes true or user requests refresh
+            }, [dbReady, refreshKey]);
 
             // --- FIRESTORE LISTENERS ---
             useEffect(() => {
@@ -311,107 +283,74 @@
                 const { collection, doc, onSnapshot, query, orderBy } = window.fs;
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
-                // 1. Users Listener
-                const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), 
-                    (snap) => {
+                const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), (snap) => {
                         const loadedUsers = snap.docs.map(d => d.data());
-                        if (loadedUsers.length === 0) {
-                            saveToCloud(`users/admin`, { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' });
-                        } else { setUsers(loadedUsers); }
-                    }, 
-                    (err) => console.log("Users sync waiting...")
-                );
+                        if (loadedUsers.length === 0) saveToCloud(`users/admin`, { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' });
+                        else setUsers(loadedUsers);
+                    }, (err) => console.log("Users sync waiting..."));
 
-                // 2. Participants Listener
-                const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), 
-                    (snap) => setParticipants(snap.docs.map(d => d.data())),
-                    (err) => console.log("Partcipants sync waiting...")
-                );
+                const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), (snap) => setParticipants(snap.docs.map(d => d.data())), (err) => {});
+                
+                const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ? snap.data() : null), (err) => {});
 
-                // 3. Theme Listener
-                const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), 
-                    (snap) => setThemeData(snap.exists() ? snap.data() : null),
-                    (err) => {}
-                );
-
-                // 4. Announcements / Broadcast
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
                         const now = Date.now();
-                        let scheduledTime = 0;
-                        if (data.scheduledAt) scheduledTime = new Date(data.scheduledAt).getTime();
-
+                        let scheduledTime = data.scheduledAt ? new Date(data.scheduledAt).getTime() : 0;
                         if (scheduledTime > now) {
-                            // Logic for scheduled notification
                             const delay = scheduledTime - now;
-                            if (delay < 86400000) { // Only if within 24h
-                                setTimeout(() => {
-                                    setActiveBroadcast(data);
-                                    setShowBroadcastModal(true);
-                                    playNotificationSound();
-                                }, delay);
+                            if (delay < 86400000) { 
+                                setTimeout(() => { setActiveBroadcast(data); setShowBroadcastModal(true); playNotificationSound(); }, delay);
                             }
                             return; 
                         }
-
-                        let timestamp = 0;
-                        if (data.id && data.id.startsWith('NOTIF-')) timestamp = parseInt(data.id.split('-')[1]);
-                        const referenceTime = scheduledTime || timestamp;
-                        
-                        // Ignore broadcast older than 2 hours
-                        if (referenceTime > 0 && (now - referenceTime > 7200000)) return; 
-
+                        let timestamp = data.id && data.id.startsWith('NOTIF-') ? parseInt(data.id.split('-')[1]) : 0;
+                        if ((scheduledTime || timestamp) > 0 && (now - (scheduledTime || timestamp) > 7200000)) return; 
                         setActiveBroadcast(data);
-                        if (localStorage.getItem('last_broadcast_id') !== data.id) {
-                            setShowBroadcastModal(true);
-                            playNotificationSound();
-                        }
+                        if (localStorage.getItem('last_broadcast_id') !== data.id) { setShowBroadcastModal(true); playNotificationSound(); }
                     }
                 }, (err) => {});
 
-                // 5. Broadcast History
-                const unsubscribeBroadcastHistory = onSnapshot(collection(db, `${publicDataPath}/broadcast_history`), 
-                    (snap) => {
+                const unsubscribeBroadcastHistory = onSnapshot(collection(db, `${publicDataPath}/broadcast_history`), (snap) => {
                         const hist = snap.docs.map(d => d.data()).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
                         setBroadcastHistory(hist);
-                    },
-                    (err) => {}
-                );
+                    }, (err) => {});
 
-                // 6. Attendance Listener (Dynamic based on date)
+                // Notebook Listener - Point 4 (Database Sync)
+                let unsubscribeNotebook = () => {};
+                if (currentUser) {
+                    try {
+                        // NOTE: Using a public collection filtered by username logic as requested by design
+                        const nbQuery = query(collection(db, `${publicDataPath}/notebook`), orderBy('timestamp', 'desc'));
+                        unsubscribeNotebook = onSnapshot(nbQuery, (snap) => {
+                            const allNotes = snap.docs.map(d => d.data());
+                            // Filter notes strictly for the logged-in user
+                            const myNotes = allNotes.filter(n => n.username === currentUser.username);
+                            setNotes(myNotes);
+                        }, (err) => console.log("Notebook sync error", err));
+                    } catch(e) { console.error("Notebook listener failed", e); }
+                }
+
+                // Attendance Listener
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
                 try {
                     const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
-                    unsubscribeAttendance = onSnapshot(q, (snap) => {
-                        const data = snap.docs.map(d => d.data());
-                        setLiveAttendance(data);
-                    }, (err) => {
-                        // Silently handle collection not existing yet
-                        setLiveAttendance([]);
-                    });
+                    unsubscribeAttendance = onSnapshot(q, (snap) => setLiveAttendance(snap.docs.map(d => d.data())), (err) => setLiveAttendance([]));
                 } catch(e) {}
 
-                // 7. Session Config
                 const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
                 try {
-                    unsubscribeConfig = onSnapshot(doc(db, configPath), (snap) => {
-                        if(snap.exists()) setSessionConfig(snap.data());
-                    }, (err) => {});
+                    unsubscribeConfig = onSnapshot(doc(db, configPath), (snap) => { if(snap.exists()) setSessionConfig(snap.data()); }, (err) => {});
                 } catch(e) {}
 
                 return () => {
-                    unsubscribeUsers();
-                    unsubscribeParticipants(); 
-                    unsubscribeTheme();
-                    unsubscribeAnnouncements();
-                    unsubscribeBroadcastHistory();
-                    unsubscribeAttendance();
-                    unsubscribeConfig();
+                    unsubscribeUsers(); unsubscribeParticipants(); unsubscribeTheme(); unsubscribeAnnouncements();
+                    unsubscribeBroadcastHistory(); unsubscribeAttendance(); unsubscribeConfig(); unsubscribeNotebook();
                 };
-            }, [dbReady, userAuth, viewDate, refreshKey]);
+            }, [dbReady, userAuth, viewDate, refreshKey, currentUser]);
 
             // --- UTILITIES ---
             const checkSessionStatus = () => {
@@ -436,7 +375,6 @@
 
             const handleSmoothRefresh = () => {
                 setNotification("Menyegarkan koneksi data...");
-                // Force Auth and Snapshot hooks to re-run
                 setRefreshKey(prev => prev + 1); 
                 setTimeout(() => setNotification(null), 2000);
             };
@@ -464,6 +402,7 @@
                 currentUser ? setView('menu') : setView('login');
             };
 
+            // --- DATABASE SAVE/DELETE LOGIC ---
             const saveToCloud = (path, data) => {
                 if (!dbReady) return Promise.reject("Database belum siap");
                 const db = window.db;
@@ -475,6 +414,8 @@
                 else if (path.startsWith('announcements/active')) finalRef = doc(db, `${basePath}/announcements`, 'active');
                 else if (path.startsWith('theme/')) finalRef = doc(db, `${basePath}/theme`, path.split('/')[1]);
                 else if (path.startsWith('config/')) finalRef = doc(db, `${basePath}/config`, path.split('/')[1]);
+                // POINT 4: Ensure notebook path logic exists
+                else if (path.startsWith('notebook/')) finalRef = doc(db, `${basePath}/notebook`, path.split('/')[1]);
                 else if (path.startsWith('attendance/')) {
                     const parts = path.split('/');
                     finalRef = doc(db, `${basePath}/attendance/${parts[1]}/records`, parts[3]);
@@ -491,10 +432,46 @@
                  let finalRef;
                  if (path.startsWith('users/')) finalRef = doc(db, `${basePath}/users`, path.split('/')[1]);
                  else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
+                 // POINT 4: Ensure notebook delete logic exists
+                 else if (path.startsWith('notebook/')) finalRef = doc(db, `${basePath}/notebook`, path.split('/')[1]);
                  if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
 
-            // --- SPECIFIC HANDLERS ---
+            // --- HANDLERS FOR NOTEBOOK ---
+            const handleSaveNote = () => {
+                if (!noteForm.title || !noteForm.content) return alert("Judul dan isi tidak boleh kosong!");
+                const id = noteForm.id || `NOTE-${Date.now()}`;
+                const data = {
+                    id,
+                    username: currentUser.username, // Associate with current user
+                    title: noteForm.title,
+                    content: noteForm.content,
+                    type: noteForm.type,
+                    date: noteForm.date || new Date().toISOString().split('T')[0],
+                    timestamp: Date.now()
+                };
+                saveToCloud(`notebook/${id}`, data);
+                alert("Catatan berhasil disimpan!");
+                setView('notebook');
+            };
+
+            const handleEditNote = (note) => {
+                setNoteForm(note);
+                setView('notebook_edit');
+            };
+
+            const handleNewNote = () => {
+                setNoteForm({ id: null, title: '', content: '', type: 'Materi', date: new Date().toISOString().split('T')[0] });
+                setView('notebook_edit');
+            };
+
+            const handleDeleteNote = (noteId) => {
+                if(confirm("Yakin hapus catatan ini?")) {
+                    deleteFromCloud(`notebook/${noteId}`);
+                }
+            };
+            // -----------------------------
+
             const handleResetAllData = async () => {
                 if (!currentUser) return;
                 const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
@@ -999,10 +976,7 @@
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
 
             const handleAddWeek = () => {
-                setEditThemeForm({
-                    ...editThemeForm,
-                    weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }]
-                });
+                setEditThemeForm({ ...editThemeForm, weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }] });
             };
 
             const handleRemoveWeek = (index) => {
@@ -1031,7 +1005,7 @@
             const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
             const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
 
-            // --- LOADING SCREEN (Waiting for DB) ---
+            // --- LOADING SCREEN ---
             if (!dbReady) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
@@ -1106,7 +1080,6 @@
                     )}
                 
                     <div className="max-w-md mx-auto glass-panel rounded-[32px] overflow-hidden border-2 border-white/60">
-                        {/* HEADER WITH REFRESH BUTTON */}
                         <div className="bg-gradient-to-r from-sky-500 to-indigo-600 p-6 text-white relative">
                             <div className="absolute top-0 right-0 p-4 opacity-10 flex items-center gap-4">
                                 <img src="logotema.png" className="w-24 h-24 object-contain" alt="Logo GKPS" />
@@ -1163,6 +1136,12 @@
                             <button onClick={() => setView('my_barcode')} className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
                                 <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="qr-code" width="28" height="28"></i></div>
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
+                            </button>
+
+                            {/* POINT 1: MENU BUTTON UNTUK NOTEBOOK */}
+                            <button onClick={() => setView('notebook')} className="w-full btn-playful bg-amber-400 border-b-4 border-amber-600 text-amber-900 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4 transform hover:scale-[1.01]">
+                                <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="book" width="24" height="24"></i></div>
+                                <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Notebook & Renungan</h3><p className="text-xs text-amber-900/70 font-bold opacity-90">Catatan Materi & Refleksi Harian</p></div>
                             </button>
 
                             {isPeserta && (
@@ -1240,18 +1219,146 @@
                 </div>
             );
             }
-            
-            if (view === 'attendance_manager') {
-                let filteredParticipants = [];
-                if (isPeserta) {
-                    const mySelf = participants.find(p => p.nama.toLowerCase() === safeUser.nama.toLowerCase());
-                    if (mySelf) filteredParticipants = [mySelf];
-                } else {
-                    filteredParticipants = participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()));
-                }
+
+            // --- POINT 2: HALAMAN LIST CATATAN ---
+            if (view === 'notebook') {
+                const [filterType, setFilterType] = useState('All');
+                const filteredNotes = notes.filter(n => filterType === 'All' ? true : n.type === filterType);
 
                 return (
-                    <div className="min-h-screen bg-slate-50 relative">
+                    <div className="min-h-screen bg-slate-50 relative flex flex-col">
+                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <button onClick={handleBackToMenu} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
+                                <h2 className="font-black text-xl text-slate-800">Notebook Saya</h2>
+                                <button onClick={handleNewNote} className="bg-amber-100 text-amber-700 p-2 rounded-xl hover:bg-amber-200 border-2 border-amber-200 shadow-sm"><i data-lucide="plus" width="20"></i></button>
+                            </div>
+                            
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                {['All', 'Materi', 'Renungan'].map(type => (
+                                    <button 
+                                        key={type}
+                                        onClick={() => setFilterType(type)}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold transition whitespace-nowrap border-2 ${
+                                            filterType === type 
+                                            ? 'bg-amber-500 border-amber-600 text-white' 
+                                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {type === 'All' ? 'Semua Catatan' : type}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 p-4 pb-20 overflow-y-auto">
+                            {filteredNotes.length === 0 ? (
+                                <div className="text-center mt-20 opacity-50">
+                                    <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <i data-lucide="book" className="w-10 h-10 text-amber-400"></i>
+                                    </div>
+                                    <h3 className="font-bold text-slate-700 text-lg">Belum Ada Catatan</h3>
+                                    <p className="text-slate-400 text-xs mt-1">Yuk mulai tulis materi atau renungan harianmu!</p>
+                                    <button onClick={handleNewNote} className="mt-4 px-6 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-200 hover:bg-amber-600">Tulis Sekarang</button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {filteredNotes.map((note) => (
+                                        <div key={note.id} onClick={() => handleEditNote(note)} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition cursor-pointer relative group animate-bounce-in">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider ${
+                                                    note.type === 'Materi' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'
+                                                }`}>
+                                                    {note.type}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded">
+                                                    {new Date(note.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                </span>
+                                            </div>
+                                            <h3 className="font-bold text-slate-800 text-lg mb-2 leading-tight line-clamp-2">{note.title}</h3>
+                                            <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">{note.content}</p>
+                                            
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteNote(note.id); }} 
+                                                className="absolute bottom-4 right-4 bg-rose-50 text-rose-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-rose-100 hover:text-rose-600"
+                                            >
+                                                <i data-lucide="trash-2" width="16"></i>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- POINT 3: HALAMAN EDITOR CATATAN ---
+            if (view === 'notebook_edit') {
+                return (
+                    <div className="min-h-screen bg-slate-50 relative flex flex-col">
+                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 flex justify-between items-center">
+                            <button onClick={() => setView('notebook')} className="text-slate-400 font-bold text-xs hover:text-slate-600">Batal</button>
+                            <h2 className="font-black text-lg text-slate-800">{noteForm.id ? 'Edit Catatan' : 'Catatan Baru'}</h2>
+                            <button onClick={handleSaveNote} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 flex items-center gap-2">
+                                <i data-lucide="save" width="14"></i> Simpan
+                            </button>
+                        </div>
+                        
+                        <div className="p-4 flex-1 overflow-y-auto">
+                            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Judul Catatan</label>
+                                    <input 
+                                        className="w-full text-xl font-black text-slate-800 border-b-2 border-slate-100 focus:border-indigo-500 focus:outline-none py-2 bg-transparent placeholder-slate-300" 
+                                        placeholder="Tulis Judul..." 
+                                        value={noteForm.title} 
+                                        onChange={e => setNoteForm({...noteForm, title: e.target.value})} 
+                                        autoFocus
+                                    />
+                                </div>
+                                
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Kategori</label>
+                                        <select 
+                                            className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm text-slate-600 border border-slate-200 focus:outline-none focus:border-indigo-400"
+                                            value={noteForm.type}
+                                            onChange={e => setNoteForm({...noteForm, type: e.target.value})}
+                                        >
+                                            <option value="Materi">📚 Materi Khotbah</option>
+                                            <option value="Renungan">🙏 Renungan Harian</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Tanggal</label>
+                                        <input 
+                                            type="date" 
+                                            className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm text-slate-600 border border-slate-200 focus:outline-none focus:border-indigo-400"
+                                            value={noteForm.date}
+                                            onChange={e => setNoteForm({...noteForm, date: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="pt-2">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-2 block">Isi Catatan</label>
+                                    <textarea 
+                                        className="w-full h-[50vh] p-4 bg-yellow-50/50 rounded-2xl font-medium text-slate-700 leading-relaxed border border-yellow-100 focus:outline-none focus:border-amber-300 resize-none text-sm" 
+                                        placeholder="Tuliskan poin-poin materi atau renunganmu disini..."
+                                        value={noteForm.content} 
+                                        onChange={e => setNoteForm({...noteForm, content: e.target.value})}
+                                    ></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            
+            // ... existing views ...
+            if (view === 'attendance_manager') return (
+                <div className="min-h-screen bg-slate-50 relative">
                         <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
                             
                             <div className="flex items-center gap-3 mb-4">
@@ -1293,14 +1400,14 @@
                         </div>
 
                         <div className="p-4 pb-20 space-y-3">
-                            {filteredParticipants.length === 0 && isPeserta ? 
+                            {(isPeserta ? participants.filter(p => p.nama.toLowerCase() === safeUser.nama.toLowerCase()) : participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()))).length === 0 && isPeserta ? 
                             (
                                 <div className="text-center p-8 opacity-50">
                                     <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
                                     <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
                                 </div>
                             ) : (
-                                filteredParticipants.map(p => {
+                                (isPeserta ? participants.filter(p => p.nama.toLowerCase() === safeUser.nama.toLowerCase()) : participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()))).map(p => {
                                     const statusData = liveAttendance.find(l => l.id === p.id);
                                     return (
                                         <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-bounce-in">
@@ -1323,19 +1430,16 @@
                             )}
                         </div>
                     </div>
-                );
-            }
+            );
 
-            if (view === 'live_report') {
-                const totalHadir = liveAttendance.length;
-                return (
+            if (view === 'live_report') return (
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
                     <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
                         <div className="flex items-center justify-between mb-4">
                             <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
                              <div className="text-right">
                                 <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
-                                <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
+                                <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{liveAttendance.length} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
                              </div>
                         </div>
                         
@@ -1375,16 +1479,13 @@
                         )}
                     </div>
                 </div>
-                );
-            }
+            );
 
-            if (view === 'scan') {
-                const totalHadir = liveAttendance.length;
-                return (
+            if (view === 'scan') return (
                 <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
                     <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
                     {attendanceMode && (<button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 
-                    text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span></button>)}
+                    text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{liveAttendance.length} Hadir</span></button>)}
                     <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
                         <div id="reader" className="w-full h-auto bg-black"></div>
                         {scanResult && (
@@ -1407,7 +1508,7 @@
                     <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">Arahkan kamera ke QR Code peserta untuk cek data & simpan kehadiran.</p>
                 </div>
             );
-            }
+
             if (view === 'edit_theme') return (
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
@@ -1440,7 +1541,7 @@
                 </div>
             );
             if (view === 'manage_users') return (
-                <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
+                <div className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
                         
@@ -1510,7 +1611,7 @@
                 </div>
             );
             if (view === 'generate') return (
-                <div key="view-generate" className="min-h-screen bg-slate-100 p-4">
+                <div className="min-h-screen bg-slate-100 p-4">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
                         <div className="bg-white rounded-xl shadow p-6">
@@ -1572,11 +1673,7 @@
                     {deleteConfig.show && <DeleteConfirmModal />}
                 </div>
             );
-            if (view === 'my_barcode') {
-                const p = participants.find(item => item.nama.toLowerCase() === safeUser.nama.toLowerCase());
-                const qrId = p ? p.id : safeUser.username;
-                const qrUrl = generateQRUrl(qrId);
-                return (
+            if (view === 'my_barcode') return (
                     <div className="min-h-screen bg-indigo-600 p-4 flex flex-col items-center justify-center relative">
                         <button onClick={handleBackToMenu} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
                         <div className="bg-white 
@@ -1588,14 +1685,109 @@
                             </div>
                             <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
                                 <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-4 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Scan Me</div>
-                                <img src={qrUrl} 
+                                <img src={generateQRUrl(p.id)} 
                                 alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
                             </div>
                             <p className="text-slate-400 text-xs font-bold w-3/4 mx-auto leading-relaxed">Tunjukkan QR Code ini kepada petugas sebagai identitas.</p>
                         </div>
                     </div>
                 );
-            }
+            
+            // --- UPDATED VIEW: BROADCAST MANAGER ---
+            if (view === 'manage_broadcast') return (
+                <div className="min-h-screen bg-slate-50 p-4 pb-20">
+                    <div className="max-w-md mx-auto">
+                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        
+                        {/* FORM INPUT BROADCAST */}
+                        <div className="bg-white rounded-3xl shadow-lg p-6 border-2 border-indigo-100 mb-6">
+                             <div className="flex items-center gap-3 mb-4 text-indigo-600">
+                                <div className="bg-indigo-100 p-2 rounded-lg"><i data-lucide="megaphone" width="24"></i></div>
+                                <h2 className="font-black text-xl">Buat Broadcast</h2>
+                             </div>
+                             <div className="space-y-3">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Judul</label>
+                                    <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" placeholder="Contoh: Pengumuman Penting" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Isi Pesan</label>
+                                    <textarea className="w-full border-2 p-3 rounded-xl font-medium text-slate-600 h-28 focus:outline-none focus:border-indigo-400" placeholder="Tulis pesan lengkap disini..." value={broadcastForm.message} onChange={e => setBroadcastForm({...broadcastForm, message: e.target.value})} />
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tipe</label>
+                                        <select className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400" value={broadcastForm.type} onChange={e => setBroadcastForm({...broadcastForm, type: e.target.value})}>
+                                            <option value="info">ℹ️ Info (Biru)</option>
+                                            <option value="urgent">⚠️ Penting (Merah)</option>
+                                         </select>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Jadwal (Opsional)</label>
+                                        <input type="datetime-local" className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400 text-xs" value={broadcastForm.schedule} onChange={e => setBroadcastForm({...broadcastForm, schedule: e.target.value})} />
+                                    </div>
+                                </div>
+                                
+                                <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg mt-2 flex items-center justify-center gap-2">
+                                    <i data-lucide="send" width="18"></i> 
+                                    {broadcastForm.schedule ? 
+                                    'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
+                                </button>
+                                {broadcastForm.schedule && <p className="text-center text-[10px] text-slate-400 font-bold">Akan muncul otomatis pada: {new Date(broadcastForm.schedule).toLocaleString('id-ID')}</p>}
+                            </div>
+                        </div>
+
+                        {/* LIST ARSIP / HISTORY */}
+                        <div>
+                            <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest mb-3">Arsip / Riwayat Pesan</h3>
+                            <div className="space-y-3">
+                                {broadcastHistory.length === 0 ? 
+                                (
+                                    <div className="text-center p-8 opacity-50 border-2 border-dashed border-slate-300 rounded-xl">
+                                        <p className="font-bold text-sm text-slate-400">Belum ada riwayat broadcast.</p>
+                                     </div>
+                                ) : (
+                                    broadcastHistory.map((item) => (
+                                      <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
+                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i 
+                                            data-lucide="trash-2" width="16"></i></button>
+                                            
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ? 
+                                                'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
+                                                {item.scheduledAt && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="clock" width="10"></i> Terjadwal</span>}
+                                            </div>
+
+                                            <h4 className="font-bold text-slate-800 text-sm mb-1">{item.title}</h4>
+                                            <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.message}</p>
+                                            
+                                            <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                                                <span className="text-[10px] text-slate-400 font-bold"><i data-lucide="user" width="10" className="inline mr-1"/>{item.sender}</span>
+                                                <div className="text-right">
+                                                    <span className="text-[10px] text-slate-400 font-bold block">{item.timestamp}</span>
+                                                    {item.scheduledAt && <span className="text-[9px] text-amber-600 font-bold block">Jadwal: {new Date(item.scheduledAt).toLocaleString('id-ID')}</span>}
+                                                </div>
+                                            </div>
+                                      </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+            // ------------------------------------
+
+            if (view === 'change_password') return (
+                <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
+                    <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-lg border-2 border-indigo-100 text-center">
+                        <h2 className="text-xl font-black text-slate-800 mb-6">Ganti Password</h2>
+                        <input type="text" className="w-full p-3 border-2 border-slate-200 rounded-xl mb-4 font-bold text-center" placeholder="Password Baru..." value={selfPassword} onChange={e => setSelfPassword(e.target.value)} />
+                        <button onClick={handleChangeSelfPassword} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold mb-3">Simpan Password</button>
+                        <button onClick={handleBackToMenu} className="text-slate-400 font-bold text-xs">Batal</button>
+                    </div>
+                </div>
+            );
             
             // --- FAILSAFE RETURN (ERROR STATE) ---
             if (connectionError) {
