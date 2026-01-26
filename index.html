@@ -525,29 +525,56 @@
                 } 
             }, [view, scanResult]);
 
-            const startScanner = () => { 
+           const startScanner = () => { 
+                // Cek agar tidak double start
                 if (isScanning.current) return;
-                if (scannerRef.current) scannerRef.current.clear().catch(()=>{}); 
                 
-                const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 }, false);
-                scanner.render((decodedText) => { 
-                    handleScanSuccess(decodedText);
-                    scanner.clear().then(() => {
-                        isScanning.current = false;
-                        scannerRef.current = null;
-                    }).catch((err) => { console.error("Failed to clear scanner", err); });
-                }, (error) => {});
-                scannerRef.current = scanner; 
-                isScanning.current = true;
-            };
-
-            const stopScanner = () => { 
+                // Bersihkan scanner lama jika masih nyangkut di memori
                 if (scannerRef.current) { 
-                    try { scannerRef.current.clear().catch(err => console.log(err));
-                    } catch(e){} 
-                    scannerRef.current = null;
-                    isScanning.current = false;
-                } 
+                    try { scannerRef.current.clear().catch(()=>{}); } catch(e){} 
+                }
+                
+                // --- KONFIGURASI BARU AGAR KOMPATIBEL DENGAN HP ---
+                const config = { 
+                    fps: 10, 
+                    // Logika QR Box dinamis: menyesuaikan ukuran layar HP agar tidak error
+                    qrbox: (viewfinderWidth, viewfinderHeight) => {
+                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                        return { 
+                            width: Math.min(minEdge * 0.8, 250), // Maksimal 250px atau 80% layar
+                            height: Math.min(minEdge * 0.8, 250) 
+                        };
+                    },
+                    // Hapus aspectRatio statis (1.0) agar tampilan kamera di HP Portrait tidak gepeng
+                    // Paksa menggunakan kamera belakang (environment)
+                    videoConstraints: {
+                        facingMode: "environment" 
+                    },
+                    rememberLastUsedCamera: true
+                };
+
+                // Bungkus dengan Try-Catch untuk menangkap error izin kamera
+                try {
+                    const scanner = new Html5QrcodeScanner("reader", config, false);
+                    
+                    scanner.render((decodedText) => { 
+                        handleScanSuccess(decodedText);
+                        
+                        // Stop scanner setelah berhasil scan agar tidak spamming data
+                        scanner.clear().then(() => {
+                            isScanning.current = false;
+                            scannerRef.current = null;
+                        }).catch((err) => { console.error("Failed to clear scanner", err); });
+                    }, (error) => {
+                        // Error scanning frame (biasa terjadi saat mencari QR), biarkan kosong agar console bersih
+                    });
+
+                    scannerRef.current = scanner; 
+                    isScanning.current = true;
+                } catch (e) {
+                    console.error("Scanner Error:", e);
+                    alert("Gagal membuka kamera. Pastikan izin kamera diberikan dan akses menggunakan HTTPS.");
+                }
             };
 
             const handleScanSuccess = (qrId) => {
