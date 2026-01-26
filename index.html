@@ -18,7 +18,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -58,6 +57,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        
         // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -101,6 +101,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
+        
         // --- GLOBAL: INSTALL PROMPT LOGIC ---
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -239,11 +240,16 @@
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
             
-            // --- NEW: Logic Smooth Refresh (Reload Total) ---
+            // --- NEW: Logic Smooth Refresh (Soft Refresh) ---
             const handleSmoothRefresh = () => {
-                // Menggunakan reload native browser agar logika sama persis 
-                // dengan saat pertama kali membuka aplikasi (clean slate).
-                window.location.reload();
+                // 1. Beri notifikasi visual bahwa sistem sedang bekerja
+                setNotification("Menyegarkan koneksi data...");
+                
+                // 2. Increment refreshKey untuk re-trigger useEffect data
+                setRefreshKey(prev => prev + 1);
+
+                // 3. Hilangkan notifikasi
+                setTimeout(() => setNotification(null), 2000);
             };
             // ---------------------------------
 
@@ -258,12 +264,17 @@
                 setAdminResetConfig({ show: false, user: null, newPass: '' });
                 setSelectedWeek(null);
                 setScanResult(null); 
+                
+                // --- UPDATE: SIMPAN VIEW TERAKHIR ---
+                localStorage.setItem('gkps_last_view', newView);
+                // ------------------------------------
+
                 setViewRaw(newView);
                 setViewDate(getSafeDateId());
             };
             const handleBackToMenu = () => {
                 window.scrollTo({ top: 0, behavior: 'instant' });
-                currentUser ? setViewRaw('menu') : setViewRaw('login');
+                currentUser ? setView('menu') : setView('login');
             };
 
             useEffect(() => {
@@ -285,10 +296,26 @@
                     }
                 };
                 initAuth();
+
+                // --- RESTORE SESSION LOGIC (FIX FOR REFRESH) ---
                 const savedUser = localStorage.getItem('gkps_user');
-                if (savedUser) { try { setCurrentUser(JSON.parse(savedUser));
-                setViewRaw('menu'); } catch(e){} }
+                const lastView = localStorage.getItem('gkps_last_view');
+                if (savedUser) { 
+                    try { 
+                        setCurrentUser(JSON.parse(savedUser));
+                        if(lastView && lastView !== 'login') {
+                            setViewRaw(lastView);
+                        } else {
+                            setViewRaw('menu');
+                        }
+                    } catch(e) {
+                        console.error("Gagal load session", e);
+                    } 
+                }
+                // -----------------------------------------------
+
             }, []);
+
             useEffect(() => {
                 const db = window.db; const { collection, doc, onSnapshot, query, orderBy } = window.fs || {};
                 if (!userAuth || !db || !collection) return;
@@ -330,8 +357,7 @@
                                     playNotificationSound();
                                 }, delay);
                             }
-                            return;
-                            // Stop, jangan tampilkan sekarang
+                            return; // Stop, jangan tampilkan sekarang
                         }
 
                         // Logic Lama: Cek kadaluarsa 2 jam
@@ -340,8 +366,7 @@
                         // Gunakan waktu jadwal sebagai acuan jika ada, jika tidak gunakan waktu ID
                         const referenceTime = scheduledTime || timestamp;
                         
-                        if (referenceTime > 0 && (now - referenceTime > 7200000)) return;
-                        // Expire 2 jam
+                        if (referenceTime > 0 && (now - referenceTime > 7200000)) return; // Expire 2 jam
 
                         setActiveBroadcast(data);
                         if (localStorage.getItem('last_broadcast_id') !== data.id) {
@@ -671,14 +696,17 @@
                             <div className={`h-20 w-full absolute top-0 left-0 ${isUrgent ? 'bg-red-100' : 'bg-sky-100'}`}></div>
                             <div className="relative z-10 p-6 pt-0">
                                 <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 bg-white mt-8 ${isUrgent ? 'border-red-100' : 'border-sky-100'}`}>
-                                    <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
+                                     <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
                                 </div>
-                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ? 'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
+                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ?
+                                'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-left">
                                     <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{activeBroadcast.message}</p>
                                     <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center text-xs text-slate-400 font-bold uppercase"><span><i data-lucide="user" width="12" className="inline mr-1"/>{activeBroadcast.sender}</span><span>{activeBroadcast.timestamp.split(' ')[1]}</span></div>
                                 </div>
-                                <button onClick={handleCloseBroadcast} className={`w-full py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ? 'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
+                                <button onClick={handleCloseBroadcast} className={`w-full 
+                                py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ?
+                                'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
                             </div>
                         </div>
                     </div>
@@ -704,7 +732,8 @@
                         <button onClick={() => setIsInstallModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" width="24"></i></button>
                         <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-50"><i data-lucide="download" className="text-sky-500 w-8 h-8"></i></div>
                         <h3 className="text-xl font-black text-slate-800 mb-4 font-fredoka">Pasang Aplikasi</h3>
-                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2.
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center 
+                        gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2.
                         Pilih <b>"Tambahkan ke Layar Utama"</b> atau <b>"Install App"</b>.</p></div>
                         <div className="text-left bg-slate-50 p-4 rounded-xl mb-4 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="apple" width="16"></i> iPhone (Safari)</h4><p className="text-xs text-slate-500">1.
                         Klik tombol <b>Share</b> (kotak panah atas) di bawah.</p><p className="text-xs text-slate-500">2.
@@ -743,8 +772,9 @@
             const performLogout = () => {
                 setCurrentUser(null);
                 localStorage.removeItem('gkps_user');
+                localStorage.removeItem('gkps_last_view'); // CLEAR LAST VIEW
                 setIsLogoutModalOpen(false);
-                setView('login');
+                setViewRaw('login'); // USE RAW TO AVOID SAVING LOGIN AS VIEW
             };
 
             const initiateDelete = (path) => setDeleteConfig({ show: true, path });
@@ -958,7 +988,8 @@
                             <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
-                            &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
+                            &copy;
+                            {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
                         </div>
                     </div>
                 </div>
@@ -972,7 +1003,8 @@
                             <p className="text-slate-500 font-bold text-xs mt-1">Khusus Akun Admin Utama</p>
                         </div>
                         <div className="space-y-3">
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username Admin</label><input className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Username Anda" value={resetForm.username} onChange={e => setResetForm({...resetForm, username: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username Admin</label><input className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Username Anda" value={resetForm.username} onChange={e => setResetForm({...resetForm, 
+                            username: e.target.value})} /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Password Baru</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="***" value={resetForm.newPassword} onChange={e => setResetForm({...resetForm, newPassword: e.target.value})} /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Kode Otorisasi</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Kode Master Panitia" value={resetForm.token} onChange={e => setResetForm({...resetForm, token: e.target.value})} /></div>
                             <button onClick={handleResetPassword} className="w-full btn-playful btn-orange py-3 rounded-xl font-black text-lg shadow-lg shadow-orange-100 mt-2">Reset Password</button>
@@ -982,10 +1014,12 @@
                 </div>
             );
             if (view === 'menu') {
-                const currentTheme = themeData || defaultTheme;
+                const currentTheme = themeData ||
+                defaultTheme;
                 let displayWeeks = currentTheme.weeks || [];
                 if (!Array.isArray(displayWeeks)) displayWeeks = [];
-                const gridCols = displayWeeks.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
+                const gridCols = displayWeeks.length === 1 ?
+                'grid-cols-1' : 'grid-cols-2';
 
                 return (
                 <div key="view-menu" className="min-h-screen bg-school-sunday p-4 pt-8 pb-20 relative">
@@ -1018,33 +1052,40 @@
                         </div>
 
                         <div className="p-6 pb-0">
-                            {themeData && themeData.title ? (
+                            {themeData && themeData.title ?
+                            (
                                 <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
                                     <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
                                     <div className="relative z-10">
                                         <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
                                         <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
                                         <div className={`grid gap-3 ${gridCols}`}>
-                                            {displayWeeks.map((week, idx) => (
-                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-4 rounded-2xl border flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
+                                        
+                                        {displayWeeks.map((week, idx) => (
+                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-4 rounded-2xl border flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ?
+                                                'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
                                                     <div className="mb-4">
-                                                        <span className={`text-[10px] font-black uppercase tracking-wider block mb-1 ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>
-                                                            {week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}
+                                                        <span className={`text-[10px] font-black uppercase tracking-wider block mb-1 ${idx % 2 === 0 ?
+                                                        'text-sky-400' : 'text-indigo-400'}`}>
+                                                            {week.date ?
+                                                            new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}
                                                         </span>
-                                                        <h4 className={`font-bold text-lg leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>
+                                                        <h4 className={`font-bold text-lg leading-tight ${idx % 2 === 0 ?
+                                                        'text-sky-700' : 'text-indigo-700'}`}>
                                                             {week.topic}
                                                         </h4>
                                                     </div>
                                                     <div className="mt-auto text-center">
                                                         <span className="text-[10px] font-bold text-sky-500 bg-white px-3 py-2 rounded-xl shadow-sm border border-sky-100 flex items-center justify-center gap-2">
-                                                            <i data-lucide="book-open" width="12"></i> Buka Materi
+                                                             <i data-lucide="book-open" width="12"></i> Buka Materi
                                                         </span>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                    {(isAdmin || isPanitia) && (
+                                    {(isAdmin ||
+                                    isPanitia) && (
                                         <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
                                     )}
                                 </div>
@@ -1080,7 +1121,8 @@
                                         <div className="text-left"><h3 className="font-bold">Kelola Absensi</h3><p className="text-[10px] text-indigo-100 opacity-90">Input Manual & Setting Jam</p></div>
                                     </button>
 
-                                    <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                    <button onClick={() 
+                                    => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
                                         <div className="text-left"><h3 className="font-bold">Scan QR Absensi</h3><p className="text-[10px] text-sky-100 opacity-90">Mode: Rekam Kehadiran</p></div>
                                     </button>
@@ -1097,7 +1139,8 @@
                                         <div className="text-left text-xs"><h3 className="font-bold text-sm">Broadcast Notifikasi</h3><p className="text-[10px] text-slate-200 opacity-90">Kirim Info ke Semua Layar</p></div>
                                     </button>
                                 
-                                    {isAdmin && (<div className="grid grid-cols-1 gap-3 mb-3"><button onClick={() => setView('manage_users')} className="btn-playful btn-blue rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2 border-b-4 border-sky-700"><i data-lucide="user-cog"></i> Atur User</button></div>)}
+                                    {isAdmin && (<div className="grid grid-cols-1 gap-3 mb-3"><button onClick={() => setView('manage_users')} className="btn-playful btn-blue rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2 border-b-4 border-sky-700"><i 
+                                    data-lucide="user-cog"></i> Atur User</button></div>)}
                                     {isAdmin && (<button onClick={() => setView('generate')} className="w-full btn-playful btn-white border-b-4 mb-3 p-3 rounded-xl flex items-center gap-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><i data-lucide="database" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold text-slate-700">Database Peserta</h3></div></button>)}
                                     
                                     {isAdmin && (
@@ -1106,7 +1149,7 @@
                                                 <i data-lucide="users" width="14"></i>
                                                 <span className="font-black text-[10px]">RESET DATA PESERTA</span>
                                             </button>
-                                        </div>
+                                            </div>
                                     )}
                                 </div>
                             )}
@@ -1115,7 +1158,8 @@
                             <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
                         
                             <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; {new Date().getFullYear()} SM GKPS Resort Tangerang</p>
+                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy;
+                                {new Date().getFullYear()} SM GKPS Resort Tangerang</p>
                                 <p className="text-[9px] text-slate-300 font-medium">Dibuat untuk Kemuliaan Tuhan</p>
                             </div>
 
@@ -1159,15 +1203,18 @@
                                         </label>
                                     </div>
                                     
-                                    {sessionConfig.autoMode ? (
+                                    {sessionConfig.autoMode ?
+                                    (
                                         <div className="flex gap-2">
-                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} onChange={e => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
+                                            <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} onChange={e 
+                                            => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
                                             <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Tutup</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.closeTime} onChange={e => setSessionConfig({...sessionConfig, closeTime: e.target.value})} /></div>
                                         </div>
                                     ) : (
                                         <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
                                             <span className="font-bold text-sm text-slate-600">Status Absensi</span>
-                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
+                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ?
+                                            'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
                                         </div>
                                     )}
                                     
@@ -1181,7 +1228,8 @@
                         </div>
 
                         <div className="p-4 pb-20 space-y-3">
-                            {filteredParticipants.length === 0 && isPeserta ? (
+                            {filteredParticipants.length === 0 && isPeserta ?
+                            (
                                 <div className="text-center p-8 opacity-50">
                                     <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
                                     <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
@@ -1192,8 +1240,11 @@
                                     return (
                                         <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-bounce-in">
                                             <div className="flex justify-between items-start mb-3">
-                                                <div><h4 className="font-bold text-slate-800">{p.nama}</h4><p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas || '-'}</p></div>
-                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ? 'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ? 'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
+                                                <div><h4 className="font-bold text-slate-800">{p.nama}</h4><p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas ||
+                                                '-'}</p></div>
+                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ?
+                                                'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ?
+                                                'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
                                             </div>
                                             <div className="grid grid-cols-4 gap-2">
                                                 <button onClick={() => handleManualAttendance(p, 'Hadir')} className="bg-emerald-50 text-emerald-600 border-b-2 border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold">Hadir</button>
@@ -1239,7 +1290,8 @@
                         
                      </div>
                     <div className="flex-1 p-4 pb-20 overflow-y-auto">
-                        {liveAttendance.length === 0 ? (
+                        {liveAttendance.length === 0 ?
+                        (
                             <div className="text-center mt-10 opacity-50">
                                 <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
                                 <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
@@ -1249,7 +1301,9 @@
                                 {liveAttendance.map((item, idx) => (
                                     <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-bounce-in">
                                         <div className={`font-black text-xs p-3 rounded-xl min-w-[60px] text-center ${item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>{item.jam}<span className="block text-[8px] opacity-60 font-normal">WIB</span></div>
-                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ? 'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ? 'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
+                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ?
+                                        'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ?
+                                        'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
                                     </div>
                                 ))}
                             </div>
@@ -1264,16 +1318,23 @@
                 return (
                 <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
                     <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
-                    {attendanceMode && (<button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span></button>)}
+                    {attendanceMode && (<button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 
+                    text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span></button>)}
                     <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
                         <div id="reader" className="w-full h-auto bg-black"></div>
                         {scanResult && (
-                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ? 'bg-white' : 'bg-red-50'}`}>
-                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i></div>
-                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ? 'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
+                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ?
+                            'bg-white' : 'bg-red-50'}`}>
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ?
+                                'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i></div>
+                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ?
+                                'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
                                 <p className="text-center text-sm text-slate-500 font-bold mb-4">{scanResult.msg}</p>
-                                {scanResult.success && scanResult.p && (<div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">{scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}<div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div><div className="flex gap-4"><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p></div></div></div>)}
-                                <button onClick={() => { setScanResult(null); startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
+                                {scanResult.success && scanResult.p && (<div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">{scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs 
+                                font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}<div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div><div className="flex gap-4"><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas ||
+                                '-'}</p></div></div></div>)}
+                                <button onClick={() => { setScanResult(null);
+                                startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
                             </div>
                         )}
                     </div>
@@ -1300,14 +1361,16 @@
                                     <div className="space-y-3">
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Tanggal (Opsional)</label><input type="date" className="w-full p-2 border rounded-lg font-bold text-slate-600 text-sm" value={week.date} onChange={e => handleWeekChange(index, 'date', e.target.value)} /></div>
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Topik / Judul Minggu Ini</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.topic} onChange={e => handleWeekChange(index, 'topic', e.target.value)} placeholder="Contoh: Minggu 1: Ketaatan" /></div>
-                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Tema (Singkat)</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" /></div>
+                                        <div><label className="text-[10px] font-bold 
+                                        text-slate-400 uppercase">Ayat Tema (Singkat)</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" /></div>
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Hafalan (Isi Lengkap)</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-xs h-16" value={week.memoryVerse} onChange={e => handleWeekChange(index, 'memoryVerse', e.target.value)} placeholder="Tulis ayat hafalan disini..." /></div>
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." /></div>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
+                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed 
+                        border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
                         <div className="sticky bottom-4 mt-6 space-y-2"><button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button></div>
                     </div>
                 </div>
@@ -1327,11 +1390,14 @@
                         </div>
                         
                         <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
-                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
+                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ?
+                            <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
                              <div className="space-y-3">
-                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
+                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ?
+                                'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
                                 <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
-                                <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
+                                <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" 
+                                value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
                                 
                                 <select className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 bg-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
                                     <option value="petugas">Petugas</option>
@@ -1342,7 +1408,10 @@
                                     <option value="pendeta">Pendeta</option>
                                  </select>
                                 
-                                <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null); setNewUser({ username: '', password: '', role: 'petugas', nama: '' }); }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
+                                <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ?
+                                'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null);
+                                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+                                }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
                             </div>
                         </div>
                         <div className="space-y-2 pb-10">
@@ -1382,23 +1451,28 @@
                                 
                                 {showAddForm && (
                                     <div className="bg-slate-50 p-4 rounded border animate-bounce-in">
-                                        <h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ? 'Edit Peserta' : 'Tambah Peserta'}</h3>
+                                        <h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ?
+                                        'Edit Peserta' : 'Tambah Peserta'}</h3>
                                         <input className="w-full p-2 border rounded mb-2" placeholder="Nama Lengkap" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} />
-                                        <select className="w-full p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
+                                        <select className="w-full 
+                                        p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
                                             <option>Anak Sekolah Minggu</option><option>GSM</option><option>Panitia</option><option>Umum</option><option>Kelas</option> 
                                         </select>
                                         <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
                                             <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                         <div className="flex gap-2">
-                                            <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
-                                            {editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
+                                            <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ?
+                                            'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
+                                            {editingId && <button onClick={() => { setEditingId(null);
+                                            setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
                                         </div>
                                     </div>
                                 )}
                             </div>
 
-                            {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
+                            {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ?
+                            'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
                             
                             <div className="grid grid-cols-2 gap-3">
                                 {participants.map(p => 
@@ -1428,7 +1502,8 @@
                 return (
                     <div className="min-h-screen bg-indigo-600 p-4 flex flex-col items-center justify-center relative">
                         <button onClick={handleBackToMenu} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
-                        <div className="bg-white p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center animate-bounce-in relative overflow-hidden">
+                        <div className="bg-white 
+                        p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center animate-bounce-in relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500"></div>
                             <div className="mb-6">
                                 <h2 className="text-2xl font-black text-slate-800 font-fredoka mb-1">{safeUser.nama}</h2>
@@ -1436,7 +1511,8 @@
                             </div>
                             <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
                                 <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-4 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Scan Me</div>
-                                <img src={qrUrl} alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
+                                <img src={qrUrl} 
+                                alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
                             </div>
                             <p className="text-slate-400 text-xs font-bold w-3/4 mx-auto leading-relaxed">Tunjukkan QR Code ini kepada petugas sebagai identitas.</p>
                         </div>
@@ -1459,7 +1535,8 @@
                              <div className="space-y-3">
                                 <div>
                                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Judul</label>
-                                    <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" placeholder="Contoh: Pengumuman Penting" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
+                                    <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" placeholder="Contoh: Pengumuman Penting" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: 
+                                    e.target.value})} />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Isi Pesan</label>
@@ -1481,7 +1558,8 @@
                                 
                                 <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg mt-2 flex items-center justify-center gap-2">
                                     <i data-lucide="send" width="18"></i> 
-                                    {broadcastForm.schedule ? 'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
+                                    {broadcastForm.schedule ?
+                                    'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
                                 </button>
                                 {broadcastForm.schedule && <p className="text-center text-[10px] text-slate-400 font-bold">Akan muncul otomatis pada: {new Date(broadcastForm.schedule).toLocaleString('id-ID')}</p>}
                             </div>
@@ -1491,17 +1569,20 @@
                         <div>
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest mb-3">Arsip / Riwayat Pesan</h3>
                             <div className="space-y-3">
-                                {broadcastHistory.length === 0 ? (
+                                {broadcastHistory.length === 0 ?
+                                (
                                     <div className="text-center p-8 opacity-50 border-2 border-dashed border-slate-300 rounded-xl">
                                         <p className="font-bold text-sm text-slate-400">Belum ada riwayat broadcast.</p>
-                                    </div>
+                                     </div>
                                 ) : (
                                     broadcastHistory.map((item) => (
-                                        <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
-                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" width="16"></i></button>
+                                      <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
+                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i 
+                                            data-lucide="trash-2" width="16"></i></button>
                                             
                                             <div className="flex items-center gap-2 mb-2">
-                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ? 'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
+                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ?
+                                                'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
                                                 {item.scheduledAt && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="clock" width="10"></i> Terjadwal</span>}
                                             </div>
 
