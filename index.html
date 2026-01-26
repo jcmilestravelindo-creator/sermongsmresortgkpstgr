@@ -218,6 +218,7 @@
             const [attendanceMode, setAttendanceMode] = useState(false);
             const [sessionConfig, setSessionConfig] = useState({ isOpen: true, autoMode: false, openTime: '07:00', closeTime: '12:00' });
             const [filterManual, setFilterManual] = useState("");
+            const [filterUser, setFilterUser] = useState("");
             
             // --- Refs & Helpers ---
             const attendanceModeRef = useRef(attendanceMode);
@@ -450,6 +451,7 @@
                 setAdminResetConfig({ show: false, user: null, newPass: '' });
                 setSelectedWeek(null);
                 setScanResult(null); 
+                setFilterUser("");
                 
                 localStorage.setItem('gkps_last_view', newView);
                 setViewRaw(newView);
@@ -1475,9 +1477,19 @@
                                 }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
                             </div>
                         </div>
+                        
                         <div className="space-y-2 pb-10">
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest">User Terdaftar</h3>
-                            {users.map(u => (
+                            
+                            <input 
+                                type="text" 
+                                placeholder="Cari username atau nama..." 
+                                className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700 mb-2"
+                                value={filterUser}
+                                onChange={(e) => setFilterUser(e.target.value)}
+                            />
+
+                            {users.filter(u => u.username.toLowerCase().includes(filterUser.toLowerCase()) || u.nama.toLowerCase().includes(filterUser.toLowerCase())).map(u => (
                                 <div key={u.username} className={`bg-white p-4 rounded-2xl shadow-sm border-2 flex justify-between items-center ${editingId === u.username ? 'border-amber-400 bg-amber-50' : 'border-slate-100'}`}>
                                     <div><p className="font-bold text-slate-700">{u.username}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama} • {u.role}</p></div>
                                     <div className="flex gap-2">
@@ -1487,6 +1499,9 @@
                                     </div>
                                 </div>
                             ))}
+                            {users.filter(u => u.username.toLowerCase().includes(filterUser.toLowerCase()) || u.nama.toLowerCase().includes(filterUser.toLowerCase())).length === 0 && (
+                                <p className="text-center text-slate-400 text-xs font-bold py-4">Tidak ada user yang cocok.</p>
+                            )}
                         </div>
                     </div>
                     {deleteConfig.show && <DeleteConfirmModal />}
