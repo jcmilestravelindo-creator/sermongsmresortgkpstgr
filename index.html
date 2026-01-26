@@ -152,8 +152,25 @@
         };
 
         const CloudAttendance = () => {
-            const [view, setViewRaw] = useState('login');
-            const [currentUser, setCurrentUser] = useState(null); 
+            // --- FIX PENTING: STATE INITIALIZATION ---
+            // Inisialisasi state LANGSUNG dari localStorage agar tidak blank/flicker saat refresh.
+            const [currentUser, setCurrentUser] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('gkps_user');
+                    return saved ? JSON.parse(saved) : null;
+                } catch(e) { return null; }
+            });
+
+            const [view, setViewRaw] = useState(() => {
+                const last = localStorage.getItem('gkps_last_view');
+                const savedUser = localStorage.getItem('gkps_user');
+                // Jika ada user login, kembalikan ke view terakhir, jika tidak ke login
+                if (savedUser && last && last !== 'login') return last;
+                if (savedUser) return 'menu';
+                return 'login';
+            });
+            // -----------------------------------------
+
             const [users, setUsers] = useState([]); 
             const [participants, setParticipants] = useState([]);
             const [isConnected, setIsConnected] = useState(false);
@@ -175,10 +192,8 @@
             const [notification, setNotification] = useState(null);
             const [activeBroadcast, setActiveBroadcast] = useState(null);
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
-            // --- UPDATED STATE FOR BROADCAST & HISTORY ---
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
             const [broadcastHistory, setBroadcastHistory] = useState([]); 
-            // ---------------------------------------------
             
             const [editingId, setEditingId] = useState(null);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'petugas', nama: '' });
@@ -192,6 +207,7 @@
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
             const sessionConfigRef = useRef(sessionConfig);
+            
             const getSafeDateId = () => {
                 const d = new Date();
                 const year = d.getFullYear();
@@ -203,55 +219,44 @@
             
             // --- NEW: State untuk Smooth Refresh ---
             const [refreshKey, setRefreshKey] = useState(0);
-            // ---------------------------------------
-
+            
             useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
+            
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
-            // --- FIX: EMPTY DEFAULT THEME TO AVOID FLASH OF OLD CONTENT ---
-            const defaultTheme = {
-                title: "", 
-                weeks: [] 
-            };
-            // -------------------------------------------------------------
+            const defaultTheme = { title: "", weeks: [] };
 
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
                 if (!config.autoMode) return config.isOpen; 
-                
                 const now = new Date();
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
                 const [openH, openM] = config.openTime.split(':').map(Number);
                 const [closeH, closeM] = config.closeTime.split(':').map(Number);
-                
                 const startMinutes = openH * 60 + openM;
                 const endMinutes = closeH * 60 + closeM;
-
                 return currentMinutes >= startMinutes && currentMinutes < endMinutes;
             };
+
             const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator();
             const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain);
             gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
+            
             const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
+            
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
             
             // --- NEW: Logic Smooth Refresh (Soft Refresh) ---
             const handleSmoothRefresh = () => {
-                // 1. Beri notifikasi visual bahwa sistem sedang bekerja
                 setNotification("Menyegarkan koneksi data...");
-                
-                // 2. Increment refreshKey untuk re-trigger useEffect data
-                setRefreshKey(prev => prev + 1);
-
-                // 3. Hilangkan notifikasi
+                setRefreshKey(prev => prev + 1); // Trigger ulang useEffect koneksi
                 setTimeout(() => setNotification(null), 2000);
             };
-            // ---------------------------------
 
             const setView = (newView) => {
                 setEditingId(null);
@@ -265,13 +270,14 @@
                 setSelectedWeek(null);
                 setScanResult(null); 
                 
-                // --- UPDATE: SIMPAN VIEW TERAKHIR ---
+                // --- FIX: Simpan view terakhir agar tahan refresh ---
                 localStorage.setItem('gkps_last_view', newView);
-                // ------------------------------------
+                // --------------------------------------------------
 
                 setViewRaw(newView);
                 setViewDate(getSafeDateId());
             };
+
             const handleBackToMenu = () => {
                 window.scrollTo({ top: 0, behavior: 'instant' });
                 currentUser ? setView('menu') : setView('login');
@@ -296,24 +302,7 @@
                     }
                 };
                 initAuth();
-
-                // --- RESTORE SESSION LOGIC (FIX FOR REFRESH) ---
-                const savedUser = localStorage.getItem('gkps_user');
-                const lastView = localStorage.getItem('gkps_last_view');
-                if (savedUser) { 
-                    try { 
-                        setCurrentUser(JSON.parse(savedUser));
-                        if(lastView && lastView !== 'login') {
-                            setViewRaw(lastView);
-                        } else {
-                            setViewRaw('menu');
-                        }
-                    } catch(e) {
-                        console.error("Gagal load session", e);
-                    } 
-                }
-                // -----------------------------------------------
-
+                // (Bagian restore session lama dihapus karena sudah dipindah ke useState)
             }, []);
 
             useEffect(() => {
@@ -333,23 +322,15 @@
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), (snap) => setThemeData(snap.exists() ?
                 snap.data() : null), (err) => console.error("Theme Sync Error", err));
                 
-                // --- UPDATED NOTIFICATION LISTENER WITH SCHEDULE CHECK ---
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
                         const now = Date.now();
-                        
-                        // LOGIC JADWAL: Cek apakah ada jadwal pengiriman
                         let scheduledTime = 0;
-                        if (data.scheduledAt) {
-                            scheduledTime = new Date(data.scheduledAt).getTime();
-                        }
+                        if (data.scheduledAt) scheduledTime = new Date(data.scheduledAt).getTime();
 
-                        // Jika waktu jadwal belum tiba, jangan tampilkan (set timer untuk nanti)
                         if (scheduledTime > now) {
                             const delay = scheduledTime - now;
-                            
-                            // Jika jadwalnya kurang dari 24 jam ke depan, pasang timer
                             if (delay < 86400000) {
                                 setTimeout(() => {
                                     setActiveBroadcast(data);
@@ -357,16 +338,13 @@
                                     playNotificationSound();
                                 }, delay);
                             }
-                            return; // Stop, jangan tampilkan sekarang
+                            return; 
                         }
 
-                        // Logic Lama: Cek kadaluarsa 2 jam
                         let timestamp = 0;
                         if (data.id && data.id.startsWith('NOTIF-')) timestamp = parseInt(data.id.split('-')[1]);
-                        // Gunakan waktu jadwal sebagai acuan jika ada, jika tidak gunakan waktu ID
                         const referenceTime = scheduledTime || timestamp;
-                        
-                        if (referenceTime > 0 && (now - referenceTime > 7200000)) return; // Expire 2 jam
+                        if (referenceTime > 0 && (now - referenceTime > 7200000)) return; 
 
                         setActiveBroadcast(data);
                         if (localStorage.getItem('last_broadcast_id') !== data.id) {
@@ -375,7 +353,6 @@
                         }
                     }
                 });
-                // --------------------------------------------------------
 
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
@@ -405,8 +382,8 @@
                     unsubscribeAttendance();
                     unsubscribeConfig();
                 };
-                // --- UPDATE: Add refreshKey dependency ---
             }, [userAuth, viewDate, refreshKey]);
+
             const saveToCloud = (path, data) => {
                 const db = window.db;
                 const { doc, setDoc } = window.fs || {};
@@ -436,6 +413,7 @@
                  else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
                  if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
+
             const handleResetAllData = async () => {
                 if (!currentUser) return;
                 const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
@@ -457,6 +435,7 @@
                 } else { alert("Password Salah! Reset Database Dibatalkan.");
                 }
             };
+
             useEffect(() => { 
                 if (view === 'scan' && !scanResult) { 
                     setTimeout(startScanner, 300); 
@@ -488,6 +467,7 @@
                     isScanning.current = false;
                 } 
             };
+
             const handleScanSuccess = (qrId) => {
                 const isModeLive = attendanceModeRef.current;
                 const currentLiveData = liveAttendanceRef.current;
@@ -534,6 +514,7 @@
                     playErrorSound();
                 }
             };
+
             const handleManualAttendance = (p, status) => {
                 const isOpen = checkSessionStatus();
                 if (isPeserta && !isOpen) {
@@ -576,6 +557,7 @@
                 }
                 setIsInstallModalOpen(false);
             };
+
             const handleImportUsers = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -628,31 +610,29 @@
                     alert(`Berhasil import ${count} user via Excel!`);
                 }
             };
+
             const handleExportAttendance = () => {
                 if (!window.XLSX) return alert("Library Excel belum dimuat.");
                 if (liveAttendance.length === 0) return alert("Tidak ada data untuk diexport.");
-                // --- FIX: Convert Timestamp to Readable Date String & Remove Raw Timestamp ---
                 const dataToExport = liveAttendance.map(item => {
                     const newItem = { ...item };
                     if (newItem.timestamp) {
                         const date = new Date(newItem.timestamp);
-                        // Format: DD/MM/YYYY HH:mm
                         newItem['Waktu Scan'] = date.toLocaleDateString('id-ID', {
                             day: '2-digit', month: '2-digit', year: 'numeric'
                         }) + ' ' + date.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
                     } else {
                         newItem['Waktu Scan'] = '-';
                     }
-                    delete newItem.timestamp; // Hapus timestamp raw agar tidak muncul di excel
+                    delete newItem.timestamp; 
                     return newItem;
                 });
-                // -----------------------------------------------------
-
                 const worksheet = XLSX.utils.json_to_sheet(dataToExport);
                 const workbook = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
                 XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
             };
+
             const handleResetDailyData = async () => {
                 if (!currentUser) return;
                 const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal: ${viewDate}.\nData yang dihapus tidak bisa kembali!`);
@@ -674,6 +654,7 @@
                     }
                 }
             };
+
             const LogoutModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
@@ -687,6 +668,7 @@
                     </div>
                 </div>
             );
+
             const BroadcastPopup = () => {
                 if (!activeBroadcast || !showBroadcastModal) return null;
                 const isUrgent = activeBroadcast.type === 'urgent';
@@ -726,6 +708,7 @@
                     </div>
                 </div>
             );
+
             const InstallModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-white/50 relative">
@@ -742,6 +725,7 @@
                     </div>
                 </div>
             );
+
             const handleLogin = (e) => {
                 e.preventDefault();
                 const form = e.target;
@@ -768,13 +752,14 @@
                     playErrorSound();
                 }
             };
+
             const handleLogoutClick = () => setIsLogoutModalOpen(true);
             const performLogout = () => {
                 setCurrentUser(null);
                 localStorage.removeItem('gkps_user');
-                localStorage.removeItem('gkps_last_view'); // CLEAR LAST VIEW
+                localStorage.removeItem('gkps_last_view'); // Fix: Hapus session view saat logout
                 setIsLogoutModalOpen(false);
-                setViewRaw('login'); // USE RAW TO AVOID SAVING LOGIN AS VIEW
+                setViewRaw('login'); 
             };
 
             const initiateDelete = (path) => setDeleteConfig({ show: true, path });
@@ -784,6 +769,7 @@
                     setDeleteConfig({ show: false, path: null });
                 }
             };
+
             const handleResetPassword = () => {
                 if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
                     playErrorSound();
@@ -810,6 +796,7 @@
                     }
                 });
             };
+
             const initiateAdminReset = (u) => setAdminResetConfig({ show: true, user: u, newPass: '' });
             const performAdminReset = () => {
                 if (!adminResetConfig.newPass || adminResetConfig.newPass.length < 3) return alert("Password minimal 3 karakter");
@@ -829,19 +816,23 @@
                 alert("Password berhasil diubah!");
                 handleBackToMenu();
             };
+
             const handleAddOrUpdateUser = () => {
                 if(!newUser.username || !newUser.password) return alert("Lengkapi data user!");
                 saveToCloud(`users/${newUser.username}`, newUser);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
                 setEditingId(null); alert(editingId ? "User diupdate!" : "User ditambahkan!");
             };
+
             const startEditUser = (u) => { setNewUser(u); setEditingId(u.username); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+            
             const handleAddOrUpdateParticipant = () => {
                 if(!formData.nama) return;
                 const id = editingId || `M-${Date.now()}`;
                 saveToCloud(`participants/${id}`, { id, nama: formData.nama, kategori: formData.kategori, kelas: formData.kelas });
                 setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setEditingId(null); if(editingId) setShowAddForm(false); alert("Tersimpan!");
             };
+
             const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true);
             window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
@@ -856,6 +847,7 @@
                 } catch (e) { window.open(generateQRUrl(p.id), '_blank');
                 }
             };
+
             const downloadAllQR = async () => {
                 if (participants.length === 0) return;
                 setIsDownloading(true); 
@@ -870,6 +862,7 @@
                 window.scrollTo(0, scrollPos);
                 setIsDownloading(false); alert("Selesai!");
             };
+
             const handleCSV = (e) => {
                 const file = e.target.files[0];
                 if (!file) return; const reader = new FileReader();
@@ -887,18 +880,6 @@
                 }; reader.readAsText(file);
             };
 
-            // --- UPDATED BROADCAST LOGIC WITH HISTORY & SCHEDULE ---
-            useEffect(() => {
-                if (view === 'manage_broadcast') {
-                    const db = window.db;
-                    const { collection, query, orderBy, onSnapshot } = window.fs;
-                    const q = query(collection(db, `artifacts/${appId}/public/data/broadcast_history`), orderBy('createdAt', 'desc'));
-                    const unsub = onSnapshot(q, (snap) => {
-                        setBroadcastHistory(snap.docs.map(d => d.data()));
-                    });
-                    return () => unsub();
-                }
-            }, [view]);
             const handleSendBroadcast = () => {
                 if(!broadcastForm.title || !broadcastForm.message) return alert("Isi judul dan pesan!");
                 const id = `NOTIF-${Date.now()}`;
@@ -914,9 +895,7 @@
                     type: broadcastForm.type,
                     scheduledAt: broadcastForm.schedule || null
                 };
-                // 1. Simpan ke 'Active'
                 saveToCloud('announcements/active', data);
-                // 2. Simpan ke 'Arsip'
                 const db = window.db;
                 const { doc, setDoc } = window.fs;
                 const historyRef = doc(db, `artifacts/${appId}/public/data/broadcast_history`, id);
@@ -925,18 +904,18 @@
                 if (broadcastForm.schedule) {
                     msg = `Notifikasi DIJADWALKAN otomatis pada: ${new Date(broadcastForm.schedule).toLocaleString('id-ID')}`;
                 }
-
                 alert(msg);
                 setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
             };
+
             const handleDeleteHistory = async (historyId) => {
                 if(!confirm("Hapus arsip ini?")) return;
                 const db = window.db;
                 const { doc, deleteDoc } = window.fs;
                 await deleteDoc(doc(db, `artifacts/${appId}/public/data/broadcast_history`, historyId));
             };
+
             const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
-            // -----------------------------------------------------
 
             const handleAddWeek = () => {
                 setEditThemeForm({
@@ -944,6 +923,7 @@
                     weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }]
                 });
             };
+
             const handleRemoveWeek = (index) => {
                 if(confirm("Yakin hapus materi minggu ini?")) {
                     const newWeeks = [...editThemeForm.weeks];
@@ -951,6 +931,7 @@
                     setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
                 }
             };
+
             const handleWeekChange = (index, field, value) => {
                 const newWeeks = [...editThemeForm.weeks];
                 newWeeks[index][field] = value;
@@ -968,6 +949,9 @@
             const isAdmin = safeUser.role === 'admin';
             const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
             const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
+
+            // --- RENDER VIEWS ---
+            
             if (view === 'login') return (
                 <div key="view-login" className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -988,12 +972,12 @@
                             <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
-                            &copy;
-                            {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
+                            &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
                         </div>
                     </div>
                 </div>
             );
+
             if (view === 'forgot_password') return (
                 <div className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -1003,8 +987,7 @@
                             <p className="text-slate-500 font-bold text-xs mt-1">Khusus Akun Admin Utama</p>
                         </div>
                         <div className="space-y-3">
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username Admin</label><input className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Username Anda" value={resetForm.username} onChange={e => setResetForm({...resetForm, 
-                            username: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username Admin</label><input className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Username Anda" value={resetForm.username} onChange={e => setResetForm({...resetForm, username: e.target.value})} /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Password Baru</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="***" value={resetForm.newPassword} onChange={e => setResetForm({...resetForm, newPassword: e.target.value})} /></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Kode Otorisasi</label><input type="password" className="w-full p-3 border-2 border-indigo-100 rounded-xl bg-white focus:outline-none focus:border-rose-400 focus:ring-0 transition font-bold text-slate-700" placeholder="Kode Master Panitia" value={resetForm.token} onChange={e => setResetForm({...resetForm, token: e.target.value})} /></div>
                             <button onClick={handleResetPassword} className="w-full btn-playful btn-orange py-3 rounded-xl font-black text-lg shadow-lg shadow-orange-100 mt-2">Reset Password</button>
@@ -1013,13 +996,12 @@
                     </div>
                 </div>
             );
+
             if (view === 'menu') {
-                const currentTheme = themeData ||
-                defaultTheme;
+                const currentTheme = themeData || defaultTheme;
                 let displayWeeks = currentTheme.weeks || [];
                 if (!Array.isArray(displayWeeks)) displayWeeks = [];
-                const gridCols = displayWeeks.length === 1 ?
-                'grid-cols-1' : 'grid-cols-2';
+                const gridCols = displayWeeks.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
 
                 return (
                 <div key="view-menu" className="min-h-screen bg-school-sunday p-4 pt-8 pb-20 relative">
@@ -1045,7 +1027,6 @@
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     <button onClick={handleLogoutClick} className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl text-white transition flex items-center justify-center shadow-inner border border-white/30" title="Keluar"><i data-lucide="log-out" width="20"></i></button>
-                                    {/* Tombol Refresh Baru */}
                                     <button onClick={handleSmoothRefresh} className="bg-emerald-400/20 hover:bg-emerald-400/40 p-3 rounded-2xl text-white transition flex items-center justify-center shadow-inner border border-white/30" title="Refresh Data"><i data-lucide="refresh-cw" width="20"></i></button>
                                 </div>
                             </div>
@@ -1062,18 +1043,12 @@
                                         <div className={`grid gap-3 ${gridCols}`}>
                                         
                                         {displayWeeks.map((week, idx) => (
-                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-4 rounded-2xl border flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ?
-                                                'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
+                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-4 rounded-2xl border flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
                                                     <div className="mb-4">
-                                                        <span className={`text-[10px] font-black uppercase tracking-wider block mb-1 ${idx % 2 === 0 ?
-                                                        'text-sky-400' : 'text-indigo-400'}`}>
-                                                            {week.date ?
-                                                            new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}
+                                                        <span className={`text-[10px] font-black uppercase tracking-wider block mb-1 ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>
+                                                            {week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}
                                                         </span>
-                                                        <h4 className={`font-bold text-lg leading-tight ${idx % 2 === 0 ?
-                                                        'text-sky-700' : 'text-indigo-700'}`}>
-                                                            {week.topic}
-                                                        </h4>
+                                                        <h4 className={`font-bold text-lg leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
                                                     </div>
                                                     <div className="mt-auto text-center">
                                                         <span className="text-[10px] font-bold text-sky-500 bg-white px-3 py-2 rounded-xl shadow-sm border border-sky-100 flex items-center justify-center gap-2">
@@ -1084,8 +1059,7 @@
                                             ))}
                                         </div>
                                     </div>
-                                    {(isAdmin ||
-                                    isPanitia) && (
+                                    {(isAdmin || isPanitia) && (
                                         <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
                                     )}
                                 </div>
@@ -1121,8 +1095,7 @@
                                         <div className="text-left"><h3 className="font-bold">Kelola Absensi</h3><p className="text-[10px] text-indigo-100 opacity-90">Input Manual & Setting Jam</p></div>
                                     </button>
 
-                                    <button onClick={() 
-                                    => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
+                                    <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
                                         <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
                                         <div className="text-left"><h3 className="font-bold">Scan QR Absensi</h3><p className="text-[10px] text-sky-100 opacity-90">Mode: Rekam Kehadiran</p></div>
                                     </button>
