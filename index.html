@@ -12,7 +12,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#F0F9FF">
     
-    <!-- Menggunakan logotema.png juga untuk icon aplikasi jika tersedia, atau fallback ke default -->
     <link rel="apple-touch-icon" href="logotema.png">
     <link rel="icon" type="image/png" href="logotema.png">
 
@@ -62,23 +61,19 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        
+
         // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // Pastikan sw.js ada atau biarkan error silent
                 navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW not found, skipping'));
             });
         }
-        // ---------------------------------------
 
         let firebaseConfig;
         try {
-            // Environment-provided config (for Gemini Canvas)
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             } else {
-                // Fallback / Default User Config
                 firebaseConfig = {
                     apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
                     authDomain: "asggkpstgr.firebaseapp.com",
@@ -91,21 +86,16 @@
             }
         } catch (e) { console.error("Firebase config parse error", e); }
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Expose to Window for React Access
         window.db = db;
         window.auth = auth;
         window.signInAnonymously = signInAnonymously;
         window.signInWithCustomToken = signInWithCustomToken;
         window.onAuthStateChanged = onAuthStateChanged;
-        // Pre-package Firestore functions to avoid import issues in babel
         window.fs = { collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs };
-        
-        // Signal that Firebase is ready
         window.isFirebaseInitialized = true;
     </script>
 </head>
@@ -116,7 +106,6 @@
     <script type="text/babel">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
         
-        // --- GLOBAL: INSTALL PROMPT LOGIC ---
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -165,9 +154,7 @@
         };
 
         const CloudAttendance = () => {
-            // --- CORE FIX: Wait for DB to be ready before doing anything ---
             const [dbReady, setDbReady] = useState(false);
-
             // --- State Initialization ---
             const [currentUser, setCurrentUser] = useState(() => {
                 try {
@@ -175,7 +162,6 @@
                     return saved ? JSON.parse(saved) : null;
                 } catch(e) { return null; }
             });
-
             const [view, setViewRaw] = useState(() => {
                 const last = localStorage.getItem('gkps_last_view');
                 const savedUser = localStorage.getItem('gkps_user');
@@ -183,9 +169,9 @@
                 if (savedUser) return 'menu';
                 return 'login';
             });
-
+            
             // --- App Data States ---
-            const [users, setUsers] = useState([]); 
+            const [users, setUsers] = useState([]);
             const [participants, setParticipants] = useState([]);
             const [isConnected, setIsConnected] = useState(false);
             const [userAuth, setUserAuth] = useState(null);
@@ -194,6 +180,8 @@
             const [scanResult, setScanResult] = useState(null);
             const scannerRef = useRef(null);
             const isScanning = useRef(false);
+            const [cameraFacing, setCameraFacing] = useState('environment'); // STATE KAMERA BARU
+
             const [themeData, setThemeData] = useState(null);
             const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
             const [selectedWeek, setSelectedWeek] = useState(null);
@@ -208,8 +196,7 @@
             const [activeBroadcast, setActiveBroadcast] = useState(null);
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
-            const [broadcastHistory, setBroadcastHistory] = useState([]); 
-            
+            const [broadcastHistory, setBroadcastHistory] = useState([]);
             const [editingId, setEditingId] = useState(null);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'petugas', nama: '' });
             const [selfPassword, setSelfPassword] = useState('');
@@ -234,10 +221,9 @@
                 return `${year}-${month}-${day}`;
             };
             const [viewDate, setViewDate] = useState(getSafeDateId());
-            const [refreshKey, setRefreshKey] = useState(0); // Soft Refresh Trigger
+            const [refreshKey, setRefreshKey] = useState(0);
             
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM"];
-            // Use environment App ID if available
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             const defaultTheme = { title: "", weeks: [] };
 
@@ -248,7 +234,7 @@
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
 
-            // --- INITIALIZATION CHECKER (Fixes White Screen on Refresh) ---
+            // --- INITIALIZATION CHECKER ---
             useEffect(() => {
                 const checkDb = setInterval(() => {
                     if (window.db && window.fs) {
@@ -261,12 +247,11 @@
 
             // --- AUTHENTICATION & DATA SYNC ---
             useEffect(() => {
-                if (!dbReady) return; // Don't run logic until DB is ready
+                if (!dbReady) return;
 
                 const initAuth = async () => {
                     const { signInAnonymously, signInWithCustomToken, auth, onAuthStateChanged } = window;
                     
-                    // Listen to auth state changes
                     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
                         if (user) {
                             setUserAuth(user);
@@ -275,7 +260,6 @@
                         } else {
                             setUserAuth(null);
                             setIsConnected(false);
-                            // Auto Re-login if needed
                             attemptSignIn(); 
                         }
                     });
@@ -292,16 +276,13 @@
                             setConnectionError(error.message);
                         }
                     };
-
                     if (!auth.currentUser) {
                         attemptSignIn();
                     }
-
                     return () => unsubscribeAuth();
                 };
-
                 initAuth();
-            }, [dbReady, refreshKey]); // Re-run if dbReady becomes true or user requests refresh
+            }, [dbReady, refreshKey]);
 
             // --- FIRESTORE LISTENERS ---
             useEffect(() => {
@@ -311,7 +292,6 @@
                 const { collection, doc, onSnapshot, query, orderBy } = window.fs;
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
-                // 1. Users Listener
                 const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), 
                     (snap) => {
                         const loadedUsers = snap.docs.map(d => d.data());
@@ -322,19 +302,16 @@
                     (err) => console.log("Users sync waiting...")
                 );
 
-                // 2. Participants Listener
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), 
                     (snap) => setParticipants(snap.docs.map(d => d.data())),
                     (err) => console.log("Partcipants sync waiting...")
                 );
 
-                // 3. Theme Listener
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), 
                     (snap) => setThemeData(snap.exists() ? snap.data() : null),
                     (err) => {}
                 );
 
-                // 4. Announcements / Broadcast
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
@@ -343,25 +320,21 @@
                         if (data.scheduledAt) scheduledTime = new Date(data.scheduledAt).getTime();
 
                         if (scheduledTime > now) {
-                            // Logic for scheduled notification
                             const delay = scheduledTime - now;
-                            if (delay < 86400000) { // Only if within 24h
+                            if (delay < 86400000) {
                                 setTimeout(() => {
                                     setActiveBroadcast(data);
                                     setShowBroadcastModal(true);
                                     playNotificationSound();
                                 }, delay);
                             }
-                            return; 
+                            return;
                         }
 
                         let timestamp = 0;
                         if (data.id && data.id.startsWith('NOTIF-')) timestamp = parseInt(data.id.split('-')[1]);
                         const referenceTime = scheduledTime || timestamp;
-                        
-                        // Ignore broadcast older than 2 hours
-                        if (referenceTime > 0 && (now - referenceTime > 7200000)) return; 
-
+                        if (referenceTime > 0 && (now - referenceTime > 7200000)) return;
                         setActiveBroadcast(data);
                         if (localStorage.getItem('last_broadcast_id') !== data.id) {
                             setShowBroadcastModal(true);
@@ -370,7 +343,6 @@
                     }
                 }, (err) => {});
 
-                // 5. Broadcast History
                 const unsubscribeBroadcastHistory = onSnapshot(collection(db, `${publicDataPath}/broadcast_history`), 
                     (snap) => {
                         const hist = snap.docs.map(d => d.data()).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -379,7 +351,6 @@
                     (err) => {}
                 );
 
-                // 6. Attendance Listener (Dynamic based on date)
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
                 try {
@@ -388,12 +359,10 @@
                         const data = snap.docs.map(d => d.data());
                         setLiveAttendance(data);
                     }, (err) => {
-                        // Silently handle collection not existing yet
                         setLiveAttendance([]);
                     });
                 } catch(e) {}
 
-                // 7. Session Config
                 const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
                 try {
@@ -426,18 +395,12 @@
                 return currentMinutes >= startMinutes && currentMinutes < endMinutes;
             };
 
-            const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator();
-            const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain);
-            gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
+            const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
+            const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
             
-            const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
-
             const handleSmoothRefresh = () => {
                 setNotification("Menyegarkan koneksi data...");
-                // Force Auth and Snapshot hooks to re-run
-                setRefreshKey(prev => prev + 1); 
+                setRefreshKey(prev => prev + 1);
                 setTimeout(() => setNotification(null), 2000);
             };
 
@@ -511,100 +474,75 @@
                     try {
                         await clearCollection('participants');
                         alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
-                    } catch(e) { alert("Gagal reset: " + e.message);
-                    }
-                } else { alert("Password Salah! Reset Database Dibatalkan.");
-                }
+                    } catch(e) { alert("Gagal reset: " + e.message); }
+                } else { alert("Password Salah! Reset Database Dibatalkan."); }
             };
 
-            // --- ADVANCED SCANNER LOGIC (FORCE START) ---
-            useEffect(() => {
-                if (view !== 'scan' || scanResult) return;
+            // --- UPDATED SCANNER LOGIC ---
+            useEffect(() => { 
+                if (view === 'scan' && !scanResult) { 
+                    setTimeout(() => startScanner(cameraFacing), 300); 
+                }
+                return () => stopScanner(); 
+            }, [view, scanResult, cameraFacing]);
 
-                const startCamera = async () => {
-                    // 1. Tunggu sebentar agar elemen <div id="reader"> siap
-                    await new Promise(r => setTimeout(r, 300));
-                    
-                    if (!document.getElementById("reader")) return;
+            const startScanner = (facingMode) => { 
+                if (isScanning.current) return;
+                if (scannerRef.current) { try { scannerRef.current.clear(); } catch(e){} }
 
-                    // 2. Bersihkan instance lama jika ada (Hard Cleanup)
-                    if (scannerRef.current) {
-                        try {
-                            await scannerRef.current.stop();
-                            await scannerRef.current.clear();
-                        } catch (e) {}
-                        scannerRef.current = null;
-                    }
+                const scanner = new Html5Qrcode("reader");
+                scannerRef.current = scanner; 
+                
+                const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+                
+                scanner.start({ facingMode: facingMode }, config, (decodedText) => { 
+                    handleScanSuccess(decodedText);
+                    stopScanner();
+                }, (error) => {}).catch(err => {
+                    console.log("Camera start error:", err);
+                    setScanResult({ success: false, msg: "Gagal membuka kamera." });
+                });
 
-                    // 3. Gunakan Class Html5Qrcode (Bukan Scanner Widget) agar bisa auto-start
-                    const html5QrCode = new Html5Qrcode("reader");
-                    scannerRef.current = html5QrCode;
+                isScanning.current = true;
+            };
 
-                    try {
-                        // 4. Paksa nyala kamera belakang (environment)
-                        await html5QrCode.start(
-                            { facingMode: "environment" }, 
-                            { 
-                                fps: 10, 
-                                qrbox: { width: 250, height: 250 }
-                            },
-                            (decodedText) => {
-                                // Sukses Scan
-                                handleScanSuccess(decodedText);
-                                // Matikan kamera
-                                html5QrCode.stop().then(() => html5QrCode.clear()).catch(err => {});
-                            },
-                            (errorMessage) => {
-                                // Ignore frame failures (normal saat scanning)
-                            }
-                        );
-                    } catch (err) {
-                        console.error("Camera Error:", err);
-                        // 5. Deteksi Error Permission / HTTPS
-                        if (String(err).includes("Permission")) {
-                            alert("IZIN DITOLAK: Mohon izinkan akses kamera di browser Anda.");
-                        } else if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                            alert("ERROR KEAMANAN: Kamera hanya bisa aktif jika web dibuka via HTTPS (Aman), bukan HTTP.");
-                        } else {
-                            alert("Gagal membuka kamera: " + err);
-                        }
-                    }
-                };
+            const stopScanner = () => { 
+                if (scannerRef.current) { 
+                    try { 
+                        scannerRef.current.stop().then(() => {
+                            scannerRef.current.clear();
+                        }).catch(err => {});
+                    } catch(e){} 
+                    isScanning.current = false;
+                } 
+            };
 
-                startCamera();
-
-                // Cleanup saat keluar menu
-                return () => {
-                    if (scannerRef.current) {
-                        scannerRef.current.stop().catch(() => {});
-                        scannerRef.current.clear().catch(() => {});
-                        scannerRef.current = null;
-                    }
-                };
-            }, [view, scanResult]);
+            const toggleCamera = () => {
+                stopScanner();
+                setCameraFacing(prev => prev === 'environment' ? 'user' : 'environment');
+            };
 
             const handleScanSuccess = (qrId) => {
                 const isModeLive = attendanceModeRef.current;
                 const currentLiveData = liveAttendanceRef.current;
                 const isOpen = checkSessionStatus();
+                const cleanId = qrId.trim();
+                const p = participants.find(item => item.id === cleanId);
 
-                const p = participants.find(item => item.id === qrId);
                 if (p) {
                     if (isModeLive) {
                         if (!isOpen) {
-                            setScanResult({ success: false, msg: `⛔ ABSENSI SEDANG DITUTUP!` });
+                            setScanResult({ success: false, msg: "Tidak Hadir", subMsg: "Absensi Sedang Ditutup" });
                             playErrorSound();
                             return;
                         }
-
-                        const todayStr = getSafeDateId();
                         const alreadyPresent = currentLiveData.find(item => item.id === p.id);
-
                         if (alreadyPresent) {
-                            setScanResult({ success: false, msg: `⚠️ ${p.nama} SUDAH ABSEN (${alreadyPresent.status}) jam ${alreadyPresent.jam}!` });
+                            setScanResult({ success: false, msg: "Sudah Hadir", subMsg: `Jam: ${alreadyPresent.jam}` });
                             playErrorSound();
                         } else {
                             const now = new Date();
+                            const todayStr = getSafeDateId();
                             const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
                             const attendanceData = {
                                 id: p.id,
@@ -617,15 +555,15 @@
                                 scanner: currentUser.nama
                             };
                             saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
-                            setScanResult({ success: true, msg: `✅ ${p.nama} BERHASIL ABSEN!`, p: p, time: jam });
+                            setScanResult({ success: true, msg: "Berhasil Hadir", p: p, time: jam });
                             playNotificationSound();
                         }
                     } else {
-                        setScanResult({ success: true, msg: `✅ DITEMUKAN: ${p.nama}`, p: p });
+                        setScanResult({ success: true, msg: "Data Ditemukan", p: p });
                         playNotificationSound();
                     }
                 } else {
-                    setScanResult({ success: false, msg: '❌ QR Tidak Terdaftar di Database!' });
+                    setScanResult({ success: false, msg: "Data Tidak Ada", subMsg: "QR tidak terdaftar di database" });
                     playErrorSound();
                 }
             };
@@ -637,7 +575,6 @@
                     playErrorSound();
                     return; 
                 }
-
                 const todayStr = getSafeDateId();
                 const now = new Date();
                 const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
@@ -673,7 +610,6 @@
             const handleImportUsers = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const saveRow = async (row) => {
                     let [username, password, nama, role] = row;
                     if(!username || !password) return;
@@ -708,7 +644,6 @@
                         const password = row['Password'] || row['password'] || Object.values(row)[1];
                         const nama = row['Nama'] || row['nama'] || Object.values(row)[2];
                         const role = row['Role'] || row['role'] || Object.values(row)[3];
-
                         if (username && password) {
                             await saveToCloud(`users/${username}`, {
                                 username: String(username),
@@ -755,9 +690,7 @@
                     const targetCollection = collection(db, `${basePath}/attendance/${viewDate}/records`);
                     try {
                         const snapshot = await getDocs(targetCollection);
-                        if (snapshot.empty) {
-                            return alert("Data sudah kosong.");
-                        }
+                        if (snapshot.empty) { return alert("Data sudah kosong."); }
                         const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
                         await Promise.all(deletePromises);
                         alert(`Berhasil mereset data absensi tanggal ${viewDate}.`);
@@ -767,7 +700,92 @@
                 }
             };
 
-            // --- UI COMPONENTS ---
+            const handleCSV = (e) => {
+                const file = e.target.files[0];
+                if (!file) return; const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const lines = ev.target.result.split('\n').filter(l => l.trim());
+                    let count = 0;
+                    lines.slice(1).forEach((line, idx) => {
+                        const [nama, kategori, kelas] = line.split(',').map(s => s?.trim());
+                        if (nama) {
+                            const id = `GSM-${Date.now()}-${idx}`;
+                            saveToCloud(`participants/${id}`, { id, nama, kategori: kategori || 'Umum', kelas: kelas || '-' }); count++;
+                        }
+                    });
+                    alert(`Mengupload ${count} data...`);
+                }; reader.readAsText(file);
+            };
+
+            const handleSendBroadcast = () => {
+                if(!broadcastForm.title || !broadcastForm.message) return alert("Isi judul dan pesan!");
+                const id = `NOTIF-${Date.now()}`;
+                const now = new Date();
+                const data = { 
+                    id, 
+                    title: broadcastForm.title, 
+                    message: broadcastForm.message, 
+                    sender: currentUser.nama, 
+                    timestamp: now.toLocaleString('id-ID'), 
+                    createdAt: now.getTime(),
+                    type: broadcastForm.type,
+                    scheduledAt: broadcastForm.schedule || null
+                };
+                saveToCloud('announcements/active', data);
+                const db = window.db;
+                const { doc, setDoc } = window.fs;
+                const historyRef = doc(db, `artifacts/${appId}/public/data/broadcast_history`, id);
+                setDoc(historyRef, data);
+                let msg = "Notifikasi berhasil dikirim!";
+                if (broadcastForm.schedule) {
+                    msg = `Notifikasi DIJADWALKAN otomatis pada: ${new Date(broadcastForm.schedule).toLocaleString('id-ID')}`;
+                }
+                alert(msg);
+                setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
+            };
+
+            const handleDeleteHistory = async (historyId) => {
+                if(!confirm("Hapus arsip ini?")) return;
+                const db = window.db;
+                const { doc, deleteDoc } = window.fs;
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/broadcast_history`, historyId));
+            };
+
+            const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
+            
+            const handleAddWeek = () => {
+                setEditThemeForm({
+                    ...editThemeForm,
+                    weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }]
+                });
+            };
+
+            const handleRemoveWeek = (index) => {
+                if(confirm("Yakin hapus materi minggu ini?")) {
+                    const newWeeks = [...editThemeForm.weeks];
+                    newWeeks.splice(index, 1);
+                    setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+                }
+            };
+
+            const handleWeekChange = (index, field, value) => {
+                const newWeeks = [...editThemeForm.weeks];
+                newWeeks[index][field] = value;
+                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
+            };
+
+            const handleSaveTheme = () => {
+                if(!editThemeForm.title) return alert("Mohon isi judul bahan ajar!");
+                saveToCloud('theme/current', editThemeForm);
+                alert("Bahan Ajar berhasil diupdate!");
+                handleBackToMenu();
+            };
+            
+            const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
+            const isAdmin = safeUser.role === 'admin';
+            const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
+            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
+
             const LogoutModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
@@ -791,17 +809,14 @@
                             <div className={`h-20 w-full absolute top-0 left-0 ${isUrgent ? 'bg-red-100' : 'bg-sky-100'}`}></div>
                             <div className="relative z-10 p-6 pt-0">
                                 <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 bg-white mt-8 ${isUrgent ? 'border-red-100' : 'border-sky-100'}`}>
-                                     <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
+                                    <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
                                 </div>
-                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ?
-                                'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
+                                <h3 className={`text-2xl font-black mb-2 font-fredoka leading-tight ${isUrgent ? 'text-red-600' : 'text-sky-600'}`}>{activeBroadcast.title}</h3>
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-left">
                                     <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{activeBroadcast.message}</p>
                                     <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center text-xs text-slate-400 font-bold uppercase"><span><i data-lucide="user" width="12" className="inline mr-1"/>{activeBroadcast.sender}</span><span>{activeBroadcast.timestamp.split(' ')[1]}</span></div>
                                 </div>
-                                <button onClick={handleCloseBroadcast} className={`w-full 
-                                py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ?
-                                'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
+                                <button onClick={handleCloseBroadcast} className={`w-full py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ? 'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
                             </div>
                         </div>
                     </div>
@@ -828,12 +843,8 @@
                         <button onClick={() => setIsInstallModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" width="24"></i></button>
                         <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-sky-50"><i data-lucide="download" className="text-sky-500 w-8 h-8"></i></div>
                         <h3 className="text-xl font-black text-slate-800 mb-4 font-fredoka">Pasang Aplikasi</h3>
-                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center 
-                        gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2.
-                        Pilih <b>"Tambahkan ke Layar Utama"</b> atau <b>"Install App"</b>.</p></div>
-                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-4 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="apple" width="16"></i> iPhone (Safari)</h4><p className="text-xs text-slate-500">1.
-                        Klik tombol <b>Share</b> (kotak panah atas) di bawah.</p><p className="text-xs text-slate-500">2.
-                        Geser & pilih <b>"Add to Home Screen"</b> (Tambah ke Utama).</p></div>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-3 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="smartphone" width="16"></i> Android (Chrome)</h4><p className="text-xs text-slate-500">1. Klik titik tiga (⋮) di pojok kanan atas browser.</p><p className="text-xs text-slate-500">2. Pilih <b>"Tambahkan ke Layar Utama"</b> atau <b>"Install App"</b>.</p></div>
+                        <div className="text-left bg-slate-50 p-4 rounded-xl mb-4 border-2 border-slate-100"><h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2"><i data-lucide="apple" width="16"></i> iPhone (Safari)</h4><p className="text-xs text-slate-500">1. Klik tombol <b>Share</b> (kotak panah atas) di bawah.</p><p className="text-xs text-slate-500">2. Geser & pilih <b>"Add to Home Screen"</b> (Tambah ke Utama).</p></div>
                         <button onClick={handleInstall} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Install Sekarang!</button>
                     </div>
                 </div>
@@ -906,8 +917,7 @@
                         localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
                         alert("Password Admin Berhasil Direset!"); 
                         setView('menu');
-                    } else { alert("Gagal koneksi: " + err.message);
-                    }
+                    } else { alert("Gagal koneksi: " + err.message); }
                 });
             };
 
@@ -939,16 +949,13 @@
             };
 
             const startEditUser = (u) => { setNewUser(u); setEditingId(u.username); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-            
             const handleAddOrUpdateParticipant = () => {
                 if(!formData.nama) return;
                 const id = editingId || `M-${Date.now()}`;
                 saveToCloud(`participants/${id}`, { id, nama: formData.nama, kategori: formData.kategori, kelas: formData.kelas });
                 setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setEditingId(null); if(editingId) setShowAddForm(false); alert("Tersimpan!");
             };
-
-            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true);
-            window.scrollTo({ top: 0, behavior: 'smooth' }); };
+            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
             const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
             const downloadSingleQR = async (p) => {
@@ -958,10 +965,8 @@
                     const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
                     link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
                     document.body.appendChild(link); link.click(); document.body.removeChild(link); window.scrollTo(0, scrollPos);
-                } catch (e) { window.open(generateQRUrl(p.id), '_blank');
-                }
+                } catch (e) { window.open(generateQRUrl(p.id), '_blank'); }
             };
-
             const downloadAllQR = async () => {
                 if (participants.length === 0) return;
                 setIsDownloading(true); 
@@ -977,94 +982,7 @@
                 setIsDownloading(false); alert("Selesai!");
             };
 
-            const handleCSV = (e) => {
-                const file = e.target.files[0];
-                if (!file) return; const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const lines = ev.target.result.split('\n').filter(l => l.trim());
-                    let count = 0;
-                    lines.slice(1).forEach((line, idx) => {
-                        const [nama, kategori, kelas] = line.split(',').map(s => s?.trim());
-                        if (nama) {
-                            const id = `GSM-${Date.now()}-${idx}`;
-                            saveToCloud(`participants/${id}`, { id, nama, kategori: kategori || 'Umum', kelas: kelas || '-' }); count++;
-                        }
-                    });
-                    alert(`Mengupload ${count} data...`);
-                }; reader.readAsText(file);
-            };
-
-            const handleSendBroadcast = () => {
-                if(!broadcastForm.title || !broadcastForm.message) return alert("Isi judul dan pesan!");
-                const id = `NOTIF-${Date.now()}`;
-                const now = new Date();
-                
-                const data = { 
-                    id, 
-                    title: broadcastForm.title, 
-                    message: broadcastForm.message, 
-                    sender: currentUser.nama, 
-                    timestamp: now.toLocaleString('id-ID'), 
-                    createdAt: now.getTime(),
-                    type: broadcastForm.type,
-                    scheduledAt: broadcastForm.schedule || null
-                };
-                saveToCloud('announcements/active', data);
-                const db = window.db;
-                const { doc, setDoc } = window.fs;
-                const historyRef = doc(db, `artifacts/${appId}/public/data/broadcast_history`, id);
-                setDoc(historyRef, data);
-                let msg = "Notifikasi berhasil dikirim!";
-                if (broadcastForm.schedule) {
-                    msg = `Notifikasi DIJADWALKAN otomatis pada: ${new Date(broadcastForm.schedule).toLocaleString('id-ID')}`;
-                }
-                alert(msg);
-                setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
-            };
-
-            const handleDeleteHistory = async (historyId) => {
-                if(!confirm("Hapus arsip ini?")) return;
-                const db = window.db;
-                const { doc, deleteDoc } = window.fs;
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/broadcast_history`, historyId));
-            };
-
-            const handleCloseBroadcast = () => { setShowBroadcastModal(false); if (activeBroadcast) localStorage.setItem('last_broadcast_id', activeBroadcast.id); };
-
-            const handleAddWeek = () => {
-                setEditThemeForm({
-                    ...editThemeForm,
-                    weeks: [...(editThemeForm.weeks || []), { date: '', topic: '', content: '', themeVerse: '', memoryVerse: '' }]
-                });
-            };
-
-            const handleRemoveWeek = (index) => {
-                if(confirm("Yakin hapus materi minggu ini?")) {
-                    const newWeeks = [...editThemeForm.weeks];
-                    newWeeks.splice(index, 1);
-                    setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
-                }
-            };
-
-            const handleWeekChange = (index, field, value) => {
-                const newWeeks = [...editThemeForm.weeks];
-                newWeeks[index][field] = value;
-                setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
-            };
-
-            const handleSaveTheme = () => {
-                if(!editThemeForm.title) return alert("Mohon isi judul bahan ajar!");
-                saveToCloud('theme/current', editThemeForm);
-                alert("Bahan Ajar berhasil diupdate!");
-                handleBackToMenu();
-            };
-            
-            const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
-            const isAdmin = safeUser.role === 'admin';
-            const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
-            const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
-
-            // --- LOADING SCREEN (Waiting for DB) ---
+            // --- LOADING SCREEN ---
             if (!dbReady) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
@@ -1078,7 +996,6 @@
             }
 
             // --- RENDER VIEWS ---
-            
             if (view === 'login') return (
                 <div key="view-login" className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -1095,8 +1012,7 @@
                             <button type="button" onClick={() => setView('forgot_password')} className="text-sky-600 font-bold text-xs hover:text-sky-800 underline text-right block w-full mt-2">Lupa Password?</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
-                            {isConnected ? 
-                            <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
                             &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
@@ -1139,12 +1055,10 @@
                     )}
                 
                     <div className="max-w-md mx-auto glass-panel rounded-[32px] overflow-hidden border-2 border-white/60">
-                        {/* HEADER WITH REFRESH BUTTON */}
                         <div className="bg-gradient-to-r from-sky-500 to-indigo-600 p-6 text-white relative">
                             <div className="absolute top-0 right-0 p-4 opacity-10 flex items-center gap-4">
                                 <img src="logotema.png" className="w-24 h-24 object-contain" alt="Logo GKPS" />
                             </div>
-
                             <div className="flex justify-between items-center relative z-10">
                                 <div>
                                     <p className="text-white/80 text-xs font-bold mb-1">Shalom,</p>
@@ -1159,15 +1073,13 @@
                         </div>
 
                         <div className="p-6 pb-0">
-                            {themeData && themeData.title ? 
-                            (
+                            {themeData && themeData.title ? (
                                 <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
                                     <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
                                     <div className="relative z-10">
                                         <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
                                         <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
                                         <div className={`grid gap-3 ${gridCols}`}>
-                                        
                                         {displayWeeks.map((week, idx) => (
                                                 <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-4 rounded-2xl border flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
                                                     <div className="mb-4">
@@ -1178,7 +1090,7 @@
                                                     </div>
                                                     <div className="mt-auto text-center">
                                                         <span className="text-[10px] font-bold text-sky-500 bg-white px-3 py-2 rounded-xl shadow-sm border border-sky-100 flex items-center justify-center gap-2">
-                                                             <i data-lucide="book-open" width="12"></i> Buka Materi
+                                                            <i data-lucide="book-open" width="12"></i> Buka Materi
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1238,8 +1150,7 @@
                                         <div className="text-left text-xs"><h3 className="font-bold text-sm">Broadcast Notifikasi</h3><p className="text-[10px] text-slate-200 opacity-90">Kirim Info ke Semua Layar</p></div>
                                     </button>
                                 
-                                    {isAdmin && (<div className="grid grid-cols-1 gap-3 mb-3"><button onClick={() => setView('manage_users')} className="btn-playful btn-blue rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2 border-b-4 border-sky-700"><i 
-                                    data-lucide="user-cog"></i> Atur User</button></div>)}
+                                    {isAdmin && (<div className="grid grid-cols-1 gap-3 mb-3"><button onClick={() => setView('manage_users')} className="btn-playful btn-blue rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2 border-b-4 border-sky-700"><i data-lucide="user-cog"></i> Atur User</button></div>)}
                                     {isAdmin && (<button onClick={() => setView('generate')} className="w-full btn-playful btn-white border-b-4 mb-3 p-3 rounded-xl flex items-center gap-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><i data-lucide="database" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold text-slate-700">SM GKPS RESORT TANGERANG</h3></div></button>)}
                                     
                                     {isAdmin && (
@@ -1255,13 +1166,11 @@
                             
                             <button onClick={() => setView('change_password')} className="w-full py-3 text-slate-400 text-xs font-bold hover:text-slate-600 transition flex items-center justify-center gap-2"><i data-lucide="lock" width="12"></i> Ganti Password Saya</button>
                             <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
-                        
+                            
                             <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; 
-                                {new Date().getFullYear()} SM GKPS Resort Tangerang</p>
+                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; {new Date().getFullYear()} SM GKPS Resort Tangerang</p>
                                 <p className="text-[9px] text-slate-300 font-medium">Dibuat untuk Kemuliaan Tuhan</p>
                             </div>
-
                         </div>
                     </div>
                     
@@ -1286,7 +1195,6 @@
                 return (
                     <div className="min-h-screen bg-slate-50 relative">
                         <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
-                            
                             <div className="flex items-center gap-3 mb-4">
                                 <button onClick={handleBackToMenu} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
                                 <h2 className="font-black text-xl text-slate-800">Kelola Absensi</h2>
@@ -1302,8 +1210,7 @@
                                         </label>
                                     </div>
                                     
-                                    {sessionConfig.autoMode ? 
-                                    (
+                                    {sessionConfig.autoMode ? (
                                         <div className="flex gap-2">
                                             <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Buka</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.openTime} onChange={e => setSessionConfig({...sessionConfig, openTime: e.target.value})} /></div>
                                             <div className="flex-1"><label className="text-[10px] font-bold text-slate-400">Tutup</label><input type="time" className="w-full p-2 rounded border font-bold text-slate-700" value={sessionConfig.closeTime} onChange={e => setSessionConfig({...sessionConfig, closeTime: e.target.value})} /></div>
@@ -1311,11 +1218,9 @@
                                     ) : (
                                         <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
                                             <span className="font-bold text-sm text-slate-600">Status Absensi</span>
-                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ? 
-                                            'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
+                                            <button onClick={() => setSessionConfig({...sessionConfig, isOpen: !sessionConfig.isOpen})} className={`px-4 py-1.5 rounded-lg text-xs font-black text-white ${sessionConfig.isOpen ? 'bg-emerald-500' : 'bg-red-500'}`}>{sessionConfig.isOpen ? 'DIBUKA' : 'DITUTUP'}</button>
                                         </div>
                                     )}
-                                    
                                     <button onClick={handleSaveConfig} className="w-full bg-indigo-600 text-white text-xs font-bold py-3 rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200">Simpan Pengaturan</button>
                                 </div>
                             )}
@@ -1326,8 +1231,7 @@
                         </div>
 
                         <div className="p-4 pb-20 space-y-3">
-                            {filteredParticipants.length === 0 && isPeserta ? 
-                            (
+                            {filteredParticipants.length === 0 && isPeserta ? (
                                 <div className="text-center p-8 opacity-50">
                                     <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
                                     <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
@@ -1338,11 +1242,8 @@
                                     return (
                                         <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-bounce-in">
                                             <div className="flex justify-between items-start mb-3">
-                                                <div><h4 className="font-bold text-slate-800">{p.nama}</h4><p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas || 
-                                                '-'}</p></div>
-                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ? 
-                                                'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ? 
-                                                'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
+                                                <div><h4 className="font-bold text-slate-800">{p.nama}</h4><p className="text-xs text-slate-500 font-bold">{p.kategori} • {p.kelas || '-'}</p></div>
+                                                {statusData && <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${statusData.status === 'Hadir' ? 'bg-emerald-500' : statusData.status === 'Sakit' ? 'bg-blue-500' : statusData.status === 'Izin' ? 'bg-orange-500' : 'bg-red-500'}`}>{statusData.status}</span>}
                                             </div>
                                             <div className="grid grid-cols-4 gap-2">
                                                 <button onClick={() => handleManualAttendance(p, 'Hadir')} className="bg-emerald-50 text-emerald-600 border-b-2 border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold">Hadir</button>
@@ -1365,7 +1266,7 @@
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
                     <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
                         <div className="flex items-center justify-between mb-4">
-                            <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
+                             <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
                              <div className="text-right">
                                 <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
                                 <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
@@ -1374,22 +1275,20 @@
                         
                         <div className="flex gap-2 items-center mb-2">
                             <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 text-slate-600 text-xs font-bold p-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-indigo-400" />
-                            
                             <button onClick={handleExportAttendance} className="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 border-2 border-green-200 flex-1 text-xs font-bold flex items-center justify-center gap-1">
                                 <i data-lucide="download" width="14"></i> Export Excel
                             </button>
                         </div>
                         
                         {!isPeserta && liveAttendance.length > 0 && (
-                            <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
+                             <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
                                 <i data-lucide="trash-2" width="12"></i> Hapus Data Tanggal Ini
                             </button>
                         )}
                         
                       </div>
                     <div className="flex-1 p-4 pb-20 overflow-y-auto">
-                        {liveAttendance.length === 0 ? 
-                        (
+                        {liveAttendance.length === 0 ? (
                             <div className="text-center mt-10 opacity-50">
                                 <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
                                 <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
@@ -1399,9 +1298,7 @@
                                 {liveAttendance.map((item, idx) => (
                                     <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-bounce-in">
                                         <div className={`font-black text-xs p-3 rounded-xl min-w-[60px] text-center ${item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>{item.jam}<span className="block text-[8px] opacity-60 font-normal">WIB</span></div>
-                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ? 
-                                        'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ? 
-                                        'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
+                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ? 'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ? 'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
                                     </div>
                                 ))}
                             </div>
@@ -1411,36 +1308,91 @@
                 );
             }
 
+            // --- SCANNER VIEW (Updated with Camera Toggle) ---
             if (view === 'scan') {
                 const totalHadir = liveAttendance.length;
                 return (
                 <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
-                    <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
-                    {attendanceMode && (<button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 
-                    text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg"><i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span></button>)}
+                    
+                    {/* TOMBOL KEMBALI */}
+                    <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50">
+                        <i data-lucide="arrow-left" width="18"></i> Kembali
+                    </button>
+
+                    {/* COUNTER HADIR */}
+                    {attendanceMode && (
+                        <button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg">
+                            <i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span>
+                        </button>
+                    )}
+
                     <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
-                        <div id="reader" className="w-full h-auto bg-black"></div>
+                        
+                        {/* AREA KAMERA */}
+                        <div className="relative bg-black">
+                            <div id="reader" className="w-full h-auto min-h-[300px]"></div>
+                            
+                            {/* TOMBOL GANTI KAMERA */}
+                            {!scanResult && (
+                                <button onClick={toggleCamera} className="absolute bottom-4 right-4 bg-white/20 hover:bg-white/40 backdrop-blur-md p-3 rounded-full text-white border-2 border-white/50 z-10 transition-transform active:scale-95 shadow-lg" title="Ganti Kamera">
+                                    <i data-lucide="refresh-ccw" width="24" height="24"></i>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* POPUP HASIL SCAN */}
                         {scanResult && (
-                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ? 
-                            'bg-white' : 'bg-red-50'}`}>
-                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ? 
-                                'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i></div>
-                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ? 
-                                'text-slate-800' : 'text-rose-600'}`}>{scanResult.success ? 'Data Ditemukan!' : 'Data Tidak Ada'}</h3>
-                                <p className="text-center text-sm text-slate-500 font-bold mb-4">{scanResult.msg}</p>
-                                {scanResult.success && scanResult.p && (<div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative">{scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs 
-                                font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}<div><p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p><p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p></div><div className="flex gap-4"><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p></div><div><p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p><p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || 
-                                '-'}</p></div></div></div>)}
-                                <button onClick={() => { setScanResult(null);
-                                startScanner(); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">Scan Lagi</button>
+                            <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ? 'bg-white' : 'bg-rose-50'}`}>
+                                
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto -mt-14 border-4 border-white shadow-lg mb-3 ${scanResult.success ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                    <i data-lucide={scanResult.success ? "check" : "x"} width="32" height="32"></i>
+                                </div>
+
+                                <h3 className={`text-xl font-black text-center mb-1 ${scanResult.success ? 'text-slate-800' : 'text-rose-600'}`}>
+                                    {scanResult.msg}
+                                </h3>
+                                
+                                {scanResult.subMsg && (
+                                    <p className="text-center text-sm text-slate-500 font-bold mb-4 uppercase tracking-wide">
+                                        {scanResult.subMsg}
+                                    </p>
+                                )}
+
+                                {scanResult.success && scanResult.p && (
+                                    <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative mt-4">
+                                        {scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p>
+                                            <p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Kategori</p>
+                                                <p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p>
+                                                <p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button onClick={() => { setScanResult(null); }} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold mt-2">
+                                    Scan Lagi
+                                </button>
                             </div>
                         )}
                     </div>
                     
-                    <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">Arahkan kamera ke QR Code peserta untuk cek data & simpan kehadiran.</p>
+                    <p className="text-white/50 text-xs font-bold mt-6 text-center max-w-xs">
+                        {cameraFacing === 'environment' ? 'Kamera Belakang' : 'Kamera Depan'} Aktif <br/>
+                        Tap ikon putar untuk ganti kamera.
+                    </p>
                 </div>
-            );
+                );
             }
+
             if (view === 'edit_theme') return (
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
@@ -1466,12 +1418,12 @@
                                 </div>
                             ))}
                         </div>
-                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed 
-                        border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
+                        <button onClick={handleAddWeek} className="w-full py-4 rounded-xl border-2 border-dashed border-indigo-300 text-indigo-500 font-bold mt-4 hover:bg-indigo-50 transition flex items-center justify-center gap-2"><i data-lucide="plus-circle" width="20"></i> Tambah Minggu Baru</button>
                         <div className="sticky bottom-4 mt-6 space-y-2"><button onClick={handleSaveTheme} className="w-full btn-playful btn-blue py-4 rounded-2xl font-black text-lg shadow-xl shadow-sky-200">SIMPAN PERUBAHAN</button></div>
                     </div>
                 </div>
             );
+
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
@@ -1482,20 +1434,16 @@
                                 <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
                                 <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
                                 <span className="text-sm font-bold text-indigo-600 block">Import User (Excel/CSV)</span>
-                                <span className="text-[10px] text-gray-400 block">Format: Username, Password, Nama, Role</span>
+                                <span className="text-xs text-gray-400">Format: Username, Password, Nama, Role</span>
                             </div>
                         </div>
                         
                         <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
-                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? 
-                            <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
+                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
                              <div className="space-y-3">
-                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 
-                                'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
+                                 <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
                                 <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
-                                <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" 
-                                value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
-                                
+                                <input placeholder="Nama Lengkap" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.nama} onChange={e => setNewUser({...newUser, nama: e.target.value})} />
                                 <select className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 bg-white" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
                                     <option value="petugas">Petugas</option>
                                     <option value="admin">Admin</option>
@@ -1504,25 +1452,13 @@
                                     <option value="pembimbing">Pembimbing</option>
                                     <option value="pendeta">Pendeta</option>
                                  </select>
-                                
-                                <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 
-                                'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null); 
-                                setNewUser({ username: '', password: '', role: 'petugas', nama: '' }); 
-                                }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
+                                <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null); setNewUser({ username: '', password: '', role: 'petugas', nama: '' }); }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
                             </div>
                         </div>
                         
                         <div className="space-y-2 pb-10">
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest">User Terdaftar</h3>
-                            
-                            <input 
-                                type="text" 
-                                placeholder="Cari username atau nama..." 
-                                className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700 mb-2"
-                                value={filterUser}
-                                onChange={(e) => setFilterUser(e.target.value)}
-                            />
-
+                            <input type="text" placeholder="Cari username atau nama..." className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700 mb-2" value={filterUser} onChange={(e) => setFilterUser(e.target.value)} />
                             {users.filter(u => u.username.toLowerCase().includes(filterUser.toLowerCase()) || u.nama.toLowerCase().includes(filterUser.toLowerCase())).map(u => (
                                 <div key={u.username} className={`bg-white p-4 rounded-2xl shadow-sm border-2 flex justify-between items-center ${editingId === u.username ? 'border-amber-400 bg-amber-50' : 'border-slate-100'}`}>
                                     <div><p className="font-bold text-slate-700">{u.username}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama} • {u.role}</p></div>
@@ -1542,13 +1478,13 @@
                     {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
                 </div>
             );
+
             if (view === 'generate') return (
                 <div key="view-generate" className="min-h-screen bg-slate-100 p-4">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
                         <div className="bg-white rounded-xl shadow p-6">
                             <h2 className="font-bold text-xl mb-6 text-indigo-800 flex items-center gap-2"><i data-lucide="users"></i> SM GKPS RESORT TANGERANG</h2>
-                            
                             <div className="mb-6 space-y-4">
                                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition">
                                     <input type="file" accept=".csv, .xlsx, .xls" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" />
@@ -1556,37 +1492,29 @@
                                     <span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span>
                                     <span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span>
                                 </div>
-                                
                                 <button onClick={() => setShowAddForm(!showAddForm)} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 py-2 rounded transition">+ Input Manual</button>
-                                
                                 {showAddForm && (
                                     <div className="bg-slate-50 p-4 rounded border animate-bounce-in">
-                                        <h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ? 
-                                        'Edit Peserta' : 'Tambah Peserta'}</h3>
+                                        <h3 className="font-bold text-xs mb-2 text-gray-500 uppercase">{editingId ? 'Edit Peserta' : 'Tambah Peserta'}</h3>
                                         <input className="w-full p-2 border rounded mb-2" placeholder="Nama Lengkap" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} />
-                                        <select className="w-full 
-                                        p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
+                                        <select className="w-full p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
                                             <option>Anak Sekolah Minggu</option><option>GSM</option><option>Panitia</option><option>Umum</option><option>Kelas</option> 
                                         </select>
                                         <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
                                             <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                         <div className="flex gap-2">
-                                            <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 
-                                            'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
-                                            {editingId && <button onClick={() => { setEditingId(null); 
-                                            setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
+                                            <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
+                                            {editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
                                         </div>
                                     </div>
                                 )}
                             </div>
 
-                            {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 
-                            'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
+                            {participants.length > 0 && <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold mb-6 flex justify-center gap-2 transition">{isDownloading ? 'Sedang Download...' : <><i data-lucide="download"></i> Download Semua QR</>}</button>}
                             
                             <div className="grid grid-cols-2 gap-3">
-                                {participants.map(p => 
-                                (
+                                {participants.map(p => (
                                     <div key={p.id} className={`border p-3 rounded text-center bg-white shadow-sm hover:shadow-md transition relative ${editingId === p.id ? 'border-amber-400 bg-amber-50' : ''}`}>
                                         <div className="absolute top-2 right-2 flex gap-1">
                                             <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button>
@@ -1605,6 +1533,7 @@
                     {deleteConfig.show && <DeleteConfirmModal />}
                 </div>
             );
+
             if (view === 'my_barcode') {
                 const p = participants.find(item => item.nama.toLowerCase() === safeUser.nama.toLowerCase());
                 const qrId = p ? p.id : safeUser.username;
@@ -1612,8 +1541,7 @@
                 return (
                     <div className="min-h-screen bg-indigo-600 p-4 flex flex-col items-center justify-center relative">
                         <button onClick={handleBackToMenu} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
-                        <div className="bg-white 
-                        p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center animate-bounce-in relative overflow-hidden">
+                        <div className="bg-white p-8 rounded-[40px] shadow-2xl w-full max-w-sm text-center animate-bounce-in relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500"></div>
                             <div className="mb-6">
                                 <h2 className="text-2xl font-black text-slate-800 font-fredoka mb-1">{safeUser.nama}</h2>
@@ -1621,8 +1549,7 @@
                             </div>
                             <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
                                 <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-4 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Scan Me</div>
-                                <img src={qrUrl} 
-                                alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
+                                <img src={qrUrl} alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
                             </div>
                             <p className="text-slate-400 text-xs font-bold w-3/4 mx-auto leading-relaxed">Tunjukkan QR Code ini kepada petugas sebagai identitas.</p>
                         </div>
@@ -1630,13 +1557,10 @@
                 );
             }
             
-            // --- UPDATED VIEW: BROADCAST MANAGER ---
             if (view === 'manage_broadcast') return (
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
                         <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
-                        
-                        {/* FORM INPUT BROADCAST */}
                         <div className="bg-white rounded-3xl shadow-lg p-6 border-2 border-indigo-100 mb-6">
                              <div className="flex items-center gap-3 mb-4 text-indigo-600">
                                 <div className="bg-indigo-100 p-2 rounded-lg"><i data-lucide="megaphone" width="24"></i></div>
@@ -1657,7 +1581,7 @@
                                         <select className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400" value={broadcastForm.type} onChange={e => setBroadcastForm({...broadcastForm, type: e.target.value})}>
                                             <option value="info">ℹ️ Info (Biru)</option>
                                             <option value="urgent">⚠️ Penting (Merah)</option>
-                                         </select>
+                                        </select>
                                     </div>
                                     <div className="flex-1">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Jadwal (Opsional)</label>
@@ -1667,37 +1591,29 @@
                                 
                                 <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg mt-2 flex items-center justify-center gap-2">
                                     <i data-lucide="send" width="18"></i> 
-                                    {broadcastForm.schedule ? 
-                                    'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
+                                    {broadcastForm.schedule ? 'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
                                 </button>
                                 {broadcastForm.schedule && <p className="text-center text-[10px] text-slate-400 font-bold">Akan muncul otomatis pada: {new Date(broadcastForm.schedule).toLocaleString('id-ID')}</p>}
                             </div>
                         </div>
 
-                        {/* LIST ARSIP / HISTORY */}
                         <div>
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest mb-3">Arsip / Riwayat Pesan</h3>
                             <div className="space-y-3">
-                                {broadcastHistory.length === 0 ? 
-                                (
+                                {broadcastHistory.length === 0 ? (
                                     <div className="text-center p-8 opacity-50 border-2 border-dashed border-slate-300 rounded-xl">
                                         <p className="font-bold text-sm text-slate-400">Belum ada riwayat broadcast.</p>
-                                     </div>
+                                    </div>
                                 ) : (
                                     broadcastHistory.map((item) => (
-                                      <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
-                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i 
-                                            data-lucide="trash-2" width="16"></i></button>
-                                            
+                                        <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
+                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" width="16"></i></button>
                                             <div className="flex items-center gap-2 mb-2">
-                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ? 
-                                                'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
+                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ? 'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
                                                 {item.scheduledAt && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="clock" width="10"></i> Terjadwal</span>}
                                             </div>
-
                                             <h4 className="font-bold text-slate-800 text-sm mb-1">{item.title}</h4>
                                             <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.message}</p>
-                                            
                                             <div className="flex justify-between items-center pt-2 border-t border-slate-50">
                                                 <span className="text-[10px] text-slate-400 font-bold"><i data-lucide="user" width="10" className="inline mr-1"/>{item.sender}</span>
                                                 <div className="text-right">
@@ -1713,7 +1629,6 @@
                     </div>
                 </div>
             );
-            // ------------------------------------
 
             if (view === 'change_password') return (
                 <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
@@ -1725,8 +1640,7 @@
                     </div>
                 </div>
             );
-            
-            // --- FAILSAFE RETURN (ERROR STATE) ---
+
             if (connectionError) {
                  return (
                      <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
@@ -1743,7 +1657,7 @@
                  );
             }
 
-            return null; // Should not reach here
+            return null;
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
