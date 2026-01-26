@@ -180,7 +180,7 @@
             const [scanResult, setScanResult] = useState(null);
             const scannerRef = useRef(null);
             const isScanning = useRef(false);
-            const [cameraFacing, setCameraFacing] = useState('environment'); // STATE KAMERA BARU
+            const [cameraFacing, setCameraFacing] = useState('environment'); // STATE KAMERA
 
             const [themeData, setThemeData] = useState(null);
             const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
@@ -544,6 +544,8 @@
                             const now = new Date();
                             const todayStr = getSafeDateId();
                             const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                            
+                            // INTEGRASI INPUT ABSEN
                             const attendanceData = {
                                 id: p.id,
                                 nama: p.nama,
@@ -1168,7 +1170,7 @@
                             <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
                             
                             <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; {new Date().getFullYear()} SM GKPS Resort Tangerang</p>
+                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang</p>
                                 <p className="text-[9px] text-slate-300 font-medium">Dibuat untuk Kemuliaan Tuhan</p>
                             </div>
                         </div>
@@ -1308,18 +1310,15 @@
                 );
             }
 
-            // --- SCANNER VIEW (Updated with Camera Toggle) ---
             if (view === 'scan') {
                 const totalHadir = liveAttendance.length;
                 return (
                 <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
                     
-                    {/* TOMBOL KEMBALI */}
                     <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50">
                         <i data-lucide="arrow-left" width="18"></i> Kembali
                     </button>
 
-                    {/* COUNTER HADIR */}
                     {attendanceMode && (
                         <button onClick={() => setView('live_report')} className="absolute top-6 right-6 btn-playful bg-emerald-500 text-white hover:bg-emerald-600 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-b-4 border-emerald-700 z-50 text-xs shadow-lg">
                             <i data-lucide="users" width="16"></i> <span>{totalHadir} Hadir</span>
@@ -1328,11 +1327,9 @@
 
                     <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl relative">
                         
-                        {/* AREA KAMERA */}
                         <div className="relative bg-black">
                             <div id="reader" className="w-full h-auto min-h-[300px]"></div>
                             
-                            {/* TOMBOL GANTI KAMERA */}
                             {!scanResult && (
                                 <button onClick={toggleCamera} className="absolute bottom-4 right-4 bg-white/20 hover:bg-white/40 backdrop-blur-md p-3 rounded-full text-white border-2 border-white/50 z-10 transition-transform active:scale-95 shadow-lg" title="Ganti Kamera">
                                     <i data-lucide="refresh-ccw" width="24" height="24"></i>
@@ -1340,7 +1337,6 @@
                             )}
                         </div>
 
-                        {/* POPUP HASIL SCAN */}
                         {scanResult && (
                             <div className={`absolute bottom-0 left-0 w-full p-6 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-bounce-in z-20 ${scanResult.success ? 'bg-white' : 'bg-rose-50'}`}>
                                 
