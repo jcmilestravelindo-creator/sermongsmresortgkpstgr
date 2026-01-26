@@ -517,65 +517,74 @@
                 }
             };
 
-            // Scanner Logic
-            useEffect(() => { 
-                if (view === 'scan' && !scanResult) { 
-                    setTimeout(startScanner, 300); 
-                    return () => stopScanner(); 
-                } 
-            }, [view, scanResult]);
+            // --- FIXED SCANNER LOGIC ---
+            useEffect(() => {
+                let html5QrcodeScanner = null;
 
-           const startScanner = () => { 
-                // Cek agar tidak double start
-                if (isScanning.current) return;
-                
-                // Bersihkan scanner lama jika masih nyangkut di memori
-                if (scannerRef.current) { 
-                    try { scannerRef.current.clear().catch(()=>{}); } catch(e){} 
-                }
-                
-                // --- KONFIGURASI BARU AGAR KOMPATIBEL DENGAN HP ---
-                const config = { 
-                    fps: 10, 
-                    // Logika QR Box dinamis: menyesuaikan ukuran layar HP agar tidak error
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                        return { 
-                            width: Math.min(minEdge * 0.8, 250), // Maksimal 250px atau 80% layar
-                            height: Math.min(minEdge * 0.8, 250) 
-                        };
-                    },
-                    // Hapus aspectRatio statis (1.0) agar tampilan kamera di HP Portrait tidak gepeng
-                    // Paksa menggunakan kamera belakang (environment)
-                    videoConstraints: {
-                        facingMode: "environment" 
-                    },
-                    rememberLastUsedCamera: true
+                const initScanner = () => {
+                    // Pastikan elemen reader tersedia dan belum ada scanner yang jalan
+                    if (view === 'scan' && !scanResult && document.getElementById("reader")) {
+                        
+                        // Hapus scanner lama jika ada instance yang nyangkut (cleanup safety)
+                        try {
+                            if(scannerRef.current) {
+                                scannerRef.current.clear().catch(() => {});
+                                scannerRef.current = null;
+                            }
+                        } catch(e) {}
+
+                        // Inisialisasi Scanner Baru
+                        // Gunakan qrbox integer (250) agar responsif, hapus aspectRatio fix agar tidak gepeng di HP
+                        html5QrcodeScanner = new Html5QrcodeScanner(
+                            "reader", 
+                            { 
+                                fps: 10, 
+                                qrbox: 250,
+                                aspectRatio: undefined, // Biarkan otomatis agar tidak gepeng
+                                disableFlip: false 
+                            }, 
+                            false
+                        );
+
+                        html5QrcodeScanner.render(
+                            (decodedText) => {
+                                // SUKSES SCAN
+                                handleScanSuccess(decodedText);
+                                
+                                // Segera matikan kamera setelah sukses agar tidak scan berulang kali
+                                if (html5QrcodeScanner) {
+                                    html5QrcodeScanner.clear().catch(error => {
+                                        console.error("Failed to clear html5QrcodeScanner. ", error);
+                                    });
+                                }
+                            }, 
+                            (errorMessage) => {
+                                // Ignore parse errors (karena scanning terus menerus)
+                            }
+                        );
+
+                        scannerRef.current = html5QrcodeScanner;
+                    }
                 };
 
-                // Bungkus dengan Try-Catch untuk menangkap error izin kamera
-                try {
-                    const scanner = new Html5QrcodeScanner("reader", config, false);
-                    
-                    scanner.render((decodedText) => { 
-                        handleScanSuccess(decodedText);
-                        
-                        // Stop scanner setelah berhasil scan agar tidak spamming data
-                        scanner.clear().then(() => {
-                            isScanning.current = false;
-                            scannerRef.current = null;
-                        }).catch((err) => { console.error("Failed to clear scanner", err); });
-                    }, (error) => {
-                        // Error scanning frame (biasa terjadi saat mencari QR), biarkan kosong agar console bersih
-                    });
-
-                    scannerRef.current = scanner; 
-                    isScanning.current = true;
-                } catch (e) {
-                    console.error("Scanner Error:", e);
-                    alert("Gagal membuka kamera. Pastikan izin kamera diberikan dan akses menggunakan HTTPS.");
+                // Beri jeda sedikit agar DOM "reader" siap dirender oleh React
+                let timeoutId;
+                if (view === 'scan' && !scanResult) {
+                    timeoutId = setTimeout(initScanner, 500);
                 }
-            };
+
+                // Cleanup Function: Dijalankan saat pindah menu atau dapat hasil scan
+                return () => {
+                    clearTimeout(timeoutId);
+                    if (html5QrcodeScanner) {
+                        html5QrcodeScanner.clear().catch(() => {});
+                    }
+                    scannerRef.current = null;
+                    isScanning.current = false;
+                };
+            }, [view, scanResult]);
+
+            // (Fungsi startScanner dan stopScanner yang lama sudah tidak dibutuhkan lagi karena sudah di-handle useEffect di atas)
 
             const handleScanSuccess = (qrId) => {
                 const isModeLive = attendanceModeRef.current;
@@ -1078,7 +1087,7 @@
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
                         <div className="text-center mb-8">
                             <img src="logotema.png" alt="Logo GKPS" className="w-32 mx-auto mb-4 drop-shadow-md object-contain" />
-                            <h1 className="text-3xl font-black text-sky-600 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Ijon do ahu, suruh ma ahu Tuhan</h1>
+                            <h1 className="text-3xl font-black text-sky-600 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Pamasuk Ham Ma Au</h1>
                             <p className="text-slate-500 font-bold text-sm mt-1 bg-white/50 inline-block px-3 py-1 rounded-full">Sistem Daftar Hadir GSM</p>
                             <p className="text-slate-400 font-bold text-xs mt-1">SM GKPS Resort Tangerang</p>
                         </div>
