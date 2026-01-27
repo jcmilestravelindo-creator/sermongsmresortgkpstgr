@@ -58,9 +58,9 @@
     </style>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
@@ -285,15 +285,14 @@
                 initAuth();
             }, [dbReady, refreshKey]);
 
-            // --- FIRESTORE LISTENERS (GLOBAL DATA) ---
+            // --- FIRESTORE LISTENERS ---
             useEffect(() => {
                 if (!dbReady || !userAuth) return;
 
                 const db = window.db; 
-                const { collection, doc, onSnapshot } = window.fs;
+                const { collection, doc, onSnapshot, query, orderBy } = window.fs;
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
-                // Listener Users
                 const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), 
                     (snap) => {
                         const loadedUsers = snap.docs.map(d => d.data());
@@ -304,19 +303,16 @@
                     (err) => console.log("Users sync waiting...")
                 );
 
-                // Listener Participants
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), 
                     (snap) => setParticipants(snap.docs.map(d => d.data())),
                     (err) => console.log("Partcipants sync waiting...")
                 );
 
-                // Listener Theme
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), 
                     (snap) => setThemeData(snap.exists() ? snap.data() : null),
                     (err) => {}
                 );
 
-                // Listener Announcements
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
@@ -348,7 +344,6 @@
                     }
                 }, (err) => {});
 
-                // Listener History
                 const unsubscribeBroadcastHistory = onSnapshot(collection(db, `${publicDataPath}/broadcast_history`), 
                     (snap) => {
                         const hist = snap.docs.map(d => d.data()).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -357,7 +352,26 @@
                     (err) => {}
                 );
 
-                // Listener Config Session
+                // --- FIX: REMOVE ORDERBY TO PREVENT INDEX ERRORS ON BACKDATE ---
+                const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
+                let unsubscribeAttendance = () => {};
+                setLiveAttendance([]); // Reset state to prevent stale data
+                
+                try {
+                    const q = query(collection(db, attendancePath)); // Simplified query without orderBy
+                    unsubscribeAttendance = onSnapshot(q, (snap) => {
+                        const data = snap.docs.map(d => d.data());
+                        // Client-side sorting
+                        data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                        setLiveAttendance(data);
+                    }, (err) => {
+                        console.error("Att Error:", err);
+                        setLiveAttendance([]);
+                    });
+                } catch(e) {
+                    console.error("Att Setup Error:", e);
+                }
+
                 const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
                 try {
@@ -366,46 +380,16 @@
                     }, (err) => {});
                 } catch(e) {}
 
-                // CLEANUP GLOBAL LISTENERS
                 return () => {
                     unsubscribeUsers();
                     unsubscribeParticipants(); 
                     unsubscribeTheme();
                     unsubscribeAnnouncements();
                     unsubscribeBroadcastHistory();
+                    unsubscribeAttendance();
                     unsubscribeConfig();
                 };
-            }, [dbReady, userAuth, refreshKey]); // HAPUS viewDate DARI SINI
-
-            // --- FIRESTORE LISTENER (KHUSUS ABSENSI HARIAN) ---
-            useEffect(() => {
-                if (!dbReady || !userAuth) return;
-                const db = window.db; 
-                const { collection, onSnapshot, query, orderBy } = window.fs;
-
-                const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
-                let unsubscribeAttendance = () => {};
-                
-                try {
-                    // Coba query dengan sorting timestamp
-                    const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
-                    
-                    unsubscribeAttendance = onSnapshot(q, (snap) => {
-                        const data = snap.docs.map(d => d.data());
-                        setLiveAttendance(data);
-                    }, (err) => {
-                        // Jika error (misal index belum ada atau path kosong), set kosong
-                        console.log("Attendance sync empty/error for date:", viewDate);
-                        setLiveAttendance([]);
-                    });
-                } catch(e) {
-                    setLiveAttendance([]);
-                }
-
-                return () => {
-                    unsubscribeAttendance();
-                };
-            }, [dbReady, userAuth, viewDate, refreshKey]); // HANYA INI YANG BERGANTUNG PADA TANGGAL
+            }, [dbReady, userAuth, viewDate, refreshKey]);
 
             // --- UTILITIES ---
             const checkSessionStatus = () => {
