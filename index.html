@@ -290,7 +290,7 @@
                 if (!dbReady || !userAuth) return;
 
                 const db = window.db; 
-                const { collection, doc, onSnapshot, query, orderBy } = window.fs;
+                const { collection, doc, onSnapshot, query, getDocs } = window.fs;
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
                 const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), 
@@ -352,25 +352,40 @@
                     (err) => {}
                 );
 
-                // --- FIX: REMOVE ORDERBY TO PREVENT INDEX ERRORS ON BACKDATE ---
+                // --- PERBAIKAN BESAR: ATTENDANCE LISTENER UNTUK BACKDATE ---
+                const today = getSafeDateId();
+                const isToday = viewDate === today;
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
-                setLiveAttendance([]); // Reset state to prevent stale data
                 
-                try {
-                    const q = query(collection(db, attendancePath)); // Simplified query without orderBy
-                    unsubscribeAttendance = onSnapshot(q, (snap) => {
-                        const data = snap.docs.map(d => d.data());
-                        // Client-side sorting
-                        data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                        setLiveAttendance(data);
-                    }, (err) => {
-                        console.error("Att Error:", err);
+                const fetchAttendanceData = async () => {
+                    try {
+                        if (isToday) {
+                            // Untuk hari ini, gunakan realtime listener
+                            const q = query(collection(db, attendancePath));
+                            unsubscribeAttendance = onSnapshot(q, (snap) => {
+                                const data = snap.docs.map(d => d.data());
+                                data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                                setLiveAttendance(data);
+                            }, (err) => {
+                                console.error("Attendance listener error:", err);
+                                setLiveAttendance([]);
+                            });
+                        } else {
+                            // Untuk backdate, gunakan getDocs sekali saja (tidak perlu realtime)
+                            const querySnapshot = await getDocs(collection(db, attendancePath));
+                            const data = querySnapshot.docs.map(d => d.data());
+                            data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                            setLiveAttendance(data);
+                        }
+                    } catch (e) {
+                        console.error("Error fetching attendance:", e);
                         setLiveAttendance([]);
-                    });
-                } catch(e) {
-                    console.error("Att Setup Error:", e);
-                }
+                    }
+                };
+
+                setLiveAttendance([]); // Reset state sebelum mengambil data baru
+                fetchAttendanceData();
 
                 const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
