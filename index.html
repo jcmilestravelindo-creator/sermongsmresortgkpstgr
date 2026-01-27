@@ -172,8 +172,15 @@
             const [participants, setParticipants] = useState([]);
             const [isConnected, setIsConnected] = useState(false);
             const [userAuth, setUserAuth] = useState(null);
+            
             // --- UI/Feature States ---
             const [scanResult, setScanResult] = useState(null);
+            
+            // ============================================
+            // [BARU] STATE MAINTENANCE
+            // ============================================
+            const [isMaintenance, setIsMaintenance] = useState(false);
+
             const scannerRef = useRef(null);
             const isScanning = useRef(false);
             const [cameraFacing, setCameraFacing] = useState('environment');
@@ -306,7 +313,17 @@
                     (snap) => setParticipants(snap.docs.map(d => d.data())),
                     (err) => console.log("Partcipants sync waiting...")
                 );
-                
+
+                // ========================================================
+                // [BARU] LISTENER UNTUK MAINTENANCE MODE
+                // ========================================================
+                const unsubscribeSystem = onSnapshot(doc(db, `${publicDataPath}/config`, 'system'), (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        setIsMaintenance(data.maintenanceMode === true);
+                    }
+                }, (err) => console.log("Config sync waiting..."));
+
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), 
                     (snap) => setThemeData(snap.exists() ? snap.data() : null),
                     (err) => {}
@@ -388,6 +405,7 @@
                     unsubscribeBroadcastHistory();
                     unsubscribeAttendance();
                     unsubscribeConfig();
+                    unsubscribeSystem(); // <--- CLEANUP MAINTENANCE LISTENER
                 };
             }, [dbReady, userAuth, viewDate, refreshKey]);
 
@@ -863,141 +881,6 @@
                 </div>
             );
 
-            // --- ACTION HANDLERS ---
-            const handleLogin = (e) => {
-                e.preventDefault();
-                const form = e.target;
-                const usernameInput = form.username.value;
-                const passwordInput = form.password.value;
-                if (usernameInput === 'admin' && passwordInput === 'admin123') {
-                    const emergencyAdmin = { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' };
-                    setCurrentUser(emergencyAdmin);
-                    localStorage.setItem('gkps_user', JSON.stringify(emergencyAdmin));
-                    setView('menu');
-                    setNotification(`Selamat Datang, Super Admin!`);
-                    setTimeout(() => setNotification(null), 3000);
-                    return;
-                }
-                const foundUser = users.find(u => u.username === usernameInput && u.password === passwordInput);
-                if (foundUser) {
-                    setCurrentUser(foundUser);
-                    localStorage.setItem('gkps_user', JSON.stringify(foundUser));
-                    setView('menu');
-                    setNotification(`Selamat Datang, ${foundUser.nama}!`);
-                    setTimeout(() => setNotification(null), 3000);
-                } else {
-                    alert("Username atau Password Salah!");
-                    playErrorSound();
-                }
-            };
-
-            const handleLogoutClick = () => setIsLogoutModalOpen(true);
-            const performLogout = () => {
-                setCurrentUser(null);
-                localStorage.removeItem('gkps_user');
-                localStorage.removeItem('gkps_last_view'); 
-                setIsLogoutModalOpen(false);
-                setViewRaw('login'); 
-            };
-
-            const initiateDelete = (path) => setDeleteConfig({ show: true, path });
-            const performDelete = () => {
-                if (deleteConfig.path) {
-                    deleteFromCloud(deleteConfig.path);
-                    setDeleteConfig({ show: false, path: null });
-                }
-            };
-            
-            const handleResetPassword = () => {
-                if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
-                    playErrorSound();
-                    return alert("Kode Otorisasi SALAH! Harap masukkan kode yang benar.");
-                }
-                if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
-                saveToCloud(`users/${resetForm.username}`, { 
-                    username: resetForm.username, 
-                    password: resetForm.newPassword,
-                    role: 'admin', 
-                    nama: 'Recovered Admin' 
-                }).then(() => {
-                    alert("Password Admin Berhasil Direset!");
-                    setView('login');
-                }).catch((err) => {
-                    console.error(err);
-                    if (err.message.includes("permissions") || err.message.includes("permission")) {
-                        const emergencyUser = { username: resetForm.username, password: resetForm.newPassword, role: 'admin', nama: 'Super Admin' };
-                        setCurrentUser(emergencyUser);
-                        localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
-                        alert("Password Admin Berhasil Direset!"); 
-                        setView('menu');
-                    } else { alert("Gagal koneksi: " + err.message); }
-                });
-            };
-
-            const initiateAdminReset = (u) => setAdminResetConfig({ show: true, user: u, newPass: '' });
-            const performAdminReset = () => {
-                if (!adminResetConfig.newPass || adminResetConfig.newPass.length < 3) return alert("Password minimal 3 karakter");
-                const updatedUser = { ...adminResetConfig.user, password: adminResetConfig.newPass };
-                saveToCloud(`users/${adminResetConfig.user.username}`, updatedUser);
-                setAdminResetConfig({ show: false, user: null, newPass: '' });
-                alert(`Password untuk ${adminResetConfig.user.username} berhasil direset!`);
-            };
-
-            const handleChangeSelfPassword = () => {
-                if(!selfPassword || selfPassword.length < 3) return alert("Password minimal 3 karakter!");
-                const updatedUser = { ...currentUser, password: selfPassword };
-                saveToCloud(`users/${currentUser.username}`, updatedUser);
-                setCurrentUser(updatedUser);
-                localStorage.setItem('gkps_user', JSON.stringify(updatedUser)); 
-                setSelfPassword('');
-                alert("Password berhasil diubah!");
-                handleBackToMenu();
-            };
-
-            const handleAddOrUpdateUser = () => {
-                if(!newUser.username || !newUser.password) return alert("Lengkapi data user!");
-                saveToCloud(`users/${newUser.username}`, newUser);
-                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
-                setEditingId(null); alert(editingId ? "User diupdate!" : "User ditambahkan!");
-            };
-
-            const startEditUser = (u) => { setNewUser(u); setEditingId(u.username); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-            
-            const handleAddOrUpdateParticipant = () => {
-                if(!formData.nama) return;
-                const id = editingId || `M-${Date.now()}`;
-                saveToCloud(`participants/${id}`, { id, nama: formData.nama, kategori: formData.kategori, kelas: formData.kelas });
-                setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setEditingId(null); if(editingId) setShowAddForm(false); alert("Tersimpan!");
-            };
-
-            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-
-            const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
-            const downloadSingleQR = async (p) => {
-                try {
-                    const scrollPos = window.scrollY;
-                    const res = await fetch(generateQRUrl(p.id)); const blob = await res.blob();
-                    const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-                    link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
-                    document.body.appendChild(link); link.click(); document.body.removeChild(link); window.scrollTo(0, scrollPos);
-                } catch (e) { window.open(generateQRUrl(p.id), '_blank'); }
-            };
-
-            const downloadAllQR = async () => {
-                if (participants.length === 0) return;
-                setIsDownloading(true); 
-                const scrollPos = window.scrollY;
-                for (const p of participants) { try {
-                    const res = await fetch(generateQRUrl(p.id));
-                    const blob = await res.blob(); const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob); link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
-                    document.body.appendChild(link);
-                    link.click(); document.body.removeChild(link); await new Promise(r => setTimeout(r, 600));
-                } catch (e) {} }
-                window.scrollTo(0, scrollPos);
-                setIsDownloading(false); alert("Selesai!");
-            };
-
             // --- LOADING SCREEN ---
             if (!dbReady) {
                 return (
@@ -1006,6 +889,50 @@
                             <div className="spinner mx-auto mb-4"></div>
                             <h1 className="text-xl font-black text-slate-700 mb-1">Menghubungkan Database...</h1>
                             <p className="text-xs text-slate-400">Mohon tunggu sebentar</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            // ========================================================
+            // [BARU] LAYAR MAINTENANCE (BLOKIR AKSES)
+            // ========================================================
+            // Jika Mode Maintenance AKTIF DAN User BUKAN Admin/Panitia, tampilkan layar ini.
+            if (isMaintenance && safeUser.role !== 'admin' && safeUser.role !== 'panitia') {
+                return (
+                    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-center animate-bounce-in relative overflow-hidden">
+                        {/* Background Animation */}
+                        <div className="absolute inset-0 opacity-10">
+                            <div className="absolute top-10 left-10 w-32 h-32 bg-yellow-500 rounded-full blur-3xl animate-pulse"></div>
+                            <div className="absolute bottom-10 right-10 w-40 h-40 bg-indigo-500 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+                        </div>
+
+                        <div className="relative z-10 bg-slate-800/50 backdrop-blur-xl p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-sm">
+                            <div className="w-24 h-24 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse">
+                                <i data-lucide="cone" className="text-amber-500 w-12 h-12"></i>
+                            </div>
+                            
+                            <h1 className="text-3xl font-black text-white mb-2 font-fredoka tracking-wide">MAINTENANCE</h1>
+                            <div className="h-1 w-20 bg-gradient-to-r from-amber-500 to-orange-600 rounded-full mx-auto mb-4"></div>
+                            
+                            <p className="text-slate-300 font-bold text-sm leading-relaxed mb-6">
+                                Sistem sedang dalam perbaikan berkala untuk meningkatkan performa.
+                            </p>
+
+                            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                                <p className="text-xs text-slate-400 font-mono">
+                                    Status: <span className="text-amber-400 font-bold">SERVER OFFLINE</span>
+                                </p>
+                                <p className="text-[10px] text-slate-500 mt-1">Silakan kembali beberapa saat lagi.</p>
+                            </div>
+                            
+                            {/* Tombol Login Admin (Rahasia) jika ingin bypass */}
+                            <button onClick={() => {
+                                const pass = prompt("Akses Admin (Bypass):");
+                                if(pass === "admin123") setView('login'); 
+                            }} className="mt-8 text-[10px] text-slate-600 hover:text-slate-400 uppercase tracking-widest font-bold">
+                                Login Admin
+                            </button>
                         </div>
                     </div>
                 );
@@ -1176,6 +1103,33 @@
                                                 <span className="font-black text-[10px]">RESET DATA PESERTA</span>
                                             </button>
                                         </div>
+                                    )}
+
+                                    {/* ============================================== */}
+                                    {/* [BARU] TOMBOL KONTROL MAINTENANCE */}
+                                    {/* ============================================== */}
+                                    {(isAdmin || isPanitia) && (
+                                        <button 
+                                            onClick={() => {
+                                                const confirmMsg = isMaintenance 
+                                                    ? "Matikan Mode Maintenance? User akan bisa akses kembali." 
+                                                    : "PERINGATAN: Aktifkan Mode Maintenance? Semua user (selain admin) akan diblokir dari aplikasi.";
+                                                
+                                                if (confirm(confirmMsg)) {
+                                                    saveToCloud('config/system', { maintenanceMode: !isMaintenance })
+                                                        .then(() => alert(isMaintenance ? "Akses dibuka kembali!" : "Sistem dikunci (Maintenance Mode)."));
+                                                }
+                                            }} 
+                                            className={`w-full btn-playful ${isMaintenance ? 'bg-amber-500 border-amber-700' : 'bg-slate-800 border-slate-950'} text-white p-3 rounded-xl flex items-center gap-3 shadow-lg mb-3 mt-2`}
+                                        >
+                                            <div className="bg-white/20 p-2 rounded-lg">
+                                                <i data-lucide={isMaintenance ? "unlock" : "lock"} width="18"></i>
+                                            </div>
+                                            <div className="text-left text-xs">
+                                                <h3 className="font-bold text-sm">{isMaintenance ? "Matikan Maintenance" : "Mode Maintenance"}</h3>
+                                                <p className="text-[10px] opacity-80">{isMaintenance ? "Buka Akses User" : "Tutup Akses & Perbaikan"}</p>
+                                            </div>
+                                        </button>
                                     )}
                                 </div>
                             )}
