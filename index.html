@@ -1172,7 +1172,7 @@
                             </div>
                         </div>
 
-                        {/* --- BAGIAN BAHAN AJAR (REDESIGNED) --- */}
+                            {/* --- BAGIAN BAHAN AJAR (REDESIGNED) --- */}
                         <div className="p-6 pb-0">
                             {themeData && themeData.title ? (
                                 <div className="mb-6 relative z-10">
@@ -1254,71 +1254,19 @@
                                 </button>
                             )}
 
+                            {/* TOMBOL DASHBOARD ADMIN BARU (MENGGANTIKAN LIST TOMBOL LAMA) */}
                             {!isPeserta && (
-                                <div className="bg-slate-50 p-4 rounded-3xl border-2 border-dashed border-slate-200 mt-4">
-                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Menu Admin</h4>
-                                    
-                                    <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-indigo-500 text-white border-b-4 border-indigo-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
-                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-check" width="20"></i></div>
-                                        <div className="text-left"><h3 className="font-bold">Kelola Absensi</h3><p className="text-[10px] text-indigo-100 opacity-90">Input Manual & Setting Jam</p></div>
-                                    </button>
-
-                                    <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="w-full btn-playful bg-sky-500 text-white border-b-4 border-sky-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
-                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="scan-line" width="20"></i></div>
-                                        <div className="text-left"><h3 className="font-bold">Scan QR Absensi</h3><p className="text-[10px] text-sky-100 opacity-90">Mode: Rekam Kehadiran</p></div>
-                                    </button>
-
-                                    {safeUser.role !== 'petugas' && (
-                                        <button onClick={() => { setView('live_report'); }} className="w-full btn-playful bg-emerald-500 text-white border-b-4 border-emerald-700 p-4 rounded-xl flex items-center gap-3 shadow-lg mb-3">
-                                            <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="clipboard-list" width="20"></i></div>
-                                            <div className="text-left"><h3 className="font-bold">Lihat Data Hadir</h3><p className="text-[10px] text-emerald-100 opacity-90">Laporan Realtime Hari Ini</p></div>
-                                        </button>
-                                     )}
-
-                                    <button onClick={() => setView('manage_broadcast')} className="w-full btn-playful bg-slate-700 text-white border-b-4 border-slate-900 p-3 rounded-xl flex items-center gap-3 shadow-lg shadow-slate-300 mb-3">
-                                        <div className="bg-white/20 p-2 rounded-lg"><i data-lucide="megaphone" width="18"></i></div>
-                                        <div className="text-left text-xs"><h3 className="font-bold text-sm">Broadcast Notifikasi</h3><p className="text-[10px] text-slate-200 opacity-90">Kirim Info ke Semua Layar</p></div>
-                                    </button>
-                                
-                                    {isAdmin && (<div className="grid grid-cols-1 gap-3 mb-3"><button onClick={() => setView('manage_users')} className="btn-playful btn-blue rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2 border-b-4 border-sky-700"><i data-lucide="user-cog"></i> Atur User</button></div>)}
-                                    {isAdmin && (<button onClick={() => setView('generate')} className="w-full btn-playful btn-white border-b-4 mb-3 p-3 rounded-xl flex items-center gap-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><i data-lucide="database" width="18"></i></div><div className="text-left text-xs"><h3 className="font-bold text-slate-700">DATABASE GSM GKPS RESORT</h3></div></button>)}
-                                    
-                                    {isAdmin && (
-                                        <div className="mt-4 pt-4 border-t border-dashed border-slate-300 space-y-2">
-                                            <button onClick={handleResetAllData} className="w-full btn-playful bg-rose-100 text-rose-600 border-b-4 border-rose-200 hover:bg-rose-200 p-3 rounded-xl flex items-center justify-center gap-2">
-                                                <i data-lucide="users" width="14"></i>
-                                                <span className="font-black text-[10px]">RESET DATA PESERTA</span>
-                                            </button>
+                                <button onClick={() => setView('admin_dashboard')} className="w-full btn-playful bg-slate-800 text-white border-b-4 border-slate-950 p-5 rounded-2xl flex items-center justify-between shadow-xl mt-4 group relative overflow-hidden transform hover:scale-[1.01] transition-transform">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                                    <div className="flex items-center gap-4 relative z-10">
+                                        <div className="bg-white/20 p-3 rounded-xl border border-white/10"><i data-lucide="layout-dashboard" width="24" height="24"></i></div>
+                                        <div className="text-left">
+                                            <h3 className="font-black text-xl font-fredoka">Dashboard Admin</h3>
+                                            <p className="text-xs text-slate-300 font-bold">Pusat Kontrol Aplikasi</p>
                                         </div>
-                                    )}
-
-                                    {/* ============================================== */}
-                                    {/* [BARU] TOMBOL KONTROL MAINTENANCE */}
-                                    {/* ============================================== */}
-                                    {(isAdmin || isPanitia) && (
-                                        <button 
-                                            onClick={() => {
-                                                const confirmMsg = isMaintenance 
-                                                    ? "Matikan Mode Maintenance? User akan bisa akses kembali." 
-                                                    : "PERINGATAN: Aktifkan Mode Maintenance? Semua user (selain admin) akan diblokir dari aplikasi.";
-                                                
-                                                if (confirm(confirmMsg)) {
-                                                    saveToCloud('config/system', { maintenanceMode: !isMaintenance })
-                                                        .then(() => alert(isMaintenance ? "Akses dibuka kembali!" : "Sistem dikunci (Maintenance Mode)."));
-                                                }
-                                            }} 
-                                            className={`w-full btn-playful ${isMaintenance ? 'bg-amber-500 border-amber-700' : 'bg-slate-800 border-slate-950'} text-white p-3 rounded-xl flex items-center gap-3 shadow-lg mb-3 mt-2`}
-                                        >
-                                            <div className="bg-white/20 p-2 rounded-lg">
-                                                <i data-lucide={isMaintenance ? "unlock" : "lock"} width="18"></i>
-                                            </div>
-                                            <div className="text-left text-xs">
-                                                <h3 className="font-bold text-sm">{isMaintenance ? "Matikan Maintenance" : "Mode Maintenance"}</h3>
-                                                <p className="text-[10px] opacity-80">{isMaintenance ? "Buka Akses User" : "Tutup Akses & Perbaikan"}</p>
-                                            </div>
-                                        </button>
-                                    )}
-                                </div>
+                                    </div>
+                                    <div className="bg-white/10 p-2 rounded-full"><i data-lucide="chevron-right" className="text-white relative z-10" width="20"></i></div>
+                                </button>
                             )}
                             
                             <button onClick={() => setView('change_password')} className="w-full py-3 text-slate-400 text-xs font-bold hover:text-slate-600 transition flex items-center justify-center gap-2"><i data-lucide="lock" width="12"></i> Ganti Password Saya</button>
@@ -1338,6 +1286,147 @@
                     <BroadcastPopup />
                 </div>
             );
+            }
+
+            // --- VIEW BARU: DASHBOARD ADMIN MODERN ---
+            if (view === 'admin_dashboard') {
+                const totalUsers = users.length;
+                const totalParticipants = participants.length;
+                const totalHadirToday = liveAttendance.length;
+
+                return (
+                    <div className="min-h-screen bg-slate-50 p-4 pb-20 animate-bounce-in">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-6 sticky top-0 bg-slate-50/90 backdrop-blur-md py-2 z-20">
+                            <button onClick={handleBackToMenu} className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-100 transition shadow-sm active:scale-95"><i data-lucide="arrow-left" width="20"></i></button>
+                            <div className="text-right">
+                                <h2 className="font-black text-2xl text-slate-800 font-fredoka">Dashboard</h2>
+                                <p className="text-xs font-bold text-slate-400">Control Center Admin</p>
+                            </div>
+                        </div>
+
+                        {/* Stats Row */}
+                        <div className="grid grid-cols-3 gap-3 mb-6">
+                            <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                <div className="text-indigo-500 mb-2 flex justify-center bg-indigo-50 p-2 rounded-full w-fit mx-auto"><i data-lucide="users" width="16"></i></div>
+                                <h3 className="font-black text-xl text-slate-700 leading-none mb-1">{totalParticipants}</h3>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">Total Peserta</p>
+                            </div>
+                            <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                <div className="text-emerald-500 mb-2 flex justify-center bg-emerald-50 p-2 rounded-full w-fit mx-auto"><i data-lucide="check-circle" width="16"></i></div>
+                                <h3 className="font-black text-xl text-slate-700 leading-none mb-1">{totalHadirToday}</h3>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">Hadir Hari Ini</p>
+                            </div>
+                            <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                <div className="text-amber-500 mb-2 flex justify-center bg-amber-50 p-2 rounded-full w-fit mx-auto"><i data-lucide="shield" width="16"></i></div>
+                                <h3 className="font-black text-xl text-slate-700 leading-none mb-1">{totalUsers}</h3>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">Total Admin</p>
+                            </div>
+                        </div>
+
+                        {/* Main Tools Grid */}
+                        <h3 className="font-black text-slate-400 text-xs uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><i data-lucide="grid" width="12"></i> Menu Utama</h3>
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            {/* Absensi */}
+                            <button onClick={() => setView('attendance_manager')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
+                                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="clipboard-check" width="24"></i></div>
+                                <h4 className="font-bold text-slate-700 text-sm">Kelola Absensi</h4>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">Input Manual & Sesi</p>
+                            </button>
+
+                            {/* Broadcast */}
+                            <button onClick={() => setView('manage_broadcast')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
+                                <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="megaphone" width="24"></i></div>
+                                <h4 className="font-bold text-slate-700 text-sm">Buat Broadcast</h4>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">Kirim Info Penting</p>
+                            </button>
+
+                            {/* Bahan Ajar */}
+                            <button onClick={() => { setEditThemeForm(themeData || defaultTheme); setView('edit_theme'); }} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
+                                <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="book-open" width="24"></i></div>
+                                <h4 className="font-bold text-slate-700 text-sm">Bahan Ajar</h4>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">Edit Materi Minggu</p>
+                            </button>
+
+                            {/* Scan QR */}
+                            <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
+                                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="scan-line" width="24"></i></div>
+                                <h4 className="font-bold text-slate-700 text-sm">Scanner QR</h4>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">Mode Scan Masuk</p>
+                            </button>
+                            
+                            {/* Live Report */}
+                             <button onClick={() => setView('live_report')} className="col-span-2 bg-gradient-to-r from-emerald-500 to-teal-600 p-5 rounded-3xl border border-emerald-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                                <div className="flex items-center justify-between relative z-10">
+                                    <div>
+                                        <h4 className="font-black text-white text-lg font-fredoka">Laporan Kehadiran</h4>
+                                        <p className="text-xs text-emerald-100 font-bold mt-1">Lihat Data Realtime Hari Ini</p>
+                                    </div>
+                                    <div className="bg-white/20 p-3 rounded-xl text-white"><i data-lucide="bar-chart-2" width="24"></i></div>
+                                </div>
+                            </button>
+                        </div>
+
+                        {/* System Tools */}
+                        <h3 className="font-black text-slate-400 text-xs uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><i data-lucide="settings" width="12"></i> Sistem & Data</h3>
+                        <div className="space-y-3">
+                            {isAdmin && (
+                                <button onClick={() => setView('manage_users')} className="w-full bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 hover:bg-slate-50 transition active:scale-95">
+                                    <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center"><i data-lucide="users-cog" width="20"></i></div>
+                                    <div className="text-left flex-1">
+                                        <h4 className="font-bold text-slate-700 text-sm">Manajemen User</h4>
+                                        <p className="text-[10px] text-slate-400 font-bold">Tambah/Edit Petugas & Admin</p>
+                                    </div>
+                                    <i data-lucide="chevron-right" width="16" className="text-slate-300"></i>
+                                </button>
+                            )}
+
+                            {isAdmin && (
+                                <button onClick={() => setView('generate')} className="w-full bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 hover:bg-slate-50 transition active:scale-95">
+                                    <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center"><i data-lucide="database" width="20"></i></div>
+                                    <div className="text-left flex-1">
+                                        <h4 className="font-bold text-slate-700 text-sm">Database Peserta</h4>
+                                        <p className="text-[10px] text-slate-400 font-bold">Import CSV/Excel & Export QR</p>
+                                    </div>
+                                    <i data-lucide="chevron-right" width="16" className="text-slate-300"></i>
+                                </button>
+                            )}
+
+                            {(isAdmin || isPanitia) && (
+                                <div className={`w-full p-4 rounded-2xl border shadow-sm flex items-center justify-between transition ${isMaintenance ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition ${isMaintenance ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                            <i data-lucide={isMaintenance ? "lock" : "unlock"} width="20"></i>
+                                        </div>
+                                        <div className="text-left">
+                                            <h4 className={`font-bold text-sm ${isMaintenance ? 'text-amber-700' : 'text-slate-700'}`}>Maintenance Mode</h4>
+                                            <p className={`text-[10px] font-bold ${isMaintenance ? 'text-amber-600' : 'text-slate-400'}`}>{isMaintenance ? 'Aplikasi Terkunci' : 'Aplikasi Terbuka'}</p>
+                                        </div>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" className="sr-only peer" checked={isMaintenance} onChange={() => {
+                                             if (confirm(isMaintenance ? "Buka akses aplikasi?" : "Kunci aplikasi (Maintenance)?")) {
+                                                saveToCloud('config/system', { maintenanceMode: !isMaintenance });
+                                             }
+                                        }} />
+                                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                                    </label>
+                                </div>
+                            )}
+                            
+                            {isAdmin && (
+                                <button onClick={handleResetAllData} className="w-full bg-rose-50 p-4 rounded-2xl border border-rose-100 shadow-sm flex items-center gap-4 hover:bg-rose-100 transition mt-4 active:scale-95">
+                                    <div className="w-10 h-10 bg-rose-200 text-rose-600 rounded-xl flex items-center justify-center"><i data-lucide="trash-2" width="20"></i></div>
+                                    <div className="text-left flex-1">
+                                        <h4 className="font-bold text-rose-700 text-sm">Reset Database</h4>
+                                        <p className="text-[10px] text-rose-500 font-bold">Hapus Semua Data Peserta</p>
+                                    </div>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                );
             }
             
             if (view === 'attendance_manager') {
