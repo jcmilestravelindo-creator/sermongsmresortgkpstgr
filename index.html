@@ -58,9 +58,9 @@
     </style>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
@@ -352,17 +352,25 @@
                     (err) => {}
                 );
 
+                // --- FIX: REMOVE ORDERBY TO PREVENT INDEX ERRORS ON BACKDATE ---
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
+                setLiveAttendance([]); // Reset state to prevent stale data
+                
                 try {
-                    const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
+                    const q = query(collection(db, attendancePath)); // Simplified query without orderBy
                     unsubscribeAttendance = onSnapshot(q, (snap) => {
                         const data = snap.docs.map(d => d.data());
+                        // Client-side sorting
+                        data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                         setLiveAttendance(data);
                     }, (err) => {
+                        console.error("Att Error:", err);
                         setLiveAttendance([]);
                     });
-                } catch(e) {}
+                } catch(e) {
+                    console.error("Att Setup Error:", e);
+                }
 
                 const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
@@ -1264,54 +1272,54 @@
                 );
             }
 
-           if (view === 'live_report') {
-    const totalHadir = liveAttendance.length;
-    return (
-    <div className="min-h-screen bg-slate-50 relative flex flex-col">
-        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
-            <div className="flex items-center justify-between mb-4">
-                 <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
-                 <div className="text-right">
-                    <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
-                    <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
-                 </div>
-            </div>
-            
-            <div className="flex gap-2 items-center mb-2">
-                <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 text-slate-600 text-xs font-bold p-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-indigo-400" />
-                <button onClick={handleExportAttendance} className="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 border-2 border-green-200 flex-1 text-xs font-bold flex items-center justify-center gap-1">
-                    <i data-lucide="download" width="14"></i> Export Excel
-                </button>
-            </div>
-            
-            {/* PERBAIKAN: Tombol delete tetap muncul meskipun data kosong */}
-            {!isPeserta && ( // Changed from: {!isPeserta && liveAttendance.length > 0 && (
-                 <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
-                    <i data-lucide="trash-2" width="12"></i> Hapus Data Tanggal Ini
-                </button>
-            )}
-            
-          </div>
-        <div className="flex-1 p-4 pb-20 overflow-y-auto">
-            {liveAttendance.length === 0 ? (
-                <div className="text-center mt-10 opacity-50">
-                    <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
-                    <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {liveAttendance.map((item, idx) => (
-                        <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-bounce-in">
-                            <div className={`font-black text-xs p-3 rounded-xl min-w-[60px] text-center ${item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>{item.jam}<span className="block text-[8px] opacity-60 font-normal">WIB</span></div>
-                            <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ? 'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ? 'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
+            if (view === 'live_report') {
+                const totalHadir = liveAttendance.length;
+                return (
+                <div className="min-h-screen bg-slate-50 relative flex flex-col">
+                    <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4 pb-2">
+                        <div className="flex items-center justify-between mb-4">
+                             <button onClick={() => { handleBackToMenu(); }} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i> Kembali</button>
+                             <div className="text-right">
+                                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Hadir</h2>
+                                <p className="text-2xl font-black text-emerald-500 font-fredoka leading-none">{totalHadir} <span className="text-xs text-slate-400 font-bold">Jiwa</span></p>
+                             </div>
                         </div>
-                    ))}
+                        
+                        <div className="flex gap-2 items-center mb-2">
+                            <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 text-slate-600 text-xs font-bold p-2 rounded-lg border-2 border-slate-200 focus:outline-none focus:border-indigo-400" />
+                            <button onClick={handleExportAttendance} className="bg-green-100 text-green-700 p-2 rounded-lg hover:bg-green-200 border-2 border-green-200 flex-1 text-xs font-bold flex items-center justify-center gap-1">
+                                <i data-lucide="download" width="14"></i> Export Excel
+                            </button>
+                        </div>
+                        
+                        {/* PERBAIKAN: Tombol delete tetap muncul meskipun data kosong */}
+                        {!isPeserta && ( // Changed from: {!isPeserta && liveAttendance.length > 0 && (
+                             <button onClick={handleResetDailyData} className="w-full bg-rose-50 text-rose-600 p-2 rounded-lg hover:bg-rose-100 border-2 border-rose-100 text-[10px] font-bold flex items-center justify-center gap-1 mb-2">
+                                <i data-lucide="trash-2" width="12"></i> Hapus Data Tanggal Ini
+                            </button>
+                        )}
+                        
+                      </div>
+                    <div className="flex-1 p-4 pb-20 overflow-y-auto">
+                        {liveAttendance.length === 0 ? (
+                            <div className="text-center mt-10 opacity-50">
+                                <i data-lucide="clipboard-list" className="mx-auto w-16 h-16 text-slate-300 mb-2"></i>
+                                <p className="font-bold text-slate-400 text-sm">Belum ada data absen pada tanggal {viewDate}.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {liveAttendance.map((item, idx) => (
+                                    <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-bounce-in">
+                                        <div className={`font-black text-xs p-3 rounded-xl min-w-[60px] text-center ${item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>{item.jam}<span className="block text-[8px] opacity-60 font-normal">WIB</span></div>
+                                        <div className="flex-1 min-w-0"><h4 className="font-bold text-slate-800 truncate">{item.nama}</h4><p className="text-xs text-slate-500 font-bold truncate"><span className="bg-slate-100 px-1.5 rounded text-slate-600 mr-1">{item.kategori}</span><span className={`px-1.5 rounded text-white ${item.status === 'Hadir' ? 'bg-emerald-400' : item.status === 'Sakit' ? 'bg-blue-400' : item.status === 'Izin' ? 'bg-orange-400' : 'bg-red-400'}`}>{item.status}</span></p></div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            )}
-        </div>
-    </div>
-    );
-}
+                );
+            }
 
             if (view === 'scan') {
                 const totalHadir = liveAttendance.length;
@@ -1665,5 +1673,3 @@
     </script>
 </body>
 </html>
-
-
