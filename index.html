@@ -58,9 +58,9 @@
     </style>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
@@ -223,7 +223,6 @@
             const [viewDate, setViewDate] = useState(getSafeDateId());
             const [refreshKey, setRefreshKey] = useState(0);
             
-            // --- UPDATED CLASS LIST ---
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM", "Pendeta", "Pembimbing", "Pengurus"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             const defaultTheme = { title: "", weeks: [] };
@@ -352,25 +351,17 @@
                     (err) => {}
                 );
 
-                // --- FIX: REMOVE ORDERBY TO PREVENT INDEX ERRORS ON BACKDATE ---
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
-                setLiveAttendance([]); // Reset state to prevent stale data
-                
                 try {
-                    const q = query(collection(db, attendancePath)); // Simplified query without orderBy
+                    const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
                     unsubscribeAttendance = onSnapshot(q, (snap) => {
                         const data = snap.docs.map(d => d.data());
-                        // Client-side sorting
-                        data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                         setLiveAttendance(data);
                     }, (err) => {
-                        console.error("Att Error:", err);
                         setLiveAttendance([]);
                     });
-                } catch(e) {
-                    console.error("Att Setup Error:", e);
-                }
+                } catch(e) {}
 
                 const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
@@ -1012,7 +1003,7 @@
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
                         <div className="text-center mb-8">
                             <img src="logotema.png" alt="Logo GKPS" className="w-32 mx-auto mb-4 drop-shadow-md object-contain" />
-                            <h1 className="text-3xl font-black text-sky-600 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Au Guru Sikolah Minggu</h1>
+                            <h1 className="text-3xl font-black text-sky-600 drop-shadow-sm" style={{fontFamily: 'Fredoka, sans-serif'}}>Juak-Juak Ni Naibata</h1>
                             <p className="text-slate-500 font-bold text-sm mt-1 bg-white/50 inline-block px-3 py-1 rounded-full">Sistem Daftar Hadir</p>
                             <p className="text-slate-400 font-bold text-xs mt-1">GSM GKPS Resort Tangerang</p>
                         </div>
