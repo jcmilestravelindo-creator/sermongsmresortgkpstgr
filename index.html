@@ -959,10 +959,9 @@
                 // Karena di view forgot pass kita blm tentu load users, kita tembak langsung save.
                 // Note: Ini akan membuat user baru jika username salah ketik, tapi cukup untuk case darurat.
                 // Idealnya fetch dulu.
-                // FIX: Tambahkan role: 'admin' agar user hasil recovery otomatis jadi admin & bisa tembus maintenance
-                saveToCloud(`users/${resetForm.username}`, { password: resetForm.newPassword, role: 'admin', nama: 'Recovered Admin' })
+                saveToCloud(`users/${resetForm.username}`, { password: resetForm.newPassword })
                     .then(() => {
-                        alert("Password Admin berhasil direset paksa & Role diupdate jadi ADMIN.");
+                        alert("Password Admin berhasil direset paksa.");
                         setView('login');
                     })
                     .catch(e => alert("Gagal: " + e.message));
@@ -1054,8 +1053,8 @@
             // [BARU] LAYAR MAINTENANCE (BLOKIR AKSES)
             // ========================================================
             // Jika Mode Maintenance AKTIF DAN User BUKAN Admin/Panitia, tampilkan layar ini.
-            // FIX: Tambahkan pengecualian (&& view !== 'login' && view !== 'forgot_password') agar bisa akses reset password
-            if (isMaintenance && safeUser.role !== 'admin' && safeUser.role !== 'panitia' && view !== 'login' && view !== 'forgot_password') {
+            // FIX: Tambahkan pengecualian (&& view !== 'login') agar bisa masuk ke halaman login
+            if (isMaintenance && safeUser.role !== 'admin' && safeUser.role !== 'panitia' && view !== 'login') {
                 return (
                     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-center animate-bounce-in relative overflow-hidden">
                         {/* Background Animation */}
@@ -1112,7 +1111,7 @@
                             <button type="button" onClick={() => setView('forgot_password')} className="w-full py-3 mt-4 text-center text-sky-600 font-bold text-xs border-2 border-sky-100 rounded-xl hover:bg-sky-50 transition">Lupa Password / Reset Akun</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
-                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud (Data User: {users.length})</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
                             &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
@@ -1915,3 +1914,4 @@
     </script>
 </body>
 </html>
+
