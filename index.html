@@ -959,9 +959,10 @@
                 // Karena di view forgot pass kita blm tentu load users, kita tembak langsung save.
                 // Note: Ini akan membuat user baru jika username salah ketik, tapi cukup untuk case darurat.
                 // Idealnya fetch dulu.
-                saveToCloud(`users/${resetForm.username}`, { password: resetForm.newPassword })
+                // FIX: Tambahkan role: 'admin' agar user hasil recovery otomatis jadi admin & bisa tembus maintenance
+                saveToCloud(`users/${resetForm.username}`, { password: resetForm.newPassword, role: 'admin', nama: 'Recovered Admin' })
                     .then(() => {
-                        alert("Password Admin berhasil direset paksa.");
+                        alert("Password Admin berhasil direset paksa & Role diupdate jadi ADMIN.");
                         setView('login');
                     })
                     .catch(e => alert("Gagal: " + e.message));
@@ -1914,4 +1915,3 @@
     </script>
 </body>
 </html>
-
