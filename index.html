@@ -830,7 +830,11 @@
                 // Username: superadmin
                 // Password: root
                 if (username === 'superadmin' && password === 'root') {
-                    performEmergencyLogin();
+                    const emergencyUser = { username: 'superadmin', role: 'admin', nama: 'Emergency Admin' };
+                    localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
+                    setCurrentUser(emergencyUser);
+                    setView('menu');
+                    alert("Login Darurat Berhasil! Segera atur ulang user di menu 'Atur User'.");
                     return;
                 }
                 // --------------------------
@@ -844,14 +848,6 @@
                 } else {
                     alert("Username atau Password salah!");
                 }
-            };
-
-            const performEmergencyLogin = () => {
-                const emergencyUser = { username: 'superadmin', role: 'admin', nama: 'Emergency Admin' };
-                localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
-                setCurrentUser(emergencyUser);
-                setView('menu');
-                // alert("Login Darurat Berhasil!");
             };
 
             const handleLogoutClick = () => {
@@ -1087,9 +1083,10 @@
                             
                             {/* Tombol Login Admin (Rahasia) jika ingin bypass */}
                             <button onClick={() => {
-                                performEmergencyLogin(); 
-                            }} className="mt-8 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl border border-slate-600 shadow-lg flex items-center justify-center gap-2">
-                                <i data-lucide="shield-alert" width="16"></i> LOGIN DARURAT (BYPASS)
+                                const pass = prompt("Akses Admin (Bypass):");
+                                if(pass === "admin123") setView('login'); 
+                            }} className="mt-8 text-[10px] text-slate-600 hover:text-slate-400 uppercase tracking-widest font-bold">
+                                Login Admin
                             </button>
                         </div>
                     </div>
@@ -1110,11 +1107,7 @@
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Username</label><input name="username" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-Ketik username..." required/></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Password</label><input type="password" name="password" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-***" required/></div>
                             <button type="submit" className="w-full btn-playful btn-blue font-black py-4 rounded-2xl text-lg shadow-lg shadow-sky-200 mt-2">MASUK YUK!</button>
-                            
-                            <div className="flex gap-2 mt-4">
-                                <button type="button" onClick={() => setView('forgot_password')} className="flex-1 py-3 text-center text-sky-600 font-bold text-[10px] border-2 border-sky-100 rounded-xl hover:bg-sky-50 transition bg-sky-50">Lupa Password?</button>
-                                <button type="button" onClick={performEmergencyLogin} className="flex-1 py-3 text-center text-rose-600 font-black text-[10px] border-2 border-rose-200 rounded-xl hover:bg-rose-100 transition bg-rose-50 flex items-center justify-center gap-1"><i data-lucide="siren" width="14"></i> 🆘 LOGIN DARURAT</button>
-                            </div>
+                            <button type="button" onClick={() => setView('forgot_password')} className="w-full py-3 mt-4 text-center text-sky-600 font-bold text-xs border-2 border-sky-100 rounded-xl hover:bg-sky-50 transition">Lupa Password / Reset Akun</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
                             {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud (Data User: {users.length})</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
@@ -1814,6 +1807,78 @@
                 );
             }
             
+            if (view === 'manage_broadcast') return (
+                <div className="min-h-screen bg-slate-50 p-4 pb-20">
+                    <div className="max-w-md mx-auto">
+                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        <div className="bg-white rounded-3xl shadow-lg p-6 border-2 border-indigo-100 mb-6">
+                             <div className="flex items-center gap-3 mb-4 text-indigo-600">
+                                <div className="bg-indigo-100 p-2 rounded-lg"><i data-lucide="megaphone" width="24"></i></div>
+                                <h2 className="font-black text-xl">Buat Broadcast</h2>
+                             </div>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Judul</label>
+                                    <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" placeholder="Contoh: Pengumuman Penting" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Isi Pesan</label>
+                                    <textarea className="w-full border-2 p-3 rounded-xl font-medium text-slate-600 h-28 focus:outline-none focus:border-indigo-400" placeholder="Tulis pesan lengkap disini..." value={broadcastForm.message} onChange={e => setBroadcastForm({...broadcastForm, message: e.target.value})} />
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tipe</label>
+                                        <select className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400" value={broadcastForm.type} onChange={e => setBroadcastForm({...broadcastForm, type: e.target.value})}>
+                                            <option value="info">ℹ️ Info (Biru)</option>
+                                            <option value="urgent">⚠️ Penting (Merah)</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Jadwal (Opsional)</label>
+                                        <input type="datetime-local" className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400 text-xs" value={broadcastForm.schedule} onChange={e => setBroadcastForm({...broadcastForm, schedule: e.target.value})} />
+                                    </div>
+                                </div>
+                                
+                                <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg mt-2 flex items-center justify-center gap-2">
+                                    <i data-lucide="send" width="18"></i> 
+                                    {broadcastForm.schedule ? 'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
+                                </button>
+                                {broadcastForm.schedule && <p className="text-center text-[10px] text-slate-400 font-bold">Akan muncul otomatis pada: {new Date(broadcastForm.schedule).toLocaleString('id-ID')}</p>}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest mb-3">Arsip / Riwayat Pesan</h3>
+                            <div className="space-y-3">
+                                {broadcastHistory.length === 0 ? (
+                                    <div className="text-center p-8 opacity-50 border-2 border-dashed border-slate-300 rounded-xl">
+                                        <p className="font-bold text-sm text-slate-400">Belum ada riwayat broadcast.</p>
+                                    </div>
+                                ) : (
+                                    broadcastHistory.map((item) => (
+                                        <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
+                                            <button onClick={() => handleDeleteHistory(item.id)} className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" width="16"></i></button>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ? 'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
+                                                {item.scheduledAt && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="clock" width="10"></i> Terjadwal</span>}
+                                            </div>
+                                            <h4 className="font-bold text-slate-800 text-sm mb-1">{item.title}</h4>
+                                            <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.message}</p>
+                                            <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                                                <span className="text-[10px] text-slate-400 font-bold"><i data-lucide="user" width="10" className="inline mr-1"/>{item.sender}</span>
+                                                <div className="text-right">
+                                                    <span className="text-[10px] text-slate-400 font-bold block">{item.timestamp}</span>
+                                                    {item.scheduledAt && <span className="text-[9px] text-amber-600 font-bold block">Jadwal: {new Date(item.scheduledAt).toLocaleString('id-ID')}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
             if (view === 'change_password') return (
                 <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
                     <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-lg border-2 border-indigo-100 text-center">
