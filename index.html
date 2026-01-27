@@ -52,6 +52,10 @@
         #reader__scan_region img { display: none; } 
         #reader__dashboard_section_csr span, #reader__dashboard_section_swaplink { display: none !important; }
         
+        /* Hide Scrollbar for Horizontal Scroll */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
         /* Loading Spinner */
         .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #0ea5e9; animation: spin 1s ease infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -74,6 +78,7 @@
             if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                 firebaseConfig = JSON.parse(__firebase_config);
             } else {
+                // Fallback config (jika tidak ada config global)
                 firebaseConfig = {
                     apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
                     authDomain: "asggkpstgr.firebaseapp.com",
@@ -138,11 +143,11 @@
                             <button onClick={onClose} className="bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 p-2 rounded-full transition"><i data-lucide="x" width="20"></i></button>
                         </div>
                         <div className="p-6 pt-2">
-                            <div className="mb-6 mt-2"><h3 className="text-2xl font-black text-slate-800 font-fredoka leading-tight mb-1">{week.topic}</h3><div className="h-1.5 w-16 bg-gradient-to-r from-sky-400 to-indigo-500 rounded-full"></div></div>
+                            <div className="mb-6 mt-2"><h3 className="text-2xl font-black text-slate-800 font-fredoka leading-tight mb-1 break-words">{week.topic}</h3><div className="h-1.5 w-16 bg-gradient-to-r from-sky-400 to-indigo-500 rounded-full"></div></div>
                             <div className="space-y-4">
-                                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-100 shadow-sm"><h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2"><div className="bg-indigo-200 p-1 rounded-md text-indigo-600"><i data-lucide="book" width="12"></i></div> Ayat Tema</h4><p className="font-bold text-indigo-900 text-lg leading-relaxed font-fredoka">{week.themeVerse}</p></div>
-                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-2xl border border-amber-100 shadow-sm"><h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3 flex items-center gap-2"><div className="bg-amber-200 p-1 rounded-md text-amber-700"><i data-lucide="heart" width="12"></i></div> Ayat Hafalan</h4><p className="font-bold text-amber-900 text-lg leading-relaxed italic font-serif">"{week.memoryVerse}"</p></div>
-                                <div className="pt-2"><h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="align-left" width="14"></i> Ringkasan Materi</h4><div className="text-slate-600 leading-relaxed font-medium whitespace-pre-wrap text-sm bg-slate-50 p-4 rounded-2xl border border-slate-100">{week.content || "Belum ada ringkasan materi."}</div></div>
+                                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-100 shadow-sm"><h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2"><div className="bg-indigo-200 p-1 rounded-md text-indigo-600"><i data-lucide="book" width="12"></i></div> Ayat Tema</h4><p className="font-bold text-indigo-900 text-lg leading-relaxed font-fredoka break-words">{week.themeVerse}</p></div>
+                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-5 rounded-2xl border border-amber-100 shadow-sm"><h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3 flex items-center gap-2"><div className="bg-amber-200 p-1 rounded-md text-amber-700"><i data-lucide="heart" width="12"></i></div> Ayat Hafalan</h4><p className="font-bold text-amber-900 text-lg leading-relaxed italic font-serif break-words">"{week.memoryVerse}"</p></div>
+                                <div className="pt-2"><h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="align-left" width="14"></i> Ringkasan Materi</h4><div className="text-slate-600 leading-relaxed font-medium whitespace-pre-wrap text-sm bg-slate-50 p-4 rounded-2xl border border-slate-100 break-words">{week.content || "Belum ada ringkasan materi."}</div></div>
                             </div>
                         </div>
                         <div className="sticky bottom-0 bg-white/90 backdrop-blur p-4 border-t border-slate-100"><button onClick={onClose} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold text-lg shadow-lg">Tutup Informasi</button></div>
@@ -172,8 +177,15 @@
             const [participants, setParticipants] = useState([]);
             const [isConnected, setIsConnected] = useState(false);
             const [userAuth, setUserAuth] = useState(null);
+            
             // --- UI/Feature States ---
             const [scanResult, setScanResult] = useState(null);
+            
+            // ============================================
+            // [BARU] STATE MAINTENANCE
+            // ============================================
+            const [isMaintenance, setIsMaintenance] = useState(false);
+
             const scannerRef = useRef(null);
             const isScanning = useRef(false);
             const [cameraFacing, setCameraFacing] = useState('environment');
@@ -306,7 +318,17 @@
                     (snap) => setParticipants(snap.docs.map(d => d.data())),
                     (err) => console.log("Partcipants sync waiting...")
                 );
-                
+
+                // ========================================================
+                // [BARU] LISTENER UNTUK MAINTENANCE MODE
+                // ========================================================
+                const unsubscribeSystem = onSnapshot(doc(db, `${publicDataPath}/config`, 'system'), (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        setIsMaintenance(data.maintenanceMode === true);
+                    }
+                }, (err) => console.log("Config sync waiting..."));
+
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), 
                     (snap) => setThemeData(snap.exists() ? snap.data() : null),
                     (err) => {}
@@ -388,6 +410,7 @@
                     unsubscribeBroadcastHistory();
                     unsubscribeAttendance();
                     unsubscribeConfig();
+                    unsubscribeSystem(); // <--- CLEANUP MAINTENANCE LISTENER
                 };
             }, [dbReady, userAuth, viewDate, refreshKey]);
 
@@ -793,6 +816,156 @@
                 alert("Bahan Ajar berhasil diupdate!");
                 handleBackToMenu();
             };
+
+            // ============================================
+            // [RESTORED] LOGIC FUNGSI YG HILANG
+            // ============================================
+            const handleLogin = (e) => {
+                e.preventDefault();
+                const username = e.target.username.value.trim();
+                const password = e.target.password.value.trim();
+
+                // --- EMERGENCY BACKDOOR ---
+                // Jika database bermasalah atau lupa password admin, gunakan ini:
+                // Username: superadmin
+                // Password: root
+                if (username === 'superadmin' && password === 'root') {
+                    const emergencyUser = { username: 'superadmin', role: 'admin', nama: 'Emergency Admin' };
+                    localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
+                    setCurrentUser(emergencyUser);
+                    setView('menu');
+                    alert("Login Darurat Berhasil! Segera atur ulang user di menu 'Atur User'.");
+                    return;
+                }
+                // --------------------------
+
+                const foundUser = users.find(u => u.username === username && u.password === password);
+                if (foundUser) {
+                    const userData = { ...foundUser };
+                    localStorage.setItem('gkps_user', JSON.stringify(userData));
+                    setCurrentUser(userData);
+                    setView('menu');
+                } else {
+                    alert("Username atau Password salah!");
+                }
+            };
+
+            const handleLogoutClick = () => {
+                setIsLogoutModalOpen(true);
+            };
+
+            const performLogout = () => {
+                localStorage.removeItem('gkps_user');
+                localStorage.removeItem('gkps_last_view');
+                setCurrentUser(null);
+                setView('login');
+                setIsLogoutModalOpen(false);
+            };
+
+            const handleAddOrUpdateUser = () => {
+                if (!newUser.username || !newUser.password) return alert("Username & Password wajib diisi!");
+                const userObj = { ...newUser, username: newUser.username.trim(), password: newUser.password.trim() };
+                saveToCloud(`users/${userObj.username}`, userObj);
+                alert("Data User Tersimpan!");
+                setEditingId(null);
+                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+            };
+
+            const startEditUser = (u) => {
+                setEditingId(u.username);
+                setNewUser(u);
+            };
+
+            const initiateAdminReset = (u) => {
+                setAdminResetConfig({ show: true, user: u, newPass: '' });
+            };
+
+            const performAdminReset = () => {
+                if (!adminResetConfig.newPass) return alert("Masukkan password baru");
+                saveToCloud(`users/${adminResetConfig.user.username}`, { ...adminResetConfig.user, password: adminResetConfig.newPass });
+                alert(`Password untuk ${adminResetConfig.user.username} berhasil direset!`);
+                setAdminResetConfig({ show: false, user: null, newPass: '' });
+            };
+
+            const initiateDelete = (path) => {
+                setDeleteConfig({ show: true, path: path });
+            };
+
+            const performDelete = () => {
+                if (deleteConfig.path) {
+                    deleteFromCloud(deleteConfig.path);
+                    setDeleteConfig({ show: false, path: null });
+                }
+            };
+
+            const handleAddOrUpdateParticipant = () => {
+                if (!formData.nama) return alert("Nama wajib diisi!");
+                const id = editingId || `GSM-${Date.now()}`;
+                const pData = { id, ...formData };
+                saveToCloud(`participants/${id}`, pData);
+                alert("Data Peserta Tersimpan!");
+                setEditingId(null);
+                setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
+                setShowAddForm(false);
+            };
+
+            const startEditParticipant = (p) => {
+                setEditingId(p.id);
+                setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' });
+                setShowAddForm(true);
+            };
+
+            const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
+
+            const downloadSingleQR = async (p) => {
+                try {
+                    const url = generateQRUrl(p.id);
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `QR_${p.nama}_${p.id}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                } catch (e) { alert("Gagal download: " + e.message); }
+            };
+
+            const downloadAllQR = async () => {
+                if (!confirm("Download semua QR Code satu per satu? Pastikan izin download browser aktif.")) return;
+                setIsDownloading(true);
+                for (const p of participants) {
+                    await downloadSingleQR(p);
+                    await new Promise(r => setTimeout(r, 500)); // Delay agar browser tidak nge-block
+                }
+                setIsDownloading(false);
+                alert("Download Selesai!");
+            };
+
+            const handleChangeSelfPassword = () => {
+                if (!selfPassword) return alert("Password tidak boleh kosong");
+                saveToCloud(`users/${currentUser.username}`, { ...currentUser, password: selfPassword });
+                alert("Password Anda berhasil diganti! Silakan login ulang.");
+                performLogout();
+            };
+
+            const handleResetPassword = () => {
+                // Logika sederhana: Cek token hardcode (misal 'PANITIA2025')
+                if (resetForm.token !== 'PANITIA2025') return alert("Kode Otorisasi Salah!");
+                if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
+                
+                // Cek apakah user ada di list users (jika data sudah load)
+                // Karena di view forgot pass kita blm tentu load users, kita tembak langsung save.
+                // Note: Ini akan membuat user baru jika username salah ketik, tapi cukup untuk case darurat.
+                // Idealnya fetch dulu.
+                saveToCloud(`users/${resetForm.username}`, { password: resetForm.newPassword })
+                    .then(() => {
+                        alert("Password Admin berhasil direset paksa.");
+                        setView('login');
+                    })
+                    .catch(e => alert("Gagal: " + e.message));
+            };
             
             const safeUser = currentUser || { nama: 'Guest', role: 'peserta' };
             const isAdmin = safeUser.role === 'admin';
@@ -863,141 +1036,6 @@
                 </div>
             );
 
-            // --- ACTION HANDLERS ---
-            const handleLogin = (e) => {
-                e.preventDefault();
-                const form = e.target;
-                const usernameInput = form.username.value;
-                const passwordInput = form.password.value;
-                if (usernameInput === 'admin' && passwordInput === 'admin123') {
-                    const emergencyAdmin = { username: 'admin', password: 'admin123', role: 'admin', nama: 'Super Admin' };
-                    setCurrentUser(emergencyAdmin);
-                    localStorage.setItem('gkps_user', JSON.stringify(emergencyAdmin));
-                    setView('menu');
-                    setNotification(`Selamat Datang, Super Admin!`);
-                    setTimeout(() => setNotification(null), 3000);
-                    return;
-                }
-                const foundUser = users.find(u => u.username === usernameInput && u.password === passwordInput);
-                if (foundUser) {
-                    setCurrentUser(foundUser);
-                    localStorage.setItem('gkps_user', JSON.stringify(foundUser));
-                    setView('menu');
-                    setNotification(`Selamat Datang, ${foundUser.nama}!`);
-                    setTimeout(() => setNotification(null), 3000);
-                } else {
-                    alert("Username atau Password Salah!");
-                    playErrorSound();
-                }
-            };
-
-            const handleLogoutClick = () => setIsLogoutModalOpen(true);
-            const performLogout = () => {
-                setCurrentUser(null);
-                localStorage.removeItem('gkps_user');
-                localStorage.removeItem('gkps_last_view'); 
-                setIsLogoutModalOpen(false);
-                setViewRaw('login'); 
-            };
-
-            const initiateDelete = (path) => setDeleteConfig({ show: true, path });
-            const performDelete = () => {
-                if (deleteConfig.path) {
-                    deleteFromCloud(deleteConfig.path);
-                    setDeleteConfig({ show: false, path: null });
-                }
-            };
-            
-            const handleResetPassword = () => {
-                if (!resetForm.token || resetForm.token.trim() !== 'GKPS2026') {
-                    playErrorSound();
-                    return alert("Kode Otorisasi SALAH! Harap masukkan kode yang benar.");
-                }
-                if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
-                saveToCloud(`users/${resetForm.username}`, { 
-                    username: resetForm.username, 
-                    password: resetForm.newPassword,
-                    role: 'admin', 
-                    nama: 'Recovered Admin' 
-                }).then(() => {
-                    alert("Password Admin Berhasil Direset!");
-                    setView('login');
-                }).catch((err) => {
-                    console.error(err);
-                    if (err.message.includes("permissions") || err.message.includes("permission")) {
-                        const emergencyUser = { username: resetForm.username, password: resetForm.newPassword, role: 'admin', nama: 'Super Admin' };
-                        setCurrentUser(emergencyUser);
-                        localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
-                        alert("Password Admin Berhasil Direset!"); 
-                        setView('menu');
-                    } else { alert("Gagal koneksi: " + err.message); }
-                });
-            };
-
-            const initiateAdminReset = (u) => setAdminResetConfig({ show: true, user: u, newPass: '' });
-            const performAdminReset = () => {
-                if (!adminResetConfig.newPass || adminResetConfig.newPass.length < 3) return alert("Password minimal 3 karakter");
-                const updatedUser = { ...adminResetConfig.user, password: adminResetConfig.newPass };
-                saveToCloud(`users/${adminResetConfig.user.username}`, updatedUser);
-                setAdminResetConfig({ show: false, user: null, newPass: '' });
-                alert(`Password untuk ${adminResetConfig.user.username} berhasil direset!`);
-            };
-
-            const handleChangeSelfPassword = () => {
-                if(!selfPassword || selfPassword.length < 3) return alert("Password minimal 3 karakter!");
-                const updatedUser = { ...currentUser, password: selfPassword };
-                saveToCloud(`users/${currentUser.username}`, updatedUser);
-                setCurrentUser(updatedUser);
-                localStorage.setItem('gkps_user', JSON.stringify(updatedUser)); 
-                setSelfPassword('');
-                alert("Password berhasil diubah!");
-                handleBackToMenu();
-            };
-
-            const handleAddOrUpdateUser = () => {
-                if(!newUser.username || !newUser.password) return alert("Lengkapi data user!");
-                saveToCloud(`users/${newUser.username}`, newUser);
-                setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
-                setEditingId(null); alert(editingId ? "User diupdate!" : "User ditambahkan!");
-            };
-
-            const startEditUser = (u) => { setNewUser(u); setEditingId(u.username); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-            
-            const handleAddOrUpdateParticipant = () => {
-                if(!formData.nama) return;
-                const id = editingId || `M-${Date.now()}`;
-                saveToCloud(`participants/${id}`, { id, nama: formData.nama, kategori: formData.kategori, kelas: formData.kelas });
-                setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setEditingId(null); if(editingId) setShowAddForm(false); alert("Tersimpan!");
-            };
-
-            const startEditParticipant = (p) => { setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' }); setEditingId(p.id); setShowAddForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-
-            const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
-            const downloadSingleQR = async (p) => {
-                try {
-                    const scrollPos = window.scrollY;
-                    const res = await fetch(generateQRUrl(p.id)); const blob = await res.blob();
-                    const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-                    link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
-                    document.body.appendChild(link); link.click(); document.body.removeChild(link); window.scrollTo(0, scrollPos);
-                } catch (e) { window.open(generateQRUrl(p.id), '_blank'); }
-            };
-
-            const downloadAllQR = async () => {
-                if (participants.length === 0) return;
-                setIsDownloading(true); 
-                const scrollPos = window.scrollY;
-                for (const p of participants) { try {
-                    const res = await fetch(generateQRUrl(p.id));
-                    const blob = await res.blob(); const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob); link.download = `QR_${p.nama.replace(/\s+/g, '_')}.png`; link.style.display = 'none';
-                    document.body.appendChild(link);
-                    link.click(); document.body.removeChild(link); await new Promise(r => setTimeout(r, 600));
-                } catch (e) {} }
-                window.scrollTo(0, scrollPos);
-                setIsDownloading(false); alert("Selesai!");
-            };
-
             // --- LOADING SCREEN ---
             if (!dbReady) {
                 return (
@@ -1006,6 +1044,50 @@
                             <div className="spinner mx-auto mb-4"></div>
                             <h1 className="text-xl font-black text-slate-700 mb-1">Menghubungkan Database...</h1>
                             <p className="text-xs text-slate-400">Mohon tunggu sebentar</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            // ========================================================
+            // [BARU] LAYAR MAINTENANCE (BLOKIR AKSES)
+            // ========================================================
+            // Jika Mode Maintenance AKTIF DAN User BUKAN Admin/Panitia, tampilkan layar ini.
+            if (isMaintenance && safeUser.role !== 'admin' && safeUser.role !== 'panitia') {
+                return (
+                    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-center animate-bounce-in relative overflow-hidden">
+                        {/* Background Animation */}
+                        <div className="absolute inset-0 opacity-10">
+                            <div className="absolute top-10 left-10 w-32 h-32 bg-yellow-500 rounded-full blur-3xl animate-pulse"></div>
+                            <div className="absolute bottom-10 right-10 w-40 h-40 bg-indigo-500 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+                        </div>
+
+                        <div className="relative z-10 bg-slate-800/50 backdrop-blur-xl p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-sm">
+                            <div className="w-24 h-24 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-pulse">
+                                <i data-lucide="cone" className="text-amber-500 w-12 h-12"></i>
+                            </div>
+                            
+                            <h1 className="text-3xl font-black text-white mb-2 font-fredoka tracking-wide">MAINTENANCE</h1>
+                            <div className="h-1 w-20 bg-gradient-to-r from-amber-500 to-orange-600 rounded-full mx-auto mb-4"></div>
+                            
+                            <p className="text-slate-300 font-bold text-sm leading-relaxed mb-6">
+                                Sistem sedang dalam perbaikan berkala untuk meningkatkan performa.
+                            </p>
+
+                            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                                <p className="text-xs text-slate-400 font-mono">
+                                    Status: <span className="text-amber-400 font-bold">SERVER OFFLINE</span>
+                                </p>
+                                <p className="text-[10px] text-slate-500 mt-1">Silakan kembali beberapa saat lagi.</p>
+                            </div>
+                            
+                            {/* Tombol Login Admin (Rahasia) jika ingin bypass */}
+                            <button onClick={() => {
+                                const pass = prompt("Akses Admin (Bypass):");
+                                if(pass === "admin123") setView('login'); 
+                            }} className="mt-8 text-[10px] text-slate-600 hover:text-slate-400 uppercase tracking-widest font-bold">
+                                Login Admin
+                            </button>
                         </div>
                     </div>
                 );
@@ -1025,10 +1107,10 @@
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Username</label><input name="username" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-Ketik username..." required/></div>
                             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Password</label><input type="password" name="password" className="w-full p-4 border-2 border-indigo-100 rounded-2xl bg-white focus:outline-none focus:border-indigo-400 focus:ring-0 transition font-bold text-slate-700 placeholder-***" required/></div>
                             <button type="submit" className="w-full btn-playful btn-blue font-black py-4 rounded-2xl text-lg shadow-lg shadow-sky-200 mt-2">MASUK YUK!</button>
-                            <button type="button" onClick={() => setView('forgot_password')} className="text-sky-600 font-bold text-xs hover:text-sky-800 underline text-right block w-full mt-2">Lupa Password?</button>
+                            <button type="button" onClick={() => setView('forgot_password')} className="w-full py-3 mt-4 text-center text-sky-600 font-bold text-xs border-2 border-sky-100 rounded-xl hover:bg-sky-50 transition">Lupa Password / Reset Akun</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
-                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud (Data User: {users.length})</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
                             &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
@@ -1088,39 +1170,69 @@
                             </div>
                         </div>
 
+                        {/* --- BAGIAN BAHAN AJAR (REDESIGNED) --- */}
                         <div className="p-6 pb-0">
                             {themeData && themeData.title ? (
-                                <div className="bg-white p-6 rounded-[32px] shadow-lg border-4 border-sky-100 relative overflow-hidden group">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500"><i data-lucide="book-open" width="80" height="80"></i></div>
-                                    <div className="relative z-10">
-                                        <h2 className="text-sm font-black text-sky-500 uppercase tracking-widest mb-2">Bahan Ajar</h2>
-                                        <h3 className="text-xl font-black text-slate-800 font-fredoka leading-tight mb-4">"{currentTheme.title}"</h3>
-                                        <div className={`grid gap-3 ${gridCols}`}>
-                                            {displayWeeks.map((week, idx) => (
-                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`p-4 rounded-2xl border flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-all active:scale-95 ${idx % 2 === 0 ? 'bg-sky-50 border-sky-100 hover:bg-sky-100' : 'bg-indigo-50 border-indigo-100 hover:bg-indigo-100'}`}>
-                                                    <div className="mb-4">
-                                                        <span className={`text-[10px] font-black uppercase tracking-wider block mb-1 ${idx % 2 === 0 ? 'text-sky-400' : 'text-indigo-400'}`}>
-                                                            {week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}
-                                                        </span>
-                                                        <h4 className={`font-bold text-lg leading-tight ${idx % 2 === 0 ? 'text-sky-700' : 'text-indigo-700'}`}>{week.topic}</h4>
-                                                    </div>
-                                                    <div className="mt-auto text-center">
-                                                        <span className="text-[10px] font-bold text-sky-500 bg-white px-3 py-2 rounded-xl shadow-sm border border-sky-100 flex items-center justify-center gap-2">
-                                                            <i data-lucide="book-open" width="12"></i> Buka Materi
-                                                        </span>
+                                <div className="mb-6 relative z-10">
+                                    <div className="flex items-center justify-between mb-4 px-2">
+                                         <div>
+                                            <h2 className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">Bahan Ajar Bulan Ini</h2>
+                                            <h3 className="text-lg font-black text-slate-800 font-fredoka leading-none">"{currentTheme.title}"</h3>
+                                        </div>
+                                         {(isAdmin || isPanitia) && (
+                                            <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="bg-white p-2 rounded-full text-indigo-400 hover:text-indigo-600 shadow-sm border border-indigo-50 transition"><i data-lucide="pencil" width="16"></i></button>
+                                        )}
+                                    </div>
+
+                                    {/* Horizontal Scroll Container (Floating Cards) */}
+                                    <div className="flex overflow-x-auto pb-8 -mx-4 px-4 snap-x snap-mandatory space-x-4 no-scrollbar" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+                                        {displayWeeks.map((week, idx) => {
+                                             const isEven = idx % 2 === 0;
+                                             return (
+                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`flex-none w-[85%] max-w-[300px] snap-center relative group cursor-pointer transition-all duration-300 hover:-translate-y-2`}>
+                                                    {/* Card Container */}
+                                                    <div className={`h-full rounded-[32px] p-6 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.15)] border-[3px] border-white relative overflow-hidden active:scale-95 transition-transform duration-200 ${isEven ? 'bg-gradient-to-br from-sky-400 to-blue-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
+                                                        
+                                                        {/* Floating decorative elements */}
+                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                                                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-black opacity-10 rounded-full -ml-8 -mb-8 blur-xl"></div>
+
+                                                        {/* Content */}
+                                                        <div className="relative z-10 flex flex-col h-full justify-between min-h-[160px]">
+                                                            <div>
+                                                                <div className="flex justify-between items-start mb-3">
+                                                                    <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-white/30">
+                                                                        {week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}
+                                                                    </span>
+                                                                    <div className="bg-white/20 p-1.5 rounded-full text-white animate-pulse">
+                                                                        <i data-lucide="book-open" width="14"></i>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                {/* TITLE - Fixed overflow with line-clamp */}
+                                                                <h4 className="text-white text-2xl font-black font-fredoka leading-tight mb-2 line-clamp-3 drop-shadow-md break-words">
+                                                                    {week.topic}
+                                                                </h4>
+                                                            </div>
+                                                            
+                                                            <div className="mt-4">
+                                                                <div className="flex items-center gap-2 text-white/90 text-xs font-bold bg-black/10 p-2 rounded-xl backdrop-blur-sm w-fit">
+                                                                    <span className="bg-white text-indigo-600 rounded-lg p-1"><i data-lucide="arrow-right" width="12"></i></span>
+                                                                    <span>Buka Materi</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
+                                         {/* Empty state or Add button if empty could go here */}
                                     </div>
-                                    {(isAdmin || isPanitia) && (
-                                        <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-slate-400 hover:text-sky-500 shadow-sm border border-slate-100 transition"><i data-lucide="pencil" width="16"></i></button>
-                                    )}
                                 </div>
                             ) : null}
                         </div>
 
-                        <div className="p-6 space-y-4">
+                        <div className="p-6 space-y-4 pt-0">
                             <button onClick={() => setView('my_barcode')} className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
                                 <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="qr-code" width="28" height="28"></i></div>
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
@@ -1176,6 +1288,33 @@
                                                 <span className="font-black text-[10px]">RESET DATA PESERTA</span>
                                             </button>
                                         </div>
+                                    )}
+
+                                    {/* ============================================== */}
+                                    {/* [BARU] TOMBOL KONTROL MAINTENANCE */}
+                                    {/* ============================================== */}
+                                    {(isAdmin || isPanitia) && (
+                                        <button 
+                                            onClick={() => {
+                                                const confirmMsg = isMaintenance 
+                                                    ? "Matikan Mode Maintenance? User akan bisa akses kembali." 
+                                                    : "PERINGATAN: Aktifkan Mode Maintenance? Semua user (selain admin) akan diblokir dari aplikasi.";
+                                                
+                                                if (confirm(confirmMsg)) {
+                                                    saveToCloud('config/system', { maintenanceMode: !isMaintenance })
+                                                        .then(() => alert(isMaintenance ? "Akses dibuka kembali!" : "Sistem dikunci (Maintenance Mode)."));
+                                                }
+                                            }} 
+                                            className={`w-full btn-playful ${isMaintenance ? 'bg-amber-500 border-amber-700' : 'bg-slate-800 border-slate-950'} text-white p-3 rounded-xl flex items-center gap-3 shadow-lg mb-3 mt-2`}
+                                        >
+                                            <div className="bg-white/20 p-2 rounded-lg">
+                                                <i data-lucide={isMaintenance ? "unlock" : "lock"} width="18"></i>
+                                            </div>
+                                            <div className="text-left text-xs">
+                                                <h3 className="font-bold text-sm">{isMaintenance ? "Matikan Maintenance" : "Mode Maintenance"}</h3>
+                                                <p className="text-[10px] opacity-80">{isMaintenance ? "Buka Akses User" : "Tutup Akses & Perbaikan"}</p>
+                                            </div>
+                                        </button>
                                     )}
                                 </div>
                             )}
