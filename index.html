@@ -285,14 +285,15 @@
                 initAuth();
             }, [dbReady, refreshKey]);
 
-            // --- FIRESTORE LISTENERS ---
+            // --- FIRESTORE LISTENERS (GLOBAL DATA) ---
             useEffect(() => {
                 if (!dbReady || !userAuth) return;
 
                 const db = window.db; 
-                const { collection, doc, onSnapshot, query, orderBy } = window.fs;
+                const { collection, doc, onSnapshot } = window.fs;
                 const publicDataPath = `artifacts/${appId}/public/data`;
 
+                // Listener Users
                 const unsubscribeUsers = onSnapshot(collection(db, `${publicDataPath}/users`), 
                     (snap) => {
                         const loadedUsers = snap.docs.map(d => d.data());
@@ -303,16 +304,19 @@
                     (err) => console.log("Users sync waiting...")
                 );
 
+                // Listener Participants
                 const unsubscribeParticipants = onSnapshot(collection(db, `${publicDataPath}/participants`), 
                     (snap) => setParticipants(snap.docs.map(d => d.data())),
                     (err) => console.log("Partcipants sync waiting...")
                 );
 
+                // Listener Theme
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), 
                     (snap) => setThemeData(snap.exists() ? snap.data() : null),
                     (err) => {}
                 );
 
+                // Listener Announcements
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
                     if (data) {
@@ -344,6 +348,7 @@
                     }
                 }, (err) => {});
 
+                // Listener History
                 const unsubscribeBroadcastHistory = onSnapshot(collection(db, `${publicDataPath}/broadcast_history`), 
                     (snap) => {
                         const hist = snap.docs.map(d => d.data()).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -352,18 +357,7 @@
                     (err) => {}
                 );
 
-                const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
-                let unsubscribeAttendance = () => {};
-                try {
-                    const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
-                    unsubscribeAttendance = onSnapshot(q, (snap) => {
-                        const data = snap.docs.map(d => d.data());
-                        setLiveAttendance(data);
-                    }, (err) => {
-                        setLiveAttendance([]);
-                    });
-                } catch(e) {}
-
+                // Listener Config Session
                 const configPath = `artifacts/${appId}/public/data/config/session`;
                 let unsubscribeConfig = () => {};
                 try {
@@ -372,16 +366,46 @@
                     }, (err) => {});
                 } catch(e) {}
 
+                // CLEANUP GLOBAL LISTENERS
                 return () => {
                     unsubscribeUsers();
                     unsubscribeParticipants(); 
                     unsubscribeTheme();
                     unsubscribeAnnouncements();
                     unsubscribeBroadcastHistory();
-                    unsubscribeAttendance();
                     unsubscribeConfig();
                 };
-            }, [dbReady, userAuth, viewDate, refreshKey]);
+            }, [dbReady, userAuth, refreshKey]); // HAPUS viewDate DARI SINI
+
+            // --- FIRESTORE LISTENER (KHUSUS ABSENSI HARIAN) ---
+            useEffect(() => {
+                if (!dbReady || !userAuth) return;
+                const db = window.db; 
+                const { collection, onSnapshot, query, orderBy } = window.fs;
+
+                const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
+                let unsubscribeAttendance = () => {};
+                
+                try {
+                    // Coba query dengan sorting timestamp
+                    const q = query(collection(db, attendancePath), orderBy('timestamp', 'desc'));
+                    
+                    unsubscribeAttendance = onSnapshot(q, (snap) => {
+                        const data = snap.docs.map(d => d.data());
+                        setLiveAttendance(data);
+                    }, (err) => {
+                        // Jika error (misal index belum ada atau path kosong), set kosong
+                        console.log("Attendance sync empty/error for date:", viewDate);
+                        setLiveAttendance([]);
+                    });
+                } catch(e) {
+                    setLiveAttendance([]);
+                }
+
+                return () => {
+                    unsubscribeAttendance();
+                };
+            }, [dbReady, userAuth, viewDate, refreshKey]); // HANYA INI YANG BERGANTUNG PADA TANGGAL
 
             // --- UTILITIES ---
             const checkSessionStatus = () => {
@@ -1664,4 +1688,3 @@
     </script>
 </body>
 </html>
-
