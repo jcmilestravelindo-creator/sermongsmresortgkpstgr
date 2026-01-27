@@ -19,6 +19,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -1355,15 +1356,22 @@
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Mode Scan Masuk</p>
                             </button>
                             
-                            {/* Live Report */}
-                             <button onClick={() => setView('live_report')} className="col-span-2 bg-gradient-to-r from-emerald-500 to-teal-600 p-5 rounded-3xl border border-emerald-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                            {/* Live Report & Analytics */}
+                             <button onClick={() => setView('live_report')} className="col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-3xl border border-emerald-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
                                 <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                                <div className="flex items-center justify-between relative z-10">
-                                    <div>
-                                        <h4 className="font-black text-white text-lg font-fredoka">Laporan Kehadiran</h4>
-                                        <p className="text-xs text-emerald-100 font-bold mt-1">Lihat Data Realtime Hari Ini</p>
-                                    </div>
-                                    <div className="bg-white/20 p-3 rounded-xl text-white"><i data-lucide="bar-chart-2" width="24"></i></div>
+                                <div className="relative z-10">
+                                    <div className="bg-white/20 p-3 rounded-xl text-white w-fit mb-3"><i data-lucide="list" width="24"></i></div>
+                                    <h4 className="font-black text-white text-md font-fredoka leading-tight">Laporan Harian</h4>
+                                    <p className="text-[10px] text-emerald-100 font-bold mt-1">Lihat Data Realtime</p>
+                                </div>
+                            </button>
+
+                            <button onClick={() => setView('analytics')} className="col-span-1 bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-3xl border border-violet-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                                <div className="relative z-10">
+                                    <div className="bg-white/20 p-3 rounded-xl text-white w-fit mb-3"><i data-lucide="pie-chart" width="24"></i></div>
+                                    <h4 className="font-black text-white text-md font-fredoka leading-tight">Analitik Grafik</h4>
+                                    <p className="text-[10px] text-violet-100 font-bold mt-1">Visualisasi Data</p>
                                 </div>
                             </button>
                         </div>
@@ -1424,6 +1432,124 @@
                                     </div>
                                 </button>
                             )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'analytics') {
+                const canvasRef1 = useRef(null);
+                const canvasRef2 = useRef(null);
+                
+                useEffect(() => {
+                    // Process Data
+                    const statusCounts = { Hadir: 0, Sakit: 0, Izin: 0, Alpha: 0 };
+                    const classCounts = {};
+                    classList.forEach(c => classCounts[c] = 0);
+                    classCounts['-'] = 0;
+
+                    liveAttendance.forEach(record => {
+                        if (statusCounts[record.status] !== undefined) statusCounts[record.status]++;
+                        const kelas = record.kelas && classList.includes(record.kelas) ? record.kelas : '-';
+                        if (classCounts[kelas] !== undefined) classCounts[kelas]++;
+                        else classCounts[kelas] = 1;
+                    });
+
+                    let chart1, chart2;
+
+                    if (canvasRef1.current) {
+                        const ctx1 = canvasRef1.current.getContext('2d');
+                        chart1 = new Chart(ctx1, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['Hadir', 'Sakit', 'Izin', 'Alpha'],
+                                datasets: [{
+                                    data: [statusCounts.Hadir, statusCounts.Sakit, statusCounts.Izin, statusCounts.Alpha],
+                                    backgroundColor: ['#10b981', '#3b82f6', '#f97316', '#ef4444'],
+                                    borderWidth: 0
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { font: { family: 'Nunito', weight: 'bold' } } }
+                                }
+                            }
+                        });
+                    }
+
+                    if (canvasRef2.current) {
+                        const ctx2 = canvasRef2.current.getContext('2d');
+                        const labels = Object.keys(classCounts).filter(k => classCounts[k] > 0 || k !== '-'); // Show used classes or all predefined
+                        const data = labels.map(k => classCounts[k]);
+                        
+                        chart2 = new Chart(ctx2, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: 'Jumlah Hadir',
+                                    data: data,
+                                    backgroundColor: '#6366f1',
+                                    borderRadius: 6
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+                                plugins: { legend: { display: false } }
+                            }
+                        });
+                    }
+
+                    return () => {
+                        if (chart1) chart1.destroy();
+                        if (chart2) chart2.destroy();
+                    };
+                }, [liveAttendance]);
+
+                const totalHadir = liveAttendance.filter(r => r.status === 'Hadir').length;
+                const totalNonHadir = liveAttendance.length - totalHadir;
+
+                return (
+                    <div className="min-h-screen bg-slate-50 p-4 pb-20 animate-bounce-in">
+                        <div className="flex items-center justify-between mb-6 sticky top-0 bg-slate-50/90 backdrop-blur-md py-2 z-20">
+                            <button onClick={() => setView('admin_dashboard')} className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-100 transition shadow-sm active:scale-95"><i data-lucide="arrow-left" width="20"></i></button>
+                            <div className="text-right">
+                                <h2 className="font-black text-2xl text-slate-800 font-fredoka">Laporan Grafik</h2>
+                                <p className="text-xs font-bold text-slate-400">{new Date(viewDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mb-6">
+                            <div className="bg-emerald-500 text-white p-4 rounded-2xl shadow-lg shadow-emerald-200 relative overflow-hidden">
+                                <div className="relative z-10">
+                                    <h3 className="text-3xl font-black font-fredoka">{totalHadir}</h3>
+                                    <p className="text-xs font-bold text-emerald-100 uppercase tracking-widest">Total Hadir</p>
+                                </div>
+                                <i data-lucide="user-check" className="absolute right-[-10px] bottom-[-10px] w-20 h-20 text-white opacity-20"></i>
+                            </div>
+                            <div className="bg-white text-slate-600 p-4 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
+                                <div className="relative z-10">
+                                    <h3 className="text-3xl font-black font-fredoka">{totalNonHadir}</h3>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tidak Hadir</p>
+                                </div>
+                                <i data-lucide="user-x" className="absolute right-[-10px] bottom-[-10px] w-20 h-20 text-slate-200 opacity-50"></i>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 mb-6">
+                            <h3 className="font-black text-slate-700 text-lg mb-4 flex items-center gap-2"><i data-lucide="pie-chart" className="text-violet-500" width="20"></i> Komposisi Kehadiran</h3>
+                            <div className="h-64 flex items-center justify-center">
+                                <canvas ref={canvasRef1}></canvas>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 mb-6">
+                            <h3 className="font-black text-slate-700 text-lg mb-4 flex items-center gap-2"><i data-lucide="bar-chart-2" className="text-indigo-500" width="20"></i> Kehadiran per Kelas</h3>
+                            <div className="h-64">
+                                <canvas ref={canvasRef2}></canvas>
+                            </div>
                         </div>
                     </div>
                 );
