@@ -1053,7 +1053,8 @@
             // [BARU] LAYAR MAINTENANCE (BLOKIR AKSES)
             // ========================================================
             // Jika Mode Maintenance AKTIF DAN User BUKAN Admin/Panitia, tampilkan layar ini.
-            if (isMaintenance && safeUser.role !== 'admin' && safeUser.role !== 'panitia') {
+            // FIX: Tambahkan pengecualian (&& view !== 'login') agar bisa masuk ke halaman login
+            if (isMaintenance && safeUser.role !== 'admin' && safeUser.role !== 'panitia' && view !== 'login') {
                 return (
                     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-center animate-bounce-in relative overflow-hidden">
                         {/* Background Animation */}
