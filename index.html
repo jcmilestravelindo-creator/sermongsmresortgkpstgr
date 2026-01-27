@@ -19,6 +19,9 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- TAMBAHAN: Chart.js untuk Grafik -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -115,6 +118,54 @@
             deferredPrompt = e;
         });
 
+        // --- KOMPONEN GRAFIK (CHARTS) ---
+        const SimpleChart = ({ type, data, options, id }) => {
+            const chartRef = useRef(null);
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                if (canvasRef.current) {
+                    // Hapus chart lama jika ada sebelum membuat baru
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                    }
+
+                    const ctx = canvasRef.current.getContext('2d');
+                    chartRef.current = new Chart(ctx, {
+                        type: type,
+                        data: data,
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        font: {
+                                            family: "'Nunito', sans-serif",
+                                            weight: 'bold',
+                                            size: 10
+                                        },
+                                        boxWidth: 10
+                                    }
+                                }
+                            },
+                            ...options
+                        }
+                    });
+                }
+
+                // Cleanup saat unmount
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                    }
+                };
+            }, [data, type, options]);
+
+            return <div className="w-full h-full"><canvas ref={canvasRef} id={id}></canvas></div>;
+        };
+
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
             if (!config.show) return null;
@@ -180,16 +231,11 @@
             
             // --- UI/Feature States ---
             const [scanResult, setScanResult] = useState(null);
-            
-            // ============================================
-            // [BARU] STATE MAINTENANCE
-            // ============================================
             const [isMaintenance, setIsMaintenance] = useState(false);
 
             const scannerRef = useRef(null);
             const isScanning = useRef(false);
             const [cameraFacing, setCameraFacing] = useState('environment');
-            // STATE KAMERA
 
             const [themeData, setThemeData] = useState(null);
             const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
@@ -217,7 +263,6 @@
             const [filterManual, setFilterManual] = useState("");
             const [filterUser, setFilterUser] = useState("");
             
-            // --- STATE BARU UNTUK LIVE SEARCH & FILTER KELAS ---
             const [liveSearch, setLiveSearch] = useState("");
             const [liveClassFilter, setLiveClassFilter] = useState("Semua");
             
@@ -235,7 +280,7 @@
             };
             const [viewDate, setViewDate] = useState(getSafeDateId());
             const [refreshKey, setRefreshKey] = useState(0);
-            // --- UPDATED CLASS LIST ---
+            
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM", "Pendeta", "Pembimbing", "Pengurus"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             const defaultTheme = { title: "", weeks: [] };
@@ -319,9 +364,6 @@
                     (err) => console.log("Partcipants sync waiting...")
                 );
 
-                // ========================================================
-                // [BARU] LISTENER UNTUK MAINTENANCE MODE
-                // ========================================================
                 const unsubscribeSystem = onSnapshot(doc(db, `${publicDataPath}/config`, 'system'), (snap) => {
                     if (snap.exists()) {
                         const data = snap.data();
@@ -373,17 +415,14 @@
                     (err) => {}
                 );
 
-                // --- FIX: REMOVE ORDERBY TO PREVENT INDEX ERRORS ON BACKDATE ---
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
-                setLiveAttendance([]); // Reset state to prevent stale data
+                setLiveAttendance([]); 
                 
                 try {
                     const q = query(collection(db, attendancePath));
-                    // Simplified query without orderBy
                     unsubscribeAttendance = onSnapshot(q, (snap) => {
                         const data = snap.docs.map(d => d.data());
-                        // Client-side sorting
                         data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                         setLiveAttendance(data);
                     }, (err) => {
@@ -410,7 +449,7 @@
                     unsubscribeBroadcastHistory();
                     unsubscribeAttendance();
                     unsubscribeConfig();
-                    unsubscribeSystem(); // <--- CLEANUP MAINTENANCE LISTENER
+                    unsubscribeSystem();
                 };
             }, [dbReady, userAuth, viewDate, refreshKey]);
 
@@ -494,7 +533,6 @@
                  if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
 
-            // --- SPECIFIC HANDLERS ---
             const handleResetAllData = async () => {
                 if (!currentUser) return;
                 const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
@@ -515,7 +553,6 @@
                 } else { alert("Password Salah! Reset Database Dibatalkan."); }
             };
 
-            // --- UPDATED SCANNER LOGIC ---
             useEffect(() => { 
                 if (view === 'scan' && !scanResult) { 
                     setTimeout(() => startScanner(cameraFacing), 300); 
@@ -579,7 +616,6 @@
                             const now = new Date();
                             const todayStr = getSafeDateId();
                             const jam = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-                            // INTEGRASI INPUT ABSEN
                             const attendanceData = {
                                 id: p.id,
                                 nama: p.nama,
@@ -817,18 +853,11 @@
                 handleBackToMenu();
             };
 
-            // ============================================
-            // [RESTORED] LOGIC FUNGSI YG HILANG
-            // ============================================
             const handleLogin = (e) => {
                 e.preventDefault();
                 const username = e.target.username.value.trim();
                 const password = e.target.password.value.trim();
 
-                // --- EMERGENCY BACKDOOR ---
-                // Jika database bermasalah atau lupa password admin, gunakan ini:
-                // Username: superadmin
-                // Password: root
                 if (username === 'superadmin' && password === 'root') {
                     const emergencyUser = { username: 'superadmin', role: 'admin', nama: 'Emergency Admin' };
                     localStorage.setItem('gkps_user', JSON.stringify(emergencyUser));
@@ -837,7 +866,6 @@
                     alert("Login Darurat Berhasil! Segera atur ulang user di menu 'Atur User'.");
                     return;
                 }
-                // --------------------------
 
                 const foundUser = users.find(u => u.username === username && u.password === password);
                 if (foundUser) {
@@ -937,7 +965,7 @@
                 setIsDownloading(true);
                 for (const p of participants) {
                     await downloadSingleQR(p);
-                    await new Promise(r => setTimeout(r, 500)); // Delay agar browser tidak nge-block
+                    await new Promise(r => setTimeout(r, 500)); 
                 }
                 setIsDownloading(false);
                 alert("Download Selesai!");
@@ -951,15 +979,9 @@
             };
 
             const handleResetPassword = () => {
-                // Logika sederhana: Cek token hardcode (misal 'PANITIA2025')
                 if (resetForm.token !== 'PANITIA2025') return alert("Kode Otorisasi Salah!");
                 if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
                 
-                // Cek apakah user ada di list users (jika data sudah load)
-                // Karena di view forgot pass kita blm tentu load users, kita tembak langsung save.
-                // Note: Ini akan membuat user baru jika username salah ketik, tapi cukup untuk case darurat.
-                // Idealnya fetch dulu.
-                // FIX: Tambahkan role: 'admin' agar user hasil recovery otomatis jadi admin & bisa tembus maintenance
                 saveToCloud(`users/${resetForm.username}`, { password: resetForm.newPassword, role: 'admin', nama: 'Recovered Admin' })
                     .then(() => {
                         alert("Password Admin berhasil direset paksa & Role diupdate jadi ADMIN.");
@@ -1037,7 +1059,6 @@
                 </div>
             );
 
-            // --- LOADING SCREEN ---
             if (!dbReady) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
@@ -1050,15 +1071,9 @@
                 );
             }
 
-            // ========================================================
-            // [BARU] LAYAR MAINTENANCE (BLOKIR AKSES)
-            // ========================================================
-            // Jika Mode Maintenance AKTIF DAN User BUKAN Admin/Panitia, tampilkan layar ini.
-            // FIX: Tambahkan pengecualian (&& view !== 'login' && view !== 'forgot_password') agar bisa akses reset password
             if (isMaintenance && safeUser.role !== 'admin' && safeUser.role !== 'panitia' && view !== 'login' && view !== 'forgot_password') {
                 return (
                     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 text-center animate-bounce-in relative overflow-hidden">
-                        {/* Background Animation */}
                         <div className="absolute inset-0 opacity-10">
                             <div className="absolute top-10 left-10 w-32 h-32 bg-yellow-500 rounded-full blur-3xl animate-pulse"></div>
                             <div className="absolute bottom-10 right-10 w-40 h-40 bg-indigo-500 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
@@ -1083,7 +1098,6 @@
                                 <p className="text-[10px] text-slate-500 mt-1">Silakan kembali beberapa saat lagi.</p>
                             </div>
                             
-                            {/* Tombol Login Admin (Rahasia) jika ingin bypass */}
                             <button onClick={() => {
                                 const pass = prompt("Akses Admin (Bypass):");
                                 if(pass === "admin123") setView('login'); 
@@ -1095,7 +1109,6 @@
                 );
             }
 
-            // --- RENDER VIEWS ---
             if (view === 'login') return (
                 <div key="view-login" className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -1172,7 +1185,6 @@
                             </div>
                         </div>
 
-                            {/* --- BAGIAN BAHAN AJAR (REDESIGNED) --- */}
                         <div className="p-6 pb-0">
                             {themeData && themeData.title ? (
                                 <div className="mb-6 relative z-10">
@@ -1186,20 +1198,14 @@
                                         )}
                                     </div>
 
-                                    {/* Horizontal Scroll Container (Floating Cards) */}
                                     <div className="flex overflow-x-auto pb-8 -mx-4 px-4 snap-x snap-mandatory space-x-4 no-scrollbar" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
                                         {displayWeeks.map((week, idx) => {
                                              const isEven = idx % 2 === 0;
                                              return (
                                                 <div key={idx} onClick={() => setSelectedWeek(week)} className={`flex-none w-[85%] max-w-[300px] snap-center relative group cursor-pointer transition-all duration-300 hover:-translate-y-2`}>
-                                                    {/* Card Container */}
                                                     <div className={`h-full rounded-[32px] p-6 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.15)] border-[3px] border-white relative overflow-hidden active:scale-95 transition-transform duration-200 ${isEven ? 'bg-gradient-to-br from-sky-400 to-blue-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
-                                                        
-                                                        {/* Floating decorative elements */}
                                                         <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                                                         <div className="absolute bottom-0 left-0 w-24 h-24 bg-black opacity-10 rounded-full -ml-8 -mb-8 blur-xl"></div>
-
-                                                        {/* Content */}
                                                         <div className="relative z-10 flex flex-col h-full justify-between min-h-[160px]">
                                                             <div>
                                                                 <div className="flex justify-between items-start mb-3">
@@ -1210,13 +1216,10 @@
                                                                         <i data-lucide="book-open" width="14"></i>
                                                                     </div>
                                                                 </div>
-                                                                
-                                                                {/* TITLE - Fixed overflow with line-clamp */}
                                                                 <h4 className="text-white text-2xl font-black font-fredoka leading-tight mb-2 line-clamp-3 drop-shadow-md break-words">
                                                                     {week.topic}
                                                                 </h4>
                                                             </div>
-                                                            
                                                             <div className="mt-4">
                                                                 <div className="flex items-center gap-2 text-white/90 text-xs font-bold bg-black/10 p-2 rounded-xl backdrop-blur-sm w-fit">
                                                                     <span className="bg-white text-indigo-600 rounded-lg p-1"><i data-lucide="arrow-right" width="12"></i></span>
@@ -1228,7 +1231,6 @@
                                                 </div>
                                             );
                                         })}
-                                         {/* Empty state or Add button if empty could go here */}
                                     </div>
                                 </div>
                             ) : null}
@@ -1254,7 +1256,6 @@
                                 </button>
                             )}
 
-                            {/* TOMBOL DASHBOARD ADMIN BARU (MENGGANTIKAN LIST TOMBOL LAMA) */}
                             {!isPeserta && (
                                 <button onClick={() => setView('admin_dashboard')} className="w-full btn-playful bg-slate-800 text-white border-b-4 border-slate-950 p-5 rounded-2xl flex items-center justify-between shadow-xl mt-4 group relative overflow-hidden transform hover:scale-[1.01] transition-transform">
                                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
@@ -1288,7 +1289,6 @@
             );
             }
 
-            // --- VIEW BARU: DASHBOARD ADMIN MODERN ---
             if (view === 'admin_dashboard') {
                 const totalUsers = users.length;
                 const totalParticipants = participants.length;
@@ -1296,7 +1296,6 @@
 
                 return (
                     <div className="min-h-screen bg-slate-50 p-4 pb-20 animate-bounce-in">
-                        {/* Header */}
                         <div className="flex items-center justify-between mb-6 sticky top-0 bg-slate-50/90 backdrop-blur-md py-2 z-20">
                             <button onClick={handleBackToMenu} className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-100 transition shadow-sm active:scale-95"><i data-lucide="arrow-left" width="20"></i></button>
                             <div className="text-right">
@@ -1305,7 +1304,6 @@
                             </div>
                         </div>
 
-                        {/* Stats Row */}
                         <div className="grid grid-cols-3 gap-3 mb-6">
                             <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
                                 <div className="text-indigo-500 mb-2 flex justify-center bg-indigo-50 p-2 rounded-full w-fit mx-auto"><i data-lucide="users" width="16"></i></div>
@@ -1324,38 +1322,39 @@
                             </div>
                         </div>
 
-                        {/* Main Tools Grid */}
                         <h3 className="font-black text-slate-400 text-xs uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><i data-lucide="grid" width="12"></i> Menu Utama</h3>
                         <div className="grid grid-cols-2 gap-4 mb-6">
-                            {/* Absensi */}
                             <button onClick={() => setView('attendance_manager')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="clipboard-check" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Kelola Absensi</h4>
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Input Manual & Sesi</p>
                             </button>
 
-                            {/* Broadcast */}
                             <button onClick={() => setView('manage_broadcast')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="megaphone" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Buat Broadcast</h4>
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Kirim Info Penting</p>
                             </button>
 
-                            {/* Bahan Ajar */}
                             <button onClick={() => { setEditThemeForm(themeData || defaultTheme); setView('edit_theme'); }} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="book-open" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Bahan Ajar</h4>
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Edit Materi Minggu</p>
                             </button>
 
-                            {/* Scan QR */}
                             <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="scan-line" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Scanner QR</h4>
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Mode Scan Masuk</p>
                             </button>
+
+                            {/* TOMBOL GRAFIK STATISTIK BARU */}
+                            <button onClick={() => setView('statistics')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
+                                <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="pie-chart" width="24"></i></div>
+                                <h4 className="font-bold text-slate-700 text-sm">Statistik & Grafik</h4>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">Visualisasi Data</p>
+                            </button>
                             
-                            {/* Live Report */}
                              <button onClick={() => setView('live_report')} className="col-span-2 bg-gradient-to-r from-emerald-500 to-teal-600 p-5 rounded-3xl border border-emerald-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
                                 <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                                 <div className="flex items-center justify-between relative z-10">
@@ -1368,7 +1367,6 @@
                             </button>
                         </div>
 
-                        {/* System Tools */}
                         <h3 className="font-black text-slate-400 text-xs uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><i data-lucide="settings" width="12"></i> Sistem & Data</h3>
                         <div className="space-y-3">
                             {isAdmin && (
@@ -1425,6 +1423,149 @@
                                 </button>
                             )}
                         </div>
+                    </div>
+                );
+            }
+
+            // --- VIEW BARU: GRAFIK STATISTIK ---
+            if (view === 'statistics') {
+                // Proses Data untuk Grafik
+                
+                // 1. Data per Kelas (Bar Chart)
+                const classCounts = {};
+                // Inisialisasi semua kelas dengan 0 agar tetap muncul di grafik
+                classList.forEach(cls => classCounts[cls] = 0);
+                
+                liveAttendance.forEach(att => {
+                    // Normalisasi nama kelas, jika tidak ada di classList masukkan ke "Lainnya" atau abaikan
+                    const clsName = att.kelas || "Tanpa Kelas";
+                    if (classCounts.hasOwnProperty(clsName)) {
+                        classCounts[clsName]++;
+                    } else if (clsName === '-' || !clsName) {
+                        // Opsi: hitung yg tanpa kelas
+                    }
+                });
+
+                const chartDataKelas = {
+                    labels: Object.keys(classCounts),
+                    datasets: [{
+                        label: 'Jumlah Hadir',
+                        data: Object.values(classCounts),
+                        backgroundColor: 'rgba(99, 102, 241, 0.6)', // Indigo-500 dengan opacity
+                        borderColor: 'rgb(79, 70, 229)', // Indigo-600
+                        borderWidth: 2,
+                        borderRadius: 8
+                    }]
+                };
+
+                // 2. Data Status Kehadiran (Doughnut Chart)
+                const statusCounts = { 'Hadir': 0, 'Sakit': 0, 'Izin': 0, 'Alpha': 0 };
+                liveAttendance.forEach(att => {
+                    const st = att.status || 'Hadir';
+                    if (statusCounts.hasOwnProperty(st)) statusCounts[st]++;
+                });
+
+                const chartDataStatus = {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{
+                        data: Object.values(statusCounts),
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.7)', // Emerald (Hadir)
+                            'rgba(59, 130, 246, 0.7)', // Blue (Sakit)
+                            'rgba(249, 115, 22, 0.7)', // Orange (Izin)
+                            'rgba(239, 68, 68, 0.7)'   // Red (Alpha)
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 3
+                    }]
+                };
+                
+                // 3. Data Kategori (Pie Chart)
+                const catCounts = {};
+                liveAttendance.forEach(att => {
+                    const cat = att.kategori || 'Umum';
+                    catCounts[cat] = (catCounts[cat] || 0) + 1;
+                });
+                
+                const chartDataKategori = {
+                    labels: Object.keys(catCounts),
+                    datasets: [{
+                        data: Object.values(catCounts),
+                        backgroundColor: [
+                            'rgba(236, 72, 153, 0.7)', // Pink
+                            'rgba(139, 92, 246, 0.7)', // Violet
+                            'rgba(20, 184, 166, 0.7)', // Teal
+                            'rgba(245, 158, 11, 0.7)', // Amber
+                            'rgba(99, 102, 241, 0.7)'  // Indigo
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 3
+                    }]
+                };
+
+                return (
+                    <div className="min-h-screen bg-slate-50 p-4 pb-20 animate-bounce-in">
+                        <div className="flex items-center justify-between mb-6 sticky top-0 bg-slate-50/90 backdrop-blur-md py-2 z-20">
+                            <button onClick={() => setView('admin_dashboard')} className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-100 transition shadow-sm active:scale-95"><i data-lucide="arrow-left" width="20"></i></button>
+                            <div className="text-right">
+                                <h2 className="font-black text-2xl text-slate-800 font-fredoka">Statistik</h2>
+                                <p className="text-xs font-bold text-slate-400">Analisa Data Kehadiran</p>
+                            </div>
+                        </div>
+
+                        {/* Filter Tanggal Sederhana */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm mb-6 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-purple-100 p-2 rounded-lg text-purple-600"><i data-lucide="calendar" width="20"></i></div>
+                                <div>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Data Tanggal</p>
+                                    <p className="text-sm font-black text-slate-700">{new Date(viewDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                </div>
+                            </div>
+                            <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 border-none rounded-lg text-xs font-bold text-slate-600 p-2 focus:ring-2 focus:ring-purple-200" />
+                        </div>
+
+                        {liveAttendance.length === 0 ? (
+                             <div className="text-center p-10 opacity-50">
+                                <i data-lucide="bar-chart-2" className="mx-auto w-16 h-16 mb-4 text-slate-300"></i>
+                                <h3 className="font-black text-slate-400 text-lg">Belum Ada Data</h3>
+                                <p className="text-xs text-slate-400 mt-1">Belum ada absensi masuk pada tanggal ini.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Grafik Batang Kelas */}
+                                <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
+                                    <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="bar-chart" width="18" className="text-indigo-500"></i> Kehadiran Per Kelas</h3>
+                                    <div className="h-64">
+                                        <SimpleChart type="bar" data={chartDataKelas} id="chartKelas" />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Grafik Donat Status */}
+                                    <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
+                                        <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="pie-chart" width="18" className="text-emerald-500"></i> Status Kehadiran</h3>
+                                        <div className="h-64 relative">
+                                            <SimpleChart type="doughnut" data={chartDataStatus} id="chartStatus" />
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <div className="text-center">
+                                                    <span className="text-3xl font-black text-slate-700 block">{liveAttendance.length}</span>
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Total</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Grafik Pie Kategori */}
+                                    <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
+                                        <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="users" width="18" className="text-pink-500"></i> Komposisi Kategori</h3>
+                                        <div className="h-64">
+                                            <SimpleChart type="pie" data={chartDataKategori} id="chartKategori" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             }
@@ -1507,7 +1648,6 @@
             }
 
             if (view === 'live_report') {
-                // Logic Filtering Data
                 let displayData = liveAttendance.filter(item => {
                     const matchName = item.nama.toLowerCase().includes(liveSearch.toLowerCase());
                     const matchClass = liveClassFilter === "Semua" || (item.kelas && item.kelas === liveClassFilter);
@@ -1519,9 +1659,7 @@
 
                 return (
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
-                    {/* --- STICKY HEADER --- */}
                     <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-                        {/* Top Bar */}
                         <div className="p-4 pb-2 flex items-center justify-between">
                              <button onClick={() => handleBackToMenu()} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200 transition active:scale-95">
                                 <i data-lucide="arrow-left" width="20"></i>
@@ -1535,9 +1673,7 @@
                              </div>
                         </div>
 
-                        {/* Controls Area */}
                         <div className="px-4 pb-4 space-y-3">
-                            {/* Date & Export */}
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1555,7 +1691,6 @@
                                 )}
                             </div>
 
-                            {/* Search & Filter */}
                             <div className="flex gap-2">
                                 <div className="relative flex-[2]">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1587,7 +1722,6 @@
                         </div>
                     </div>
 
-                    {/* --- CONTENT LIST --- */}
                     <div className="flex-1 p-4 pb-24 overflow-y-auto bg-slate-50 min-h-[50vh]">
                         {displayData.length === 0 ? (
                             <div className="flex flex-col items-center justify-center pt-10 opacity-60">
@@ -1611,20 +1745,17 @@
                                 
                                 {displayData.map((item, idx) => (
                                     <div key={idx} className="group bg-white p-3 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-3 animate-bounce-in relative overflow-hidden">
-                                        {/* Status Indicator Bar */}
                                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
                                             item.status === 'Hadir' ? 'bg-emerald-400' : 
                                             item.status === 'Sakit' ? 'bg-blue-400' : 
                                             item.status === 'Izin' ? 'bg-orange-400' : 'bg-red-400'
                                         }`}></div>
 
-                                        {/* Time Badge */}
                                         <div className="flex flex-col items-center justify-center bg-slate-50 min-w-[56px] h-[56px] rounded-xl border border-slate-100 ml-2">
                                             <span className="text-[14px] font-black text-slate-700 leading-none">{item.jam.split(':')[0]}</span>
                                             <span className="text-[10px] font-bold text-slate-400 leading-none mt-0.5">{item.jam.split(':')[1]}</span>
                                         </div>
 
-                                        {/* User Info */}
                                         <div className="flex-1 min-w-0 py-1">
                                             <h4 className="font-bold text-slate-800 text-sm truncate leading-tight mb-1">{item.nama}</h4>
                                             <div className="flex flex-wrap items-center gap-1.5">
@@ -1639,7 +1770,6 @@
                                             </div>
                                         </div>
 
-                                        {/* Status Badge */}
                                         <div className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide transform -rotate-2 group-hover:rotate-0 transition ${
                                             item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-600' : 
                                             item.status === 'Sakit' ? 'bg-blue-100 text-blue-600' : 
@@ -1801,7 +1931,6 @@
                         <div className="space-y-2 pb-10">
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest">User Terdaftar</h3>
                             <input type="text" placeholder="Cari username atau nama..." className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700 mb-2" value={filterUser} onChange={(e) => setFilterUser(e.target.value)} />
-                            {/* FIX: Tambahkan (u.username || '') dan (u.nama || '') untuk mencegah crash jika data kosong */}
                             {users.filter(u => (u.username || '').toLowerCase().includes(filterUser.toLowerCase()) || (u.nama || '').toLowerCase().includes(filterUser.toLowerCase())).map(u => (
                                 <div key={u.username} className={`bg-white p-4 rounded-2xl shadow-sm border-2 flex justify-between items-center ${editingId === u.username ? 'border-amber-400 bg-amber-50' : 'border-slate-100'}`}>
                                     <div><p className="font-bold text-slate-700">{u.username || 'Tanpa Username'}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama || '-'} • {u.role || 'peserta'}</p></div>
@@ -2005,4 +2134,3 @@
     </script>
 </body>
 </html>
-
