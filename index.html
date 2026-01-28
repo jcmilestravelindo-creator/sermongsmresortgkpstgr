@@ -20,6 +20,9 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     
+    <!-- Chart.js untuk Grafik -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -118,6 +121,64 @@
             e.preventDefault();
             deferredPrompt = e;
         });
+
+        // --- KOMPONEN GRAFIK (CHARTS) YANG DIPERBAIKI (REBUILT) ---
+        const SimpleChart = ({ type, data, options, id }) => {
+            const chartRef = useRef(null);
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                // Hancurkan chart lama jika ada untuk mencegah memory leak atau glitch
+                const destroyChart = () => {
+                    if (chartRef.current) {
+                        try {
+                            chartRef.current.destroy();
+                        } catch (error) {
+                            console.warn("Chart destroy warning:", error);
+                        }
+                        chartRef.current = null;
+                    }
+                };
+
+                // Render chart baru
+                const renderChart = () => {
+                    if (canvasRef.current) {
+                        const ctx = canvasRef.current.getContext('2d');
+                        if (ctx) {
+                            try {
+                                chartRef.current = new Chart(ctx, {
+                                    type: type,
+                                    data: data,
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        animation: false, // Nonaktifkan animasi agar transisi tanggal lebih cepat
+                                        ...options
+                                    }
+                                });
+                            } catch (error) {
+                                console.error("Chart render error:", error);
+                            }
+                        }
+                    }
+                };
+
+                destroyChart();
+                // Gunakan timeout kecil untuk memastikan DOM sudah siap
+                const timer = setTimeout(renderChart, 50);
+
+                return () => {
+                    clearTimeout(timer);
+                    destroyChart();
+                };
+            }, [data, type, options]); // Re-render saat data berubah
+
+            return (
+                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    <canvas ref={canvasRef} id={id}></canvas>
+                </div>
+            );
+        };
 
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
@@ -1286,7 +1347,7 @@
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Mode Scan Masuk</p>
                             </button>
 
-                            {/* TOMBOL GRAFIK STATISTIK BARU */}
+                            {/* TOMBOL GRAFIK STATISTIK BARU (TETAP ADA SESUAI PERMINTAAN REBUILT) */}
                             <button onClick={() => setView('statistics')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="pie-chart" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Statistik & Grafik</h4>
@@ -1365,7 +1426,7 @@
                 );
             }
 
-            // --- VIEW BARU: GRAFIK STATISTIK ---
+            // --- VIEW BARU: GRAFIK STATISTIK (REBUILT AGAR BISA BACKDATE) ---
             if (view === 'statistics') {
                 // 1. Data per Kelas (Bar Chart)
                 const classCounts = {};
@@ -2091,4 +2152,3 @@
     </script>
 </body>
 </html>
-
