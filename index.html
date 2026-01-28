@@ -1380,7 +1380,7 @@
                 );
             }
 
-            // --- VIEW BARU: AI SMART ANALYTICS (PERBAIKAN) ---
+            // --- VIEW BARU: AI SMART ANALYTICS (DIPERBARUI) ---
             if (view === 'ai_analytics') {
                 
                 const generateAIAnalysis = () => {
@@ -1391,14 +1391,29 @@
                     setTimeout(() => {
                         const total = liveAttendance.length;
                         
-                        // Logika Analisis Cerdas (Rule-Based AI)
+                        // Data Containers
                         const classStats = {};
+                        const categoryStats = {};
                         const statusStats = { Hadir: 0, Sakit: 0, Izin: 0, Alpha: 0 };
+                        let posPICount = 0; // Menghitung asal dari Pos PI (sebagai proxy lokasi)
                         
+                        // --- CORE LOGIC: Loop Data ---
                         liveAttendance.forEach(d => {
+                            // 1. Analisa Status
+                            if (statusStats[d.status] !== undefined) statusStats[d.status]++;
+                            
+                            // 2. Analisa Kelas
                             const cls = d.kelas || 'Tanpa Kelas';
                             classStats[cls] = (classStats[cls] || 0) + 1;
-                            if (statusStats[d.status] !== undefined) statusStats[d.status]++;
+                            
+                            // 3. Analisa Kategori
+                            const cat = d.kategori || 'Umum';
+                            categoryStats[cat] = (categoryStats[cat] || 0) + 1;
+
+                            // 4. Analisa Asal/Lokasi (Pos PI)
+                            if (cls.toLowerCase().includes("pos pi")) {
+                                posPICount++;
+                            }
                         });
 
                         // Jika data kosong
@@ -1411,37 +1426,49 @@
                             return;
                         }
 
-                        // Mencari kelas teraktif
-                        let topClass = "-";
-                        let topClassCount = 0;
+                        // --- ADVANCED ANALYSIS ---
+                        // Mencari kelas teraktif & terendah
+                        let topClass = "-"; let topClassCount = -1;
+                        let lowClass = "-"; let lowClassCount = 9999;
+
                         Object.entries(classStats).forEach(([cls, count]) => {
-                            if (count > topClassCount) {
-                                topClass = cls;
-                                topClassCount = count;
-                            }
+                            if (count > topClassCount) { topClass = cls; topClassCount = count; }
+                            if (count < lowClassCount) { lowClass = cls; lowClassCount = count; }
                         });
+
+                        // Menghitung komposisi penting
+                        const countASM = categoryStats['Anak Sekolah Minggu'] || 0;
+                        const countGSM = categoryStats['GSM'] || 0;
+                        const ratio = countGSM > 0 ? (countASM / countGSM).toFixed(1) : countASM; 
 
                         const hadirPct = Math.round((statusStats.Hadir / total) * 100);
                         
-                        // Membuat Narasi AI yang Natural
+                        // --- AI NARRATIVE GENERATION ---
                         const narrative = `
-                            Analisis Data Sekolah Minggu (${new Date(viewDate).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}):
+                            Laporan Analisis Cerdas (${new Date(viewDate).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}):
 
-                            Saya mendeteksi total **${total} peserta** yang terdata pada sistem hari ini.
+                            📊 **Ringkasan Eksekutif:**
+                            Total partisipan terdata sebanyak **${total} jiwa**. Tingkat kehadiran efektif mencapai **${hadirPct}%**.
 
-                            📊 **Tren Kehadiran:**
-                            Tingkat kehadiran efektif mencapai **${hadirPct}%**. Kelas **${topClass}** menjadi kelas paling aktif hari ini dengan kontribusi ${topClassCount} jiwa.
+                            🏫 **Analisa Kelas & Lokasi:**
+                            - Kelas Teraktif: **${topClass}** (${topClassCount} anak).
+                            - Asal Pos PI: Terdeteksi **${posPICount}** peserta dari cabang Pos PI (Pekabaran Injil).
+                            ${posPICount > 0 ? "Kehadiran dari Pos PI cukup signifikan, pertahankan semangat pelayanannya!" : "Belum ada data signifikan dari Pos PI hari ini."}
+
+                            👥 **Komposisi & Pengawasan:**
+                            - Anak Sekolah Minggu (ASM): ${countASM} jiwa.
+                            - Guru Sekolah Minggu (GSM): ${countGSM} jiwa.
+                            - Rasio Pengawasan: **1 Guru menangani ±${ratio} Anak**.
+                            ${ratio > 15 ? "⚠️ Rasio cukup tinggi. Disarankan menambah personil GSM untuk efektivitas kelas." : "✅ Rasio guru dan murid sangat ideal."}
 
                             🩺 **Kesehatan & Kedisiplinan:**
-                            - ${statusStats.Sakit > 0 ? `Terdapat ${statusStats.Sakit} anak yang sakit, mari kita doakan kesembuhan mereka.` : `Puji Tuhan, tidak ada laporan sakit hari ini.`}
-                            - ${statusStats.Alpha > 5 ? `⚠️ Perhatian: Terdeteksi ${statusStats.Alpha} anak Alpha (Tanpa Keterangan). Disarankan GSM melakukan kunjungan atau kontak orang tua.` : `✅ Tingkat kedisiplinan cukup baik (Alpha rendah).`}
-                            
-                            Terus semangat melayani, Kak ${safeUser.nama}!
+                            - ${statusStats.Sakit > 0 ? `Terdapat ${statusStats.Sakit} anak sakit.` : `Puji Tuhan, nihil laporan sakit.`}
+                            - ${statusStats.Alpha > 5 ? `⚠️ Perhatian: ${statusStats.Alpha} Alpha. Mohon tim kunjungan menindaklanjuti.` : `✅ Kedisiplinan baik (Alpha rendah).`}
                         `;
 
-                        setAiResponse({ error: false, text: narrative, stats: statusStats });
+                        setAiResponse({ error: false, text: narrative, stats: statusStats, catStats: categoryStats });
                         setIsThinking(false);
-                    }, 2000);
+                    }, 2500); // Sedikit lebih lama untuk efek "berpikir"
                 };
 
                 return (
@@ -1490,7 +1517,9 @@
                                     </div>
                                 </div>
 
-                                {!aiResponse.error && aiResponse.stats && (
+                                {!aiResponse.error && (
+                                    <>
+                                    {/* Status Cards */}
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="bg-white p-4 rounded-2xl border border-emerald-100 text-center shadow-sm">
                                             <span className="text-3xl font-black text-emerald-500 block font-fredoka">{aiResponse.stats.Hadir}</span>
@@ -1509,6 +1538,22 @@
                                             <span className="text-[10px] font-bold text-slate-400 uppercase">Alpha</span>
                                         </div>
                                     </div>
+
+                                    {/* Category Cards Breakdown */}
+                                    {aiResponse.catStats && (
+                                        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg mt-2">
+                                            <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2"><i data-lucide="pie-chart" width="14"></i> Komposisi Peserta</h4>
+                                            <div className="space-y-2">
+                                                {Object.entries(aiResponse.catStats).map(([key, val]) => (
+                                                    <div key={key} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                        <span className="text-xs font-bold text-slate-600">{key}</span>
+                                                        <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{val} Jiwa</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    </>
                                 )}
                             </div>
                         ) : (
