@@ -20,9 +20,6 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     
-    <!-- Chart.js untuk Grafik -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -121,54 +118,6 @@
             e.preventDefault();
             deferredPrompt = e;
         });
-
-        // --- KOMPONEN GRAFIK (CHARTS) ---
-        const SimpleChart = ({ type, data, options, id }) => {
-            const chartRef = useRef(null);
-            const canvasRef = useRef(null);
-
-            useEffect(() => {
-                // Fungsi cleanup yang aman
-                const cleanup = () => {
-                    if (chartRef.current) {
-                        try { chartRef.current.destroy(); } catch(e) { console.warn("Chart destroy error", e); }
-                        chartRef.current = null;
-                    }
-                };
-
-                if (canvasRef.current) {
-                    cleanup(); // Hapus chart lama sebelum membuat baru
-
-                    try {
-                        const ctx = canvasRef.current.getContext('2d');
-                        if (ctx) {
-                             chartRef.current = new Chart(ctx, {
-                                type: type,
-                                data: data,
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    animation: false, // MATIKAN ANIMASI UNTUK STABILITAS SAAT GANTI TANGGAL
-                                    plugins: {
-                                        legend: {
-                                            position: 'bottom',
-                                            labels: { font: { family: "'Nunito', sans-serif", weight: 'bold', size: 10 }, boxWidth: 10 }
-                                        }
-                                    },
-                                    ...options
-                                }
-                            });
-                        }
-                    } catch (err) {
-                        console.error("Chart creation error", err);
-                    }
-                }
-
-                return cleanup;
-            }, [data, type, options]);
-
-            return <div className="w-full h-full"><canvas ref={canvasRef} id={id}></canvas></div>;
-        };
 
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
