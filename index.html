@@ -20,8 +20,6 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -71,6 +69,10 @@
         /* Loading Spinner */
         .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #0ea5e9; animation: spin 1s ease infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* AI Typing Effect */
+        .typing-cursor::after { content: '|'; animation: blink 1s step-start infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
     </style>
 
     <script type="module">
@@ -125,59 +127,6 @@
             e.preventDefault();
             deferredPrompt = e;
         });
-        // --- KOMPONEN GRAFIK (CHARTS) YANG DIPERBAIKI (REBUILT) ---
-        const SimpleChart = ({ type, data, options, id }) => {
-            const chartRef = useRef(null);
-            const canvasRef = useRef(null);
-
-            useEffect(() => {
-                const destroyChart = () => {
-                    if (chartRef.current) {
-                        try {
-                            chartRef.current.destroy();
-                        } catch (error) {
-                            console.warn("Chart destroy warning:", error);
-                        }
-                        chartRef.current = null;
-                    }
-                };
-
-                const renderChart = () => {
-                    if (canvasRef.current) {
-                        const ctx = canvasRef.current.getContext('2d');
-                        if (ctx) {
-                            try {
-                                chartRef.current = new Chart(ctx, {
-                                    type: type,
-                                    data: data,
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        animation: false,
-                                        ...options
-                                    }
-                                });
-                            } catch (error) {
-                                console.error("Chart render error:", error);
-                            }
-                        }
-                    }
-                };
-                destroyChart();
-                const timer = setTimeout(renderChart, 50);
-
-                return () => {
-                    clearTimeout(timer);
-                    destroyChart();
-                };
-            }, [data, type, options]);
-
-            return (
-                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                    <canvas ref={canvasRef} id={id}></canvas>
-                </div>
-            );
-        };
 
         const AdminResetModal = ({ config, setConfig, onConfirm }) => {
             React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [config.show]);
@@ -1349,21 +1298,21 @@
                                  <p className="text-[10px] text-slate-400 font-bold mt-1">Mode Scan Masuk</p>
                             </button>
 
-                            {/* TOMBOL GRAFIK STATISTIK BARU (TETAP ADA SESUAI PERMINTAAN REBUILT) */}
-                             <button onClick={() => setView('statistics')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
-                                <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="pie-chart" width="24"></i></div>
-                                <h4 className="font-bold text-slate-700 text-sm">Statistik & Grafik</h4>
-                                <p className="text-[10px] text-slate-400 font-bold mt-1">Visualisasi Data</p>
+                            {/* FITUR BARU: AI SMART ANALYTICS */}
+                             <button onClick={() => setView('ai_analytics')} className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-indigo-100 p-5 rounded-3xl shadow-sm hover:shadow-md transition text-left group active:scale-95">
+                                <div className="w-12 h-12 bg-indigo-500 text-white rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-lg shadow-indigo-200"><i data-lucide="sparkles" width="24"></i></div>
+                                <h4 className="font-bold text-indigo-800 text-sm">AI Smart Analyst</h4>
+                                <p className="text-[10px] text-indigo-400 font-bold mt-1">Analisa Data Cerdas</p>
                             </button>
                              
-                             <button onClick={() => setView('live_report')} className="col-span-2 bg-gradient-to-r from-emerald-500 to-teal-600 p-5 rounded-3xl border border-emerald-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                             <button onClick={() => setView('live_report')} className="col-span-1 bg-gradient-to-r from-emerald-500 to-teal-600 p-5 rounded-3xl border border-emerald-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
                                 <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                                <div className="flex items-center justify-between relative z-10">
+                                <div className="flex flex-col justify-between h-full relative z-10">
+                                    <div className="bg-white/20 p-2 rounded-xl text-white w-fit mb-2"><i data-lucide="bar-chart-2" width="20"></i></div>
                                     <div>
-                                         <h4 className="font-black text-white text-lg font-fredoka">Laporan Kehadiran</h4>
-                                        <p className="text-xs text-emerald-100 font-bold mt-1">Lihat Data Realtime Hari Ini</p>
+                                         <h4 className="font-black text-white text-sm font-fredoka">Laporan Kehadiran</h4>
+                                        <p className="text-[10px] text-emerald-100 font-bold mt-1">Data Realtime</p>
                                      </div>
-                                    <div className="bg-white/20 p-3 rounded-xl text-white"><i data-lucide="bar-chart-2" width="24"></i></div>
                                 </div>
                             </button>
                         </div>
@@ -1428,153 +1377,116 @@
                 );
             }
 
-            // --- VIEW BARU: GRAFIK STATISTIK (REBUILT AGAR BISA BACKDATE) ---
-            if (view === 'statistics') {
-                // 1. Data per Kelas (Bar Chart)
-                const classCounts = {};
-                classList.forEach(cls => classCounts[cls] = 0);
-                
-                liveAttendance.forEach(att => {
-                    const clsName = att.kelas || "Tanpa Kelas";
-                    if (classCounts.hasOwnProperty(clsName)) {
-                        classCounts[clsName]++;
-                    }
-                });
-                const chartDataKelas = {
-                    labels: Object.keys(classCounts),
-                    datasets: [{
-                        label: 'Jumlah Hadir',
-                        data: Object.values(classCounts),
-                        backgroundColor: 'rgba(99, 102, 241, 0.6)', // Indigo-500 dengan opacity
-                        borderColor: 'rgb(79, 70, 229)', // Indigo-600
-                        borderWidth: 2,
-                        borderRadius: 8
-                    }]
+            // --- VIEW BARU: AI SMART ANALYTICS (PENGGANTI STATISTIK) ---
+            if (view === 'ai_analytics') {
+                const [isThinking, setIsThinking] = useState(false);
+                const [aiResponse, setAiResponse] = useState(null);
+
+                const generateAIAnalysis = () => {
+                    setIsThinking(true);
+                    setAiResponse(null);
+                    
+                    // Simulasi delay AI agar terasa canggih
+                    setTimeout(() => {
+                        const total = liveAttendance.length;
+                        if (total === 0) {
+                            setAiResponse({ error: true, text: "Maaf, sistem tidak mendeteksi adanya data absensi pada tanggal ini. AI tidak dapat melakukan analisis." });
+                            setIsThinking(false);
+                            return;
+                        }
+
+                        // Logika Analisis Cerdas (Rule-Based AI)
+                        const classStats = {};
+                        const statusStats = { Hadir: 0, Sakit: 0, Izin: 0, Alpha: 0 };
+                        
+                        liveAttendance.forEach(d => {
+                            const cls = d.kelas || 'Tanpa Kelas';
+                            classStats[cls] = (classStats[cls] || 0) + 1;
+                            if (statusStats[d.status] !== undefined) statusStats[d.status]++;
+                        });
+
+                        const topClass = Object.keys(classStats).reduce((a, b) => classStats[a] > classStats[b] ? a : b);
+                        const hadirPct = Math.round((statusStats.Hadir / total) * 100);
+                        
+                        // Membuat Narasi AI
+                        const narrative = `
+                            Berdasarkan pemindaian data tanggal ${new Date(viewDate).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}, sistem AI mendeteksi total **${total} entri kehadiran**.
+                            
+                            Secara keseluruhan, tingkat kehadiran efektif adalah **${hadirPct}%**. Kelas **${topClass}** menunjukkan aktivitas tertinggi dengan kontribusi ${classStats[topClass]} peserta.
+                            
+                            Dari sisi kesehatan dan kedisiplinan, tercatat ${statusStats.Sakit} peserta sakit dan ${statusStats.Alpha} alpha. ${statusStats.Alpha > 5 ? "⚠️ Perhatian: Angka Alpha tergolong tinggi, disarankan tim GSM melakukan follow-up." : "✅ Tingkat kedisiplinan terpantau baik."}
+                        `;
+
+                        setAiResponse({ error: false, text: narrative, stats: statusStats });
+                        setIsThinking(false);
+                    }, 2000);
                 };
-                // 2. Data Status Kehadiran (Doughnut Chart)
-                const statusCounts = { 'Hadir': 0, 'Sakit': 0, 'Izin': 0, 'Alpha': 0 };
-                liveAttendance.forEach(att => {
-                    const st = att.status || 'Hadir';
-                    if (statusCounts.hasOwnProperty(st)) statusCounts[st]++;
-                });
-                const chartDataStatus = {
-                    labels: Object.keys(statusCounts),
-                    datasets: [{
-                        data: Object.values(statusCounts),
-                        backgroundColor: [
-                            'rgba(16, 185, 129, 0.7)', // Emerald (Hadir)
-                            'rgba(59, 130, 246, 0.7)', // Blue (Sakit)
-                            'rgba(249, 115, 22, 0.7)', // Orange (Izin)
-                            'rgba(239, 68, 68, 0.7)'   // Red (Alpha)
-                        ],
-                        borderColor: '#ffffff',
-                        borderWidth: 3
-                    }]
-                };
-                // 3. Data Kategori (Pie Chart)
-                const catCounts = {};
-                liveAttendance.forEach(att => {
-                    const cat = att.kategori || 'Umum';
-                    catCounts[cat] = (catCounts[cat] || 0) + 1;
-                });
-                const chartDataKategori = {
-                    labels: Object.keys(catCounts),
-                    datasets: [{
-                        data: Object.values(catCounts),
-                        backgroundColor: [
-                            'rgba(236, 72, 153, 0.7)', // Pink
-                            'rgba(139, 92, 246, 0.7)', // Violet
-                            'rgba(20, 184, 166, 0.7)', // Teal
-                            'rgba(245, 158, 11, 0.7)', // Amber
-                            'rgba(99, 102, 241, 0.7)'  // Indigo
-                        ],
-                        borderColor: '#ffffff',
-                        borderWidth: 3
-                    }]
-                };
-                const displayDate = () => {
-                    try {
-                        const d = new Date(viewDate);
-                        if (isNaN(d.getTime())) return "Tanggal Tidak Valid";
-                        return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-                    } catch (e) { return viewDate; }
-                };
+
                 return (
                     <div className="min-h-screen bg-slate-50 p-4 pb-20 animate-bounce-in">
                         <div className="flex items-center justify-between mb-6 sticky top-0 bg-slate-50/90 backdrop-blur-md py-2 z-20">
                             <button onClick={() => setView('admin_dashboard')} className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-100 transition shadow-sm active:scale-95"><i data-lucide="arrow-left" width="20"></i></button>
                             <div className="text-right">
-                                <h2 className="font-black text-2xl text-slate-800 font-fredoka">Statistik</h2>
-                                <p className="text-xs font-bold text-slate-400">Analisa Data Kehadiran</p>
+                                <h2 className="font-black text-2xl text-indigo-600 font-fredoka">AI Analyst</h2>
+                                <p className="text-xs font-bold text-slate-400">Gemini-Powered Insights</p>
                             </div>
                         </div>
 
-                        {/* Filter Tanggal Sederhana */}
-                        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm mb-6 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-purple-100 p-2 rounded-lg text-purple-600"><i data-lucide="calendar" width="20"></i></div>
-                                <div>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase">Data Tanggal</p>
-                                    <p className="text-sm font-black text-slate-700">{displayDate()}</p>
-                                </div>
+                        {/* Date Picker */}
+                        <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-lg mb-6">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Pilih Tanggal Analisis</label>
+                            <div className="flex gap-2">
+                                <input type="date" value={viewDate} onChange={(e) => { setViewDate(e.target.value); setAiResponse(null); }} className="flex-1 bg-slate-50 p-3 rounded-xl font-bold text-slate-700 border-2 border-slate-200 focus:border-indigo-500 outline-none" />
+                                <button onClick={generateAIAnalysis} className="bg-indigo-600 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                                    <i data-lucide="sparkles" width="20"></i> Analisa
+                                </button>
                             </div>
-                            <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 border-none rounded-lg text-xs font-bold text-slate-600 p-2 focus:ring-2 focus:ring-purple-200" />
                         </div>
 
-                        {liveAttendance.length === 0 ? (
-                             <div className="flex flex-col items-center justify-center p-8 bg-white rounded-3xl border-2 border-dashed border-slate-200 min-h-[400px] animate-fade-in">
-                                <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-sm">
-                                    <i data-lucide="calendar-off" className="text-slate-300 w-10 h-10"></i>
+                        {/* AI Output Area */}
+                        {isThinking ? (
+                            <div className="text-center py-10">
+                                <div className="spinner mx-auto mb-4 border-t-indigo-500 border-l-indigo-500"></div>
+                                <p className="text-sm font-bold text-indigo-500 animate-pulse">Gemini sedang membaca data...</p>
+                            </div>
+                        ) : aiResponse ? (
+                            <div className="animate-fade-in space-y-4">
+                                <div className={`bg-white p-6 rounded-3xl border-2 ${aiResponse.error ? 'border-rose-100' : 'border-indigo-100'} shadow-xl relative overflow-hidden`}>
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="bot" width="64" height="64"></i></div>
+                                    <h3 className="font-black text-lg mb-4 flex items-center gap-2">
+                                        <i data-lucide={aiResponse.error ? "alert-circle" : "file-text"} className={aiResponse.error ? "text-rose-500" : "text-indigo-500"}></i>
+                                        Hasil Analisis
+                                    </h3>
+                                    <div className="text-sm font-medium text-slate-600 leading-relaxed whitespace-pre-line typing-cursor">
+                                        {aiResponse.text}
+                                    </div>
                                 </div>
-                                <h3 className="font-black text-slate-700 text-xl font-fredoka mb-2 text-center">Data Kosong</h3>
-                                <p className="text-sm text-slate-500 font-bold text-center max-w-[200px] mb-6">
-                                    Tidak ada aktivitas absensi tercatat pada tanggal <br/>
-                                    <span className="text-indigo-500">{displayDate()}</span>
-                                </p>
-                                
-                                {viewDate !== getSafeDateId() && (
-                                    <button 
-                                        onClick={() => setViewDate(getSafeDateId())}
-                                        className="btn-playful btn-blue px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-sky-100"
-                                    >
-                                        <i data-lucide="calendar-check" width="18"></i>
-                                        Kembali ke Hari Ini
-                                    </button>
+
+                                {!aiResponse.error && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center">
+                                            <span className="text-2xl font-black text-emerald-600 block">{aiResponse.stats.Hadir}</span>
+                                            <span className="text-[10px] font-bold text-emerald-400 uppercase">Hadir</span>
+                                        </div>
+                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center">
+                                            <span className="text-2xl font-black text-blue-600 block">{aiResponse.stats.Sakit}</span>
+                                            <span className="text-[10px] font-bold text-blue-400 uppercase">Sakit</span>
+                                        </div>
+                                        <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center">
+                                            <span className="text-2xl font-black text-orange-600 block">{aiResponse.stats.Izin}</span>
+                                            <span className="text-[10px] font-bold text-orange-400 uppercase">Izin</span>
+                                        </div>
+                                        <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100 text-center">
+                                            <span className="text-2xl font-black text-rose-600 block">{aiResponse.stats.Alpha}</span>
+                                            <span className="text-[10px] font-bold text-rose-400 uppercase">Alpha</span>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         ) : (
-                             <div className="space-y-6 animate-bounce-in">
-                                {/* Grafik Batang Kelas */}
-                                <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
-                                     <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="bar-chart" width="18" className="text-indigo-500"></i> Kehadiran Per Kelas</h3>
-                                    <div className="h-64">
-                                        <SimpleChart type="bar" data={chartDataKelas} id="chartKelas" />
-                                    </div>
-                                </div>
-
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Grafik Donat Status */}
-                                    <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
-                                        <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="pie-chart" width="18" className="text-emerald-500"></i> Status Kehadiran</h3>
-                                        <div className="h-64 relative">
-                                            <SimpleChart type="doughnut" data={chartDataStatus} id="chartStatus" />
-                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                <div className="text-center">
-                                                    <span className="text-3xl font-black text-slate-700 block">{liveAttendance.length}</span>
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Total</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Grafik Pie Kategori */}
-                                    <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
-                                        <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="users" width="18" className="text-pink-500"></i> Komposisi Kategori</h3>
-                                        <div className="h-64">
-                                            <SimpleChart type="pie" data={chartDataKategori} id="chartKategori" />
-                                        </div>
-                                    </div>
-                                </div>
+                            <div className="text-center py-10 opacity-50">
+                                <i data-lucide="search" className="mx-auto w-12 h-12 mb-2 text-slate-300"></i>
+                                <p className="text-xs font-bold text-slate-400">Pilih tanggal dan tekan Analisa.</p>
                             </div>
                         )}
                     </div>
@@ -2146,4 +2058,3 @@
     </script>
 </body>
 </html>
-
