@@ -1433,20 +1433,14 @@
 
             // --- VIEW BARU: GRAFIK STATISTIK ---
             if (view === 'statistics') {
-                // Proses Data untuk Grafik
-                
                 // 1. Data per Kelas (Bar Chart)
                 const classCounts = {};
-                // Inisialisasi semua kelas dengan 0 agar tetap muncul di grafik
                 classList.forEach(cls => classCounts[cls] = 0);
                 
                 liveAttendance.forEach(att => {
-                    // Normalisasi nama kelas, jika tidak ada di classList masukkan ke "Lainnya" atau abaikan
                     const clsName = att.kelas || "Tanpa Kelas";
                     if (classCounts.hasOwnProperty(clsName)) {
                         classCounts[clsName]++;
-                    } else if (clsName === '-' || !clsName) {
-                        // Opsi: hitung yg tanpa kelas
                     }
                 });
 
