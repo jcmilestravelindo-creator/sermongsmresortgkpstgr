@@ -1929,6 +1929,7 @@
                                     <option value="gsm">GSM</option>
                                     <option value="pembimbing">Pembimbing</option>
                                     <option value="pendeta">Pendeta</option>
+                                    <option value="pmj">PMJ</option>
                                 </select>
                                 <div className="flex gap-2 pt-2"><button onClick={handleAddOrUpdateUser} className={`flex-1 btn-playful py-3 rounded-xl font-bold ${editingId ? 'btn-yellow' : 'btn-blue'}`}>{editingId ? 'Update / Reset' : 'Simpan User'}</button>{editingId && <button onClick={() => { setEditingId(null); setNewUser({ username: '', password: '', role: 'petugas', nama: '' }); }} className="btn-playful btn-white px-4 rounded-xl font-bold">Batal</button>}</div>
                             </div>
@@ -1977,6 +1978,7 @@
                                         <select className="w-full p-2 border rounded mb-2" value={formData.kategori} onChange={e => setFormData({...formData, kategori: e.target.value})}>
                                             <option>Anak Sekolah Minggu</option><option>GSM</option><option>Panitia</option><option>Umum</option><option>Kelas</option> 
                                             <option>Pendeta</option><option>Pembimbing</option><option>Pengurus</option>
+                                            <option>PMJ</option>
                                         </select>
                                         <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
                                             <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
