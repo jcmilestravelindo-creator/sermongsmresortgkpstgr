@@ -1202,37 +1202,22 @@
                                         )}
                                     </div>
 
-                                    <div className="flex overflow-x-auto pb-8 -mx-4 px-4 snap-x snap-mandatory space-x-4 no-scrollbar" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+                                    {/* MENGUBAH TAMPILAN KARTU MENJADI LIST TOMBOL VERTIKAL (SESUAI REQUEST DESIGN2) */}
+                                    <div className="flex flex-col gap-3">
                                         {displayWeeks.map((week, idx) => {
-                                             const isEven = idx % 2 === 0;
+                                             const dateObj = week.date ? new Date(week.date) : null;
+                                             const dateStr = dateObj ? dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }) : `Minggu ke-${idx + 1}`;
+                                             
                                              return (
-                                                <div key={idx} onClick={() => setSelectedWeek(week)} className={`flex-none w-[85%] max-w-[300px] snap-center relative group cursor-pointer transition-all duration-300 hover:-translate-y-2`}>
-                                                    <div className={`h-full rounded-[32px] p-6 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.15)] border-[3px] border-white relative overflow-hidden active:scale-95 transition-transform duration-200 ${isEven ? 'bg-gradient-to-br from-sky-400 to-blue-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
-                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                                                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-black opacity-10 rounded-full -ml-8 -mb-8 blur-xl"></div>
-                                                        <div className="relative z-10 flex flex-col h-full justify-between min-h-[160px]">
-                                                            <div>
-                                                                <div className="flex justify-between items-start mb-3">
-                                                                    <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-white/30">
-                                                                        {week.date ? new Date(week.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Minggu ${idx + 1}`}
-                                                                    </span>
-                                                                    <div className="bg-white/20 p-1.5 rounded-full text-white animate-pulse">
-                                                                        <i data-lucide="book-open" width="14"></i>
-                                                                    </div>
-                                                                </div>
-                                                                <h4 className="text-white text-2xl font-black font-fredoka leading-tight mb-2 line-clamp-3 drop-shadow-md break-words">
-                                                                    {week.topic}
-                                                                </h4>
-                                                            </div>
-                                                            <div className="mt-4">
-                                                                <div className="flex items-center gap-2 text-white/90 text-xs font-bold bg-black/10 p-2 rounded-xl backdrop-blur-sm w-fit">
-                                                                    <span className="bg-white text-indigo-600 rounded-lg p-1"><i data-lucide="arrow-right" width="12"></i></span>
-                                                                    <span>Buka Materi</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <button 
+                                                    key={idx} 
+                                                    onClick={() => setSelectedWeek(week)} 
+                                                    className="w-full btn-playful bg-white border-2 border-indigo-500 border-b-4 text-indigo-700 p-4 rounded-2xl flex items-center justify-center shadow-md hover:bg-indigo-50 transition active:scale-95"
+                                                >
+                                                    <span className="font-black text-lg font-fredoka text-slate-700">
+                                                        <span className="text-red-500">{dateStr}</span>
+                                                    </span>
+                                                </button>
                                             );
                                         })}
                                     </div>
@@ -1240,7 +1225,7 @@
                             ) : null}
                         </div>
 
-                        <div className="p-6 space-y-4 pt-0">
+                        <div className="p-6 space-y-4 pt-4">
                             <button onClick={() => setView('my_barcode')} className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
                                 <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="qr-code" width="28" height="28"></i></div>
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
