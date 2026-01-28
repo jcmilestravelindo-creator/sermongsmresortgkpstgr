@@ -20,7 +20,6 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     
-    <!-- Chart.js untuk Grafik -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -78,7 +77,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
         // --- PWA SERVICE WORKER REGISTRATION ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -127,7 +125,6 @@
             e.preventDefault();
             deferredPrompt = e;
         });
-
         // --- KOMPONEN GRAFIK (CHARTS) YANG DIPERBAIKI (REBUILT) ---
         const SimpleChart = ({ type, data, options, id }) => {
             const chartRef = useRef(null);
@@ -166,7 +163,6 @@
                         }
                     }
                 };
-
                 destroyChart();
                 const timer = setTimeout(renderChart, 50);
 
@@ -245,7 +241,6 @@
             const [participants, setParticipants] = useState([]);
             const [isConnected, setIsConnected] = useState(false);
             const [userAuth, setUserAuth] = useState(null);
-            
             // --- UI/Feature States ---
             const [scanResult, setScanResult] = useState(null);
             const [isMaintenance, setIsMaintenance] = useState(false);
@@ -253,7 +248,6 @@
             const scannerRef = useRef(null);
             const isScanning = useRef(false);
             const [cameraFacing, setCameraFacing] = useState('environment');
-
             const [themeData, setThemeData] = useState(null);
             const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
             const [selectedWeek, setSelectedWeek] = useState(null);
@@ -265,11 +259,11 @@
             const [deleteConfig, setDeleteConfig] = useState({ show: false, path: null });
             const [adminResetConfig, setAdminResetConfig] = useState({ show: false, user: null, newPass: '' });
             const [notification, setNotification] = useState(null);
-            
             // Broadcast State Modified
             const [activeBroadcast, setActiveBroadcast] = useState(null);
             const [showBroadcastModal, setShowBroadcastModal] = useState(false);
-            const [hasUnreadBroadcast, setHasUnreadBroadcast] = useState(false); // New State for Bell Dot
+            const [hasUnreadBroadcast, setHasUnreadBroadcast] = useState(false);
+            // New State for Bell Dot
 
             const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', type: 'info', schedule: '' });
             const [broadcastHistory, setBroadcastHistory] = useState([]);
@@ -286,7 +280,6 @@
             
             const [liveSearch, setLiveSearch] = useState("");
             const [liveClassFilter, setLiveClassFilter] = useState("Semua");
-            
             // --- Refs & Helpers ---
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
@@ -301,18 +294,15 @@
             };
             const [viewDate, setViewDate] = useState(getSafeDateId());
             const [refreshKey, setRefreshKey] = useState(0);
-            
             const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM", "Pendeta", "Pembimbing", "Pengurus", "PMJ"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             const defaultTheme = { title: "", weeks: [] };
-            
             // --- Effects for Refs ---
             useEffect(() => { attendanceModeRef.current = attendanceMode; }, [attendanceMode]);
             useEffect(() => { liveAttendanceRef.current = liveAttendance; }, [liveAttendance]);
             useEffect(() => { sessionConfigRef.current = sessionConfig; }, [sessionConfig]);
             useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
-            
             // --- INITIALIZATION CHECKER ---
             useEffect(() => {
                 const checkDb = setInterval(() => {
@@ -323,7 +313,6 @@
                 }, 100);
                 return () => clearInterval(checkDb);
             }, []);
-
             // --- AUTHENTICATION & DATA SYNC ---
             useEffect(() => {
                 if (!dbReady) return;
@@ -384,19 +373,16 @@
                     (snap) => setParticipants(snap.docs.map(d => d.data())),
                     (err) => console.log("Partcipants sync waiting...")
                 );
-
                 const unsubscribeSystem = onSnapshot(doc(db, `${publicDataPath}/config`, 'system'), (snap) => {
                     if (snap.exists()) {
                         const data = snap.data();
                         setIsMaintenance(data.maintenanceMode === true);
                     }
                 }, (err) => console.log("Config sync waiting..."));
-
                 const unsubscribeTheme = onSnapshot(doc(db, `${publicDataPath}/theme`, 'current'), 
                     (snap) => setThemeData(snap.exists() ? snap.data() : null),
                     (err) => {}
                 );
-
                 // --- MODIFIED NOTIFICATION LISTENER ---
                 const unsubscribeAnnouncements = onSnapshot(doc(db, `${publicDataPath}/announcements`, 'active'), (snap) => {
                     const data = snap.data();
@@ -406,7 +392,7 @@
                         if (data.scheduledAt) scheduledTime = new Date(data.scheduledAt).getTime();
 
                         if (scheduledTime > now) {
-                            // Pesan terjadwal, belum waktunya
+                             // Pesan terjadwal, belum waktunya
                             return;
                         }
 
@@ -415,12 +401,12 @@
                         const referenceTime = scheduledTime || timestamp;
                         if (referenceTime > 0 && (now - referenceTime > 7200000)) return; // Expired 2 jam
 
-                        setActiveBroadcast(data);
-                        
+                         setActiveBroadcast(data);
                         // Cek apakah sudah dibaca user
                         const lastRead = localStorage.getItem('last_broadcast_id');
                         if (lastRead !== data.id) {
-                            setHasUnreadBroadcast(true); // Nyalakan lonceng
+                            setHasUnreadBroadcast(true);
+                            // Nyalakan lonceng
                             playNotificationSound();
                             // KITA HAPUS setShowBroadcastModal(true) DISINI AGAR TIDAK MUNCUL TIBA-TIBA
                         } else {
@@ -431,7 +417,6 @@
                         setHasUnreadBroadcast(false);
                     }
                 }, (err) => {});
-
                 const unsubscribeBroadcastHistory = onSnapshot(collection(db, `${publicDataPath}/broadcast_history`), 
                     (snap) => {
                         const hist = snap.docs.map(d => d.data()).sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -439,11 +424,9 @@
                     },
                     (err) => {}
                 );
-
                 const attendancePath = `artifacts/${appId}/public/data/attendance/${viewDate}/records`;
                 let unsubscribeAttendance = () => {};
-                setLiveAttendance([]); 
-                
+                setLiveAttendance([]);
                 try {
                     const q = query(collection(db, attendancePath));
                     unsubscribeAttendance = onSnapshot(q, (snap) => {
@@ -477,7 +460,6 @@
                     unsubscribeSystem();
                 };
             }, [dbReady, userAuth, viewDate, refreshKey]);
-
             // --- UTILITIES ---
             const checkSessionStatus = () => {
                 const config = sessionConfigRef.current;
@@ -490,7 +472,6 @@
                 const endMinutes = closeH * 60 + closeM;
                 return currentMinutes >= startMinutes && currentMinutes < endMinutes;
             };
-            
             const playErrorSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator();
             const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3); osc.connect(gain);
             gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3); } catch(e){} };
@@ -498,13 +479,11 @@
             const playNotificationSound = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.3, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch(e){} };
-            
             const handleSmoothRefresh = () => {
                 setNotification("Menyegarkan koneksi data...");
                 setRefreshKey(prev => prev + 1);
                 setTimeout(() => setNotification(null), 2000);
             };
-
             const setView = (newView) => {
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
@@ -522,7 +501,6 @@
                 setViewRaw(newView);
                 setViewDate(getSafeDateId());
             };
-            
             const handleBackToMenu = () => {
                 window.scrollTo({ top: 0, behavior: 'instant' });
                 currentUser ? setView('menu') : setView('login');
@@ -555,9 +533,8 @@
                  let finalRef;
                  if (path.startsWith('users/')) finalRef = doc(db, `${basePath}/users`, path.split('/')[1]);
                  else if (path.startsWith('participants/')) finalRef = doc(db, `${basePath}/participants`, path.split('/')[1]);
-                 if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
+                if(finalRef) return deleteDoc(finalRef).then(() => alert("Berhasil dihapus")).catch(e => alert("Gagal: " + e.message));
             };
-
             const handleResetAllData = async () => {
                 if (!currentUser) return;
                 const confirmPass = prompt(`PERINGATAN KERAS!\n\nAnda sedang login sebagai: ${currentUser.username}\nFitur ini akan MENGHAPUS SEMUA DATA PESERTA secara permanen.\n\nMasukkan Password Akun Anda (${currentUser.username}) untuk konfirmasi:`);
@@ -574,10 +551,11 @@
                     try {
                         await clearCollection('participants');
                         alert("DATABASE PESERTA BERHASIL DIRESET KE NOL.");
-                    } catch(e) { alert("Gagal reset: " + e.message); }
-                } else { alert("Password Salah! Reset Database Dibatalkan."); }
+                    } catch(e) { alert("Gagal reset: " + e.message);
+                    }
+                } else { alert("Password Salah! Reset Database Dibatalkan.");
+                }
             };
-
             useEffect(() => { 
                 if (view === 'scan' && !scanResult) { 
                     setTimeout(() => startScanner(cameraFacing), 300); 
@@ -607,25 +585,22 @@
                 if (scannerRef.current) { 
                     try { 
                         scannerRef.current.stop().then(() => {
-                            scannerRef.current.clear();
+                             scannerRef.current.clear();
                         }).catch(err => {});
                     } catch(e){} 
                     isScanning.current = false;
                 } 
             };
-            
             const toggleCamera = () => {
                 stopScanner();
                 setCameraFacing(prev => prev === 'environment' ? 'user' : 'environment');
             };
-
             const handleScanSuccess = (qrId) => {
                 const isModeLive = attendanceModeRef.current;
                 const currentLiveData = liveAttendanceRef.current;
                 const isOpen = checkSessionStatus();
                 const cleanId = qrId.trim();
                 const p = participants.find(item => item.id === cleanId);
-                
                 if (p) {
                     if (isModeLive) {
                         if (!isOpen) {
@@ -664,7 +639,6 @@
                     playErrorSound();
                 }
             };
-
             const handleManualAttendance = (p, status) => {
                 const isOpen = checkSessionStatus();
                 if (isPeserta && !isOpen) {
@@ -703,7 +677,6 @@
                 }
                 setIsInstallModalOpen(false);
             };
-
             const handleImportUsers = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -754,7 +727,6 @@
                     alert(`Berhasil import ${count} user via Excel!`);
                 }
             };
-
             const handleExportAttendance = () => {
                 if (!window.XLSX) return alert("Library Excel belum dimuat.");
                 if (liveAttendance.length === 0) return alert("Tidak ada data untuk diexport.");
@@ -776,7 +748,6 @@
                 XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
                 XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
             };
-
             const handleResetDailyData = async () => {
                 if (!currentUser) return;
                 const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal: ${viewDate}.\nData yang dihapus tidak bisa kembali!`);
@@ -796,7 +767,6 @@
                     }
                 }
             };
-            
             const handleCSV = (e) => {
                 const file = e.target.files[0];
                 if (!file) return; const reader = new FileReader();
@@ -840,23 +810,20 @@
                 alert(msg);
                 setBroadcastForm({ title: '', message: '', type: 'info', schedule: '' });
             };
-
             const handleDeleteHistory = async (historyId) => {
                 if(!confirm("Hapus arsip ini?")) return;
                 const db = window.db;
                 const { doc, deleteDoc } = window.fs;
                 await deleteDoc(doc(db, `artifacts/${appId}/public/data/broadcast_history`, historyId));
             };
-            
             // --- MODIFIED CLOSE HANDLER ---
             const handleCloseBroadcast = () => { 
-                setShowBroadcastModal(false); 
+                setShowBroadcastModal(false);
                 if (activeBroadcast) {
                     localStorage.setItem('last_broadcast_id', activeBroadcast.id);
                     setHasUnreadBroadcast(false); // Matikan dot merah
                 }
             };
-            
             const handleAddWeek = () => {
                 setEditThemeForm({
                     ...editThemeForm,
@@ -871,7 +838,6 @@
                     setEditThemeForm({ ...editThemeForm, weeks: newWeeks });
                 }
             };
-
             const handleWeekChange = (index, field, value) => {
                 const newWeeks = [...editThemeForm.weeks];
                 newWeeks[index][field] = value;
@@ -909,7 +875,6 @@
                     alert("Username atau Password salah!");
                 }
             };
-
             const handleLogoutClick = () => {
                 setIsLogoutModalOpen(true);
             };
@@ -930,7 +895,6 @@
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
             };
-
             const startEditUser = (u) => {
                 setEditingId(u.username);
                 setNewUser(u);
@@ -946,7 +910,6 @@
                 alert(`Password untuk ${adminResetConfig.user.username} berhasil direset!`);
                 setAdminResetConfig({ show: false, user: null, newPass: '' });
             };
-
             const initiateDelete = (path) => {
                 setDeleteConfig({ show: true, path: path });
             };
@@ -957,7 +920,6 @@
                     setDeleteConfig({ show: false, path: null });
                 }
             };
-
             const handleAddOrUpdateParticipant = () => {
                 if (!formData.nama) return alert("Nama wajib diisi!");
                 const id = editingId || `GSM-${Date.now()}`;
@@ -968,7 +930,6 @@
                 setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
                 setShowAddForm(false);
             };
-
             const startEditParticipant = (p) => {
                 setEditingId(p.id);
                 setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' });
@@ -976,7 +937,6 @@
             };
 
             const generateQRUrl = (id) => `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${id}`;
-
             const downloadSingleQR = async (p) => {
                 try {
                     const url = generateQRUrl(p.id);
@@ -989,9 +949,9 @@
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
-                } catch (e) { alert("Gagal download: " + e.message); }
+                } catch (e) { alert("Gagal download: " + e.message);
+                }
             };
-
             const downloadAllQR = async () => {
                 if (!confirm("Download semua QR Code satu per satu? Pastikan izin download browser aktif.")) return;
                 setIsDownloading(true);
@@ -1009,7 +969,6 @@
                 alert("Password Anda berhasil diganti! Silakan login ulang.");
                 performLogout();
             };
-
             const handleResetPassword = () => {
                 if (resetForm.token !== 'PANITIA2025') return alert("Kode Otorisasi Salah!");
                 if (!resetForm.username || !resetForm.newPassword) return alert("Isi semua data!");
@@ -1026,7 +985,6 @@
             const isAdmin = safeUser.role === 'admin';
             const isPanitia = safeUser.role === 'panitia' || safeUser.role === 'pengurus';
             const isPeserta = safeUser.role === 'peserta' || safeUser.role === 'gsm' || safeUser.role === 'pembimbing' || safeUser.role === 'pendeta';
-            
             const LogoutModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
@@ -1040,7 +998,6 @@
                     </div>
                 </div>
             );
-
             // --- MODIFIED BROADCAST POPUP (Fixes the screen blocking issue) ---
             const BroadcastPopup = () => {
                 if (!activeBroadcast || !showBroadcastModal) return null;
@@ -1054,7 +1011,7 @@
                             <div className={`h-20 w-full absolute top-0 left-0 shrink-0 ${isUrgent ? 'bg-red-100' : 'bg-sky-100'}`}></div>
                             
                             {/* Bagian Konten Scrollable */}
-                            <div className="relative z-10 flex flex-col h-full overflow-hidden">
+                             <div className="relative z-10 flex flex-col h-full overflow-hidden">
                                 <div className="pt-6 px-6 shrink-0 text-center">
                                     <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 bg-white mt-2 ${isUrgent ? 'border-red-100' : 'border-sky-100'}`}>
                                          <div className="bell-ring"><i data-lucide={isUrgent ? "alert-triangle" : "megaphone"} className={`w-10 h-10 ${isUrgent ? 'text-red-500' : 'text-sky-500'}`}></i></div>
@@ -1071,7 +1028,7 @@
                                 </div>
                                 
                                 {/* Tombol Tutup Tetap Dibawah */}
-                                <div className="p-6 pt-4 bg-white shrink-0 border-t border-slate-100">
+                                 <div className="p-6 pt-4 bg-white shrink-0 border-t border-slate-100">
                                     <button onClick={handleCloseBroadcast} className={`w-full py-3 px-4 rounded-xl font-black text-white transition shadow-lg btn-playful ${isUrgent ? 'bg-red-500 border-red-700 hover:bg-red-600' : 'bg-sky-500 border-sky-700 hover:bg-sky-600'}`}>OKE, SIAP!</button>
                                 </div>
                             </div>
@@ -1093,7 +1050,6 @@
                     </div>
                 </div>
             );
-
             const InstallModal = () => (
                 <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-bounce-in">
                     <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center border-4 border-white/50 relative">
@@ -1106,7 +1062,6 @@
                     </div>
                 </div>
             );
-
             if (!dbReady) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
@@ -1173,7 +1128,8 @@
                             <button type="button" onClick={() => setView('forgot_password')} className="w-full py-3 mt-4 text-center text-sky-600 font-bold text-xs border-2 border-sky-100 rounded-xl hover:bg-sky-50 transition">Lupa Password / Reset Akun</button>
                         </form>
                         <div className="mt-6 text-center text-xs font-bold bg-white/40 py-2 rounded-xl">
-                            {isConnected ? <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
+                            {isConnected ?
+                                <span className="text-emerald-500 flex items-center justify-center gap-1"><i data-lucide="wifi" width="14"></i> Terhubung ke Cloud</span> : <span className="text-rose-500 animate-pulse">● Menghubungkan...</span>}
                         </div>
                         <div className="mt-8 text-center text-[10px] text-slate-400 font-medium">
                             &copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang
@@ -1181,7 +1137,6 @@
                     </div>
                 </div>
             );
-            
             if (view === 'forgot_password') return (
                 <div className="min-h-screen bg-school-sunday flex items-center justify-center p-4">
                     <div className="glass-panel p-8 rounded-[30px] shadow-2xl w-full max-w-sm animate-bounce-in border-4 border-white/50">
@@ -1200,7 +1155,6 @@
                     </div>
                 </div>
             );
-
             if (view === 'menu') {
                 const currentTheme = themeData || defaultTheme;
                 let displayWeeks = currentTheme.weeks || [];
@@ -1211,11 +1165,11 @@
                 <div key="view-menu" className="min-h-screen bg-school-sunday p-4 pt-8 pb-20 relative">
                       {notification && (
                         <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-[150] w-full max-w-sm px-4 animate-shake">
-                            <div className="bg-yellow-300 border-4 border-yellow-500 text-yellow-900 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-4 animate-bounce-in"><div className="bg-white p-2 rounded-full shadow-sm"><i data-lucide="info" className="text-yellow-600"></i></div><span className="font-bold text-sm leading-tight font-fredoka">{notification}</span></div>
+                             <div className="bg-yellow-300 border-4 border-yellow-500 text-yellow-900 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-4 animate-bounce-in"><div className="bg-white p-2 rounded-full shadow-sm"><i data-lucide="info" className="text-yellow-600"></i></div><span className="font-bold text-sm leading-tight font-fredoka">{notification}</span></div>
                         </div>
                     )}
                 
-                    <div className="max-w-md mx-auto glass-panel rounded-[32px] overflow-hidden border-2 border-white/60">
+                     <div className="max-w-md mx-auto glass-panel rounded-[32px] overflow-hidden border-2 border-white/60">
                         <div className="bg-gradient-to-r from-sky-500 to-indigo-600 p-6 text-white relative">
                             <div className="absolute top-0 right-0 p-4 opacity-10 flex items-center gap-4">
                                 <img src="logotema.png" className="w-24 h-24 object-contain" alt="Logo GKPS" />
@@ -1232,13 +1186,13 @@
                                 <div className="flex flex-col gap-2 items-end">
                                     {/* Tombol Lonceng Notifikasi - Baru ditambahkan */}
                                     <button onClick={() => setShowBroadcastModal(true)} className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl text-white transition flex items-center justify-center shadow-inner border border-white/30 relative active:scale-95" title="Lihat Notifikasi">
-                                        <i data-lucide="bell" width="20"></i>
+                                         <i data-lucide="bell" width="20"></i>
                                         {hasUnreadBroadcast && (
                                             <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-4 w-4">
                                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                               <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-sky-600"></span>
                                             </span>
-                                        )}
+                                         )}
                                     </button>
 
                                     <div className="flex gap-2">
@@ -1253,21 +1207,20 @@
                             {themeData && themeData.title ? (
                                 <div className="mb-6 relative z-10">
                                     <div className="flex items-center justify-between mb-4 px-2">
-                                         <div>
+                                          <div>
                                             <h2 className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">Bahan Ajar Bulan Ini</h2>
-                                            <h3 className="text-lg font-black text-slate-800 font-fredoka leading-none">"{currentTheme.title}"</h3>
+                                             <h3 className="text-lg font-black text-slate-800 font-fredoka leading-none">"{currentTheme.title}"</h3>
                                         </div>
                                          {(isAdmin || isPanitia) && (
                                             <button onClick={() => { setEditThemeForm(currentTheme); setView('edit_theme'); }} className="bg-white p-2 rounded-full text-indigo-400 hover:text-indigo-600 shadow-sm border border-indigo-50 transition"><i data-lucide="pencil" width="16"></i></button>
-                                        )}
+                                         )}
                                     </div>
 
                                     <div className="flex flex-col gap-3">
-                                        {displayWeeks.map((week, idx) => {
+                                         {displayWeeks.map((week, idx) => {
                                              const dateObj = week.date ? new Date(week.date) : null;
                                              const dateStr = dateObj ? dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }) : `Minggu ke-${idx + 1}`;
-                                             
-                                             return (
+                                            return (
                                                 <button 
                                                     key={idx} 
                                                     onClick={() => setSelectedWeek(week)} 
@@ -1277,7 +1230,7 @@
                                                         <span className="text-red-500">{dateStr}</span>
                                                     </span>
                                                 </button>
-                                            );
+                                              );
                                         })}
                                     </div>
                                 </div>
@@ -1288,13 +1241,13 @@
                             <button onClick={() => setView('my_barcode')} className="w-full btn-playful bg-gradient-to-r from-blue-500 to-indigo-600 border-b-4 border-indigo-800 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg hover:shadow-indigo-200 transform hover:scale-[1.01]">
                                 <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="qr-code" width="28" height="28"></i></div>
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
-                            </button>
+                             </button>
 
                             {isPeserta && (
                                 <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4">
-                                    <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
+                                     <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
                                     <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Input Absen</h3><p className="text-xs text-slate-400 font-bold">Catat Kehadiran Manual</p></div>
-                                </button>
+                                 </button>
                             )}
 
                             {(['gsm', 'petugas', 'pembimbing', 'pendeta'].includes(safeUser.role)) && (
@@ -1309,20 +1262,20 @@
                                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                                     <div className="flex items-center gap-4 relative z-10">
                                         <div className="bg-white/20 p-3 rounded-xl border border-white/10"><i data-lucide="layout-dashboard" width="24" height="24"></i></div>
-                                        <div className="text-left">
+                                         <div className="text-left">
                                             <h3 className="font-black text-xl font-fredoka">Dashboard Admin</h3>
-                                            <p className="text-xs text-slate-300 font-bold">Pusat Kontrol Aplikasi</p>
+                                             <p className="text-xs text-slate-300 font-bold">Pusat Kontrol Aplikasi</p>
                                         </div>
                                     </div>
                                     <div className="bg-white/10 p-2 rounded-full"><i data-lucide="chevron-right" className="text-white relative z-10" width="20"></i></div>
                                 </button>
-                            )}
+                             )}
                             
                             <button onClick={() => setView('change_password')} className="w-full py-3 text-slate-400 text-xs font-bold hover:text-slate-600 transition flex items-center justify-center gap-2"><i data-lucide="lock" width="12"></i> Ganti Password Saya</button>
-                            <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
+                             <button onClick={() => setIsInstallModalOpen(true)} className="w-full py-2 text-indigo-400 text-[10px] font-bold hover:text-indigo-600 transition flex items-center justify-center gap-1"><i data-lucide="smartphone" width="10"></i> Cara Install Aplikasi</button>
                             
                              <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-                                <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang</p>
+                                 <p className="text-[10px] text-slate-400 font-bold mb-1">&copy; {new Date().getFullYear()} Sekolah Minggu GKPS Resort Tangerang</p>
                                 <p className="text-[9px] text-slate-300 font-medium">Dibuat untuk Kemuliaan Tuhan</p>
                             </div>
                         </div>
@@ -1353,9 +1306,9 @@
                         </div>
 
                         <div className="grid grid-cols-3 gap-3 mb-6">
-                            <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
+                             <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
                                 <div className="text-indigo-500 mb-2 flex justify-center bg-indigo-50 p-2 rounded-full w-fit mx-auto"><i data-lucide="users" width="16"></i></div>
-                                <h3 className="font-black text-xl text-slate-700 leading-none mb-1">{totalParticipants}</h3>
+                                 <h3 className="font-black text-xl text-slate-700 leading-none mb-1">{totalParticipants}</h3>
                                 <p className="text-[9px] font-bold text-slate-400 uppercase">Total Peserta</p>
                             </div>
                             <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
@@ -1382,34 +1335,34 @@
                                 <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="megaphone" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Buat Broadcast</h4>
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Kirim Info Penting</p>
-                            </button>
+                             </button>
 
                             <button onClick={() => { setEditThemeForm(themeData || defaultTheme); setView('edit_theme'); }} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="book-open" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Bahan Ajar</h4>
-                                <p className="text-[10px] text-slate-400 font-bold mt-1">Edit Materi Minggu</p>
+                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Edit Materi Minggu</p>
                             </button>
 
                             <button onClick={() => { setView('scan'); setAttendanceMode(true); }} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="scan-line" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Scanner QR</h4>
-                                <p className="text-[10px] text-slate-400 font-bold mt-1">Mode Scan Masuk</p>
+                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Mode Scan Masuk</p>
                             </button>
 
                             {/* TOMBOL GRAFIK STATISTIK BARU (TETAP ADA SESUAI PERMINTAAN REBUILT) */}
-                            <button onClick={() => setView('statistics')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
+                             <button onClick={() => setView('statistics')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition text-left group active:scale-95">
                                 <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="pie-chart" width="24"></i></div>
                                 <h4 className="font-bold text-slate-700 text-sm">Statistik & Grafik</h4>
                                 <p className="text-[10px] text-slate-400 font-bold mt-1">Visualisasi Data</p>
                             </button>
-                            
+                             
                              <button onClick={() => setView('live_report')} className="col-span-2 bg-gradient-to-r from-emerald-500 to-teal-600 p-5 rounded-3xl border border-emerald-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
                                 <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                                 <div className="flex items-center justify-between relative z-10">
                                     <div>
-                                        <h4 className="font-black text-white text-lg font-fredoka">Laporan Kehadiran</h4>
+                                         <h4 className="font-black text-white text-lg font-fredoka">Laporan Kehadiran</h4>
                                         <p className="text-xs text-emerald-100 font-bold mt-1">Lihat Data Realtime Hari Ini</p>
-                                    </div>
+                                     </div>
                                     <div className="bg-white/20 p-3 rounded-xl text-white"><i data-lucide="bar-chart-2" width="24"></i></div>
                                 </div>
                             </button>
@@ -1433,7 +1386,7 @@
                                     <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center"><i data-lucide="database" width="20"></i></div>
                                     <div className="text-left flex-1">
                                         <h4 className="font-bold text-slate-700 text-sm">Database Peserta</h4>
-                                        <p className="text-[10px] text-slate-400 font-bold">Import CSV/Excel & Export QR</p>
+                                         <p className="text-[10px] text-slate-400 font-bold">Import CSV/Excel & Export QR</p>
                                     </div>
                                     <i data-lucide="chevron-right" width="16" className="text-slate-300"></i>
                                 </button>
@@ -1444,7 +1397,7 @@
                                     <div className="flex items-center gap-4">
                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition ${isMaintenance ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
                                             <i data-lucide={isMaintenance ? "lock" : "unlock"} width="20"></i>
-                                        </div>
+                                         </div>
                                         <div className="text-left">
                                             <h4 className={`font-bold text-sm ${isMaintenance ? 'text-amber-700' : 'text-slate-700'}`}>Maintenance Mode</h4>
                                             <p className={`text-[10px] font-bold ${isMaintenance ? 'text-amber-600' : 'text-slate-400'}`}>{isMaintenance ? 'Aplikasi Terkunci' : 'Aplikasi Terbuka'}</p>
@@ -1454,18 +1407,18 @@
                                         <input type="checkbox" className="sr-only peer" checked={isMaintenance} onChange={() => {
                                              if (confirm(isMaintenance ? "Buka akses aplikasi?" : "Kunci aplikasi (Maintenance)?")) {
                                                 saveToCloud('config/system', { maintenanceMode: !isMaintenance });
-                                             }
+                                            }
                                         }} />
                                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                                     </label>
                                 </div>
                             )}
-                            
+                             
                             {isAdmin && (
                                 <button onClick={handleResetAllData} className="w-full bg-rose-50 p-4 rounded-2xl border border-rose-100 shadow-sm flex items-center gap-4 hover:bg-rose-100 transition mt-4 active:scale-95">
                                     <div className="w-10 h-10 bg-rose-200 text-rose-600 rounded-xl flex items-center justify-center"><i data-lucide="trash-2" width="20"></i></div>
                                     <div className="text-left flex-1">
-                                        <h4 className="font-bold text-rose-700 text-sm">Reset Database</h4>
+                                         <h4 className="font-bold text-rose-700 text-sm">Reset Database</h4>
                                         <p className="text-[10px] text-rose-500 font-bold">Hapus Semua Data Peserta</p>
                                     </div>
                                 </button>
@@ -1487,7 +1440,6 @@
                         classCounts[clsName]++;
                     }
                 });
-
                 const chartDataKelas = {
                     labels: Object.keys(classCounts),
                     datasets: [{
@@ -1499,14 +1451,12 @@
                         borderRadius: 8
                     }]
                 };
-
                 // 2. Data Status Kehadiran (Doughnut Chart)
                 const statusCounts = { 'Hadir': 0, 'Sakit': 0, 'Izin': 0, 'Alpha': 0 };
                 liveAttendance.forEach(att => {
                     const st = att.status || 'Hadir';
                     if (statusCounts.hasOwnProperty(st)) statusCounts[st]++;
                 });
-
                 const chartDataStatus = {
                     labels: Object.keys(statusCounts),
                     datasets: [{
@@ -1521,14 +1471,12 @@
                         borderWidth: 3
                     }]
                 };
-                
                 // 3. Data Kategori (Pie Chart)
                 const catCounts = {};
                 liveAttendance.forEach(att => {
                     const cat = att.kategori || 'Umum';
                     catCounts[cat] = (catCounts[cat] || 0) + 1;
                 });
-                
                 const chartDataKategori = {
                     labels: Object.keys(catCounts),
                     datasets: [{
@@ -1544,7 +1492,6 @@
                         borderWidth: 3
                     }]
                 };
-
                 const displayDate = () => {
                     try {
                         const d = new Date(viewDate);
@@ -1552,7 +1499,6 @@
                         return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
                     } catch (e) { return viewDate; }
                 };
-
                 return (
                     <div className="min-h-screen bg-slate-50 p-4 pb-20 animate-bounce-in">
                         <div className="flex items-center justify-between mb-6 sticky top-0 bg-slate-50/90 backdrop-blur-md py-2 z-20">
@@ -1597,16 +1543,16 @@
                                 )}
                             </div>
                         ) : (
-                            <div className="space-y-6 animate-bounce-in">
+                             <div className="space-y-6 animate-bounce-in">
                                 {/* Grafik Batang Kelas */}
                                 <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
-                                    <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="bar-chart" width="18" className="text-indigo-500"></i> Kehadiran Per Kelas</h3>
+                                     <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="bar-chart" width="18" className="text-indigo-500"></i> Kehadiran Per Kelas</h3>
                                     <div className="h-64">
                                         <SimpleChart type="bar" data={chartDataKelas} id="chartKelas" />
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Grafik Donat Status */}
                                     <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-lg">
                                         <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="pie-chart" width="18" className="text-emerald-500"></i> Status Kehadiran</h3>
@@ -1648,7 +1594,7 @@
                     <div className="min-h-screen bg-slate-50 relative">
                         <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
                             <div className="flex items-center gap-3 mb-4">
-                                <button onClick={handleBackToMenu} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
+                                <button onClick={() => isPeserta ? handleBackToMenu() : setView('admin_dashboard')} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
                                 <h2 className="font-black text-xl text-slate-800">Kelola Absensi</h2>
                             </div>
                             
@@ -1660,7 +1606,7 @@
                                             <input type="checkbox" className="sr-only peer" checked={sessionConfig.autoMode} onChange={e => setSessionConfig({...sessionConfig, autoMode: e.target.checked})} />
                                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                                         </label>
-                                    </div>
+                                     </div>
                                     
                                     {sessionConfig.autoMode ? (
                                         <div className="flex gap-2">
@@ -1677,7 +1623,7 @@
                                 </div>
                             )}
 
-                            {!isPeserta && (
+                             {!isPeserta && (
                                 <input className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700" placeholder="Cari Nama Peserta..." value={filterManual} onChange={e => setFilterManual(e.target.value)} />
                             )}
                         </div>
@@ -1706,7 +1652,7 @@
                                         </div>
                                     )
                                 })
-                            )}
+                             )}
                         </div>
                     </div>
                 );
@@ -1718,7 +1664,6 @@
                     const matchClass = liveClassFilter === "Semua" || (item.kelas && item.kelas === liveClassFilter);
                     return matchName && matchClass;
                 });
-
                 const totalHadir = liveAttendance.length;
                 const totalFiltered = displayData.length;
 
@@ -1726,7 +1671,7 @@
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
                     <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
                         <div className="p-4 pb-2 flex items-center justify-between">
-                             <button onClick={() => handleBackToMenu()} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200 transition active:scale-95">
+                             <button onClick={() => isPeserta ? handleBackToMenu() : setView('admin_dashboard')} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200 transition active:scale-95">
                                 <i data-lucide="arrow-left" width="20"></i>
                              </button>
                              <div className="text-right">
@@ -1819,7 +1764,7 @@
                                         <div className="flex flex-col items-center justify-center bg-slate-50 min-w-[56px] h-[56px] rounded-xl border border-slate-100 ml-2">
                                             <span className="text-[14px] font-black text-slate-700 leading-none">{item.jam.split(':')[0]}</span>
                                             <span className="text-[10px] font-bold text-slate-400 leading-none mt-0.5">{item.jam.split(':')[1]}</span>
-                                        </div>
+                                         </div>
 
                                         <div className="flex-1 min-w-0 py-1">
                                             <h4 className="font-bold text-slate-800 text-sm truncate leading-tight mb-1">{item.nama}</h4>
@@ -1856,7 +1801,7 @@
                 return (
                 <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
                     
-                    <button onClick={() => handleBackToMenu()} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50">
+                    <button onClick={() => setView('admin_dashboard')} className="absolute top-6 left-6 btn-playful bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 font-bold border-2 border-white/30 z-50">
                         <i data-lucide="arrow-left" width="18"></i> Kembali
                     </button>
 
@@ -1891,13 +1836,13 @@
                                 
                                 {scanResult.subMsg && (
                                     <p className="text-center text-sm text-slate-500 font-bold mb-4 uppercase tracking-wide">
-                                       {scanResult.subMsg}
+                                        {scanResult.subMsg}
                                     </p>
                                 )}
 
                                 {scanResult.success && scanResult.p && (
                                     <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 mb-4 text-left space-y-2 relative mt-4">
-                                         {scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}
+                                        {scanResult.time && <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-lg shadow-sm">{scanResult.time}</div>}
                                         <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase">Nama Lengkap</p>
                                             <p className="font-black text-lg text-slate-700">{scanResult.p.nama}</p>
@@ -1908,7 +1853,7 @@
                                                 <p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kategori}</p>
                                             </div>
                                             <div>
-                                                 <p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Kelas</p>
                                                 <p className="font-bold text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">{scanResult.p.kelas || '-'}</p>
                                             </div>
                                         </div>
@@ -1934,10 +1879,10 @@
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
                         <div className="flex items-center justify-between mb-6">
-                            <button onClick={handleBackToMenu} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
+                            <button onClick={() => setView('admin_dashboard')} className="btn-playful btn-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold"><i data-lucide="arrow-left" width="18"></i> Kembali</button>
                             <h2 className="font-black text-xl text-slate-700">Edit Bahan Ajar</h2>
                         </div>
-                         <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 space-y-4 mb-4">
+                        <div className="bg-white p-6 rounded-3xl shadow-lg border-2 border-indigo-100 space-y-4 mb-4">
                             <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Judul Besar / Tema Bulanan</label><input className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" value={editThemeForm.title} onChange={e => setEditThemeForm({...editThemeForm, title: e.target.value})} placeholder="Contoh: Kasih Allah..." /></div>
                         </div>
                         <div className="space-y-4">
@@ -1950,7 +1895,7 @@
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Topik / Judul Minggu Ini</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.topic} onChange={e => handleWeekChange(index, 'topic', e.target.value)} placeholder="Contoh: Minggu 1: Ketaatan" /></div>
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Tema (Singkat)</label><input className="w-full p-2 border rounded-lg font-bold text-slate-700 text-sm" value={week.themeVerse} onChange={e => handleWeekChange(index, 'themeVerse', e.target.value)} placeholder="Contoh: Yohanes 3:16" /></div>
                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Ayat Hafalan (Isi Lengkap)</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-xs h-16" value={week.memoryVerse} onChange={e => handleWeekChange(index, 'memoryVerse', e.target.value)} placeholder="Tulis ayat hafalan disini..." /></div>
-                                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." /></div>
+                                        <div><label className="text-[10px] font-bold text-slate-400 uppercase">Isi Ringkasan Materi</label><textarea className="w-full p-2 border rounded-lg font-medium text-slate-600 text-sm h-24" value={week.content} onChange={e => handleWeekChange(index, 'content', e.target.value)} placeholder="Ringkasan khotbah..." /></div>
                                     </div>
                                 </div>
                             ))}
@@ -1964,17 +1909,17 @@
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
                     <div className="max-w-md mx-auto">
-                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
-                        
+                        <button onClick={() => setView('admin_dashboard')} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+            
                         <div className="bg-white rounded-xl shadow p-4 mb-4 border-2 border-dashed border-indigo-200 text-center">
                              <div className="text-center relative hover:bg-indigo-50 transition rounded-lg p-2 cursor-pointer">
-                                <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                 <input type="file" accept=".csv, .xlsx, .xls" onChange={handleImportUsers} className="absolute inset-0 opacity-0 cursor-pointer" />
                                 <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
                                 <span className="text-sm font-bold text-indigo-600 block">Import User (Excel/CSV)</span>
                                 <span className="text-xs text-gray-400">Format: Username, Password, Nama, Role</span>
                             </div>
                         </div>
-                        
+                         
                         <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
                             <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
                              <div className="space-y-3">
@@ -1997,17 +1942,17 @@
                         <div className="space-y-2 pb-10">
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest">User Terdaftar</h3>
                             <input type="text" placeholder="Cari username atau nama..." className="w-full p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-indigo-400 font-bold text-sm text-slate-700 mb-2" value={filterUser} onChange={(e) => setFilterUser(e.target.value)} />
-                            {users.filter(u => (u.username || '').toLowerCase().includes(filterUser.toLowerCase()) || (u.nama || '').toLowerCase().includes(filterUser.toLowerCase())).map(u => (
+                             {users.filter(u => (u.username || '').toLowerCase().includes(filterUser.toLowerCase()) || (u.nama || '').toLowerCase().includes(filterUser.toLowerCase())).map(u => (
                                 <div key={u.username} className={`bg-white p-4 rounded-2xl shadow-sm border-2 flex justify-between items-center ${editingId === u.username ? 'border-amber-400 bg-amber-50' : 'border-slate-100'}`}>
                                     <div><p className="font-bold text-slate-700">{u.username || 'Tanpa Username'}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama || '-'} • {u.role || 'peserta'}</p></div>
                                     <div className="flex gap-2">
                                         <button onClick={() => startEditUser(u)} className="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition" title="Edit Data"><i data-lucide="pencil" width="16"></i></button>
-                                        <button onClick={() => initiateAdminReset(u)} className="text-amber-500 bg-amber-50 p-2 rounded-lg hover:bg-amber-100 transition" title="Reset Password"><i data-lucide="key-round" width="16"></i></button>
+                                         <button onClick={() => initiateAdminReset(u)} className="text-amber-500 bg-amber-50 p-2 rounded-lg hover:bg-amber-100 transition" title="Reset Password"><i data-lucide="key-round" width="16"></i></button>
                                         {u.username !== 'admin' && (<button onClick={() => initiateDelete(`users/${u.username}`)} className="text-rose-500 bg-rose-50 p-2 rounded-lg hover:bg-rose-100 transition" title="Hapus User"><i data-lucide="trash-2" width="16"></i></button>)}
                                     </div>
                                 </div>
                             ))}
-                            {users.filter(u => (u.username || '').toLowerCase().includes(filterUser.toLowerCase()) || (u.nama || '').toLowerCase().includes(filterUser.toLowerCase())).length === 0 && (
+                             {users.filter(u => (u.username || '').toLowerCase().includes(filterUser.toLowerCase()) || (u.nama || '').toLowerCase().includes(filterUser.toLowerCase())).length === 0 && (
                                 <p className="text-center text-slate-400 text-xs font-bold py-4">Tidak ada user yang cocok.</p>
                             )}
                         </div>
@@ -2019,13 +1964,13 @@
             if (view === 'generate') return (
                 <div key="view-generate" className="min-h-screen bg-slate-100 p-4">
                     <div className="max-w-md mx-auto">
-                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        <button onClick={() => setView('admin_dashboard')} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
                         <div className="bg-white rounded-xl shadow p-6">
                             <h2 className="font-bold text-xl mb-6 text-indigo-800 flex items-center gap-2"><i data-lucide="users"></i> SM GKPS RESORT TANGERANG</h2>
                             <div className="mb-6 space-y-4">
                                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition">
                                     <input type="file" accept=".csv, .xlsx, .xls" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                    <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
+                                     <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
                                     <span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span>
                                     <span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span>
                                 </div>
@@ -2041,7 +1986,7 @@
                                         </select>
                                         <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
                                             <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
+                                         </select>
                                         <div className="flex gap-2">
                                             <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
                                             {editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
@@ -2059,7 +2004,7 @@
                                             <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button>
                                             <button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button>
                                             <button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100"><i data-lucide="trash-2" width="12"></i></button>
-                                        </div>
+                                         </div>
                                         <img src={generateQRUrl(p.id)} className="w-24 mx-auto mb-2 mix-blend-multiply cursor-pointer hover:scale-110 transition-transform duration-200 border-2 border-transparent hover:border-indigo-200 rounded-lg p-1" loading="lazy" onClick={() => downloadSingleQR(p)} title="Klik untuk download QR" />
                                         <p className="font-bold text-xs truncate text-slate-800">{p.nama}</p>
                                         <p className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 inline-block mt-1">{p.kategori}</p>
@@ -2085,7 +2030,7 @@
                                 <h2 className="text-2xl font-black text-slate-800 font-fredoka mb-1">{safeUser.nama}</h2>
                                 <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">{safeUser.role}</span>
                             </div>
-                            <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
+                             <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 mb-6 relative">
                                 <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-4 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Scan Me</div>
                                 <img src={qrUrl} alt="QR Code" className="w-48 h-48 mx-auto mix-blend-multiply" />
                             </div>
@@ -2098,13 +2043,13 @@
             if (view === 'manage_broadcast') return (
                 <div className="min-h-screen bg-slate-50 p-4 pb-20">
                     <div className="max-w-md mx-auto">
-                        <button onClick={handleBackToMenu} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+                        <button onClick={() => setView('admin_dashboard')} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
                         <div className="bg-white rounded-3xl shadow-lg p-6 border-2 border-indigo-100 mb-6">
                              <div className="flex items-center gap-3 mb-4 text-indigo-600">
-                                <div className="bg-indigo-100 p-2 rounded-lg"><i data-lucide="megaphone" width="24"></i></div>
+                                 <div className="bg-indigo-100 p-2 rounded-lg"><i data-lucide="megaphone" width="24"></i></div>
                                 <h2 className="font-black text-xl">Buat Broadcast</h2>
                              </div>
-                            <div className="space-y-3">
+                             <div className="space-y-3">
                                 <div>
                                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Judul</label>
                                     <input className="w-full border-2 p-3 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400" placeholder="Contoh: Pengumuman Penting" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
@@ -2119,7 +2064,7 @@
                                         <select className="w-full border-2 p-3 rounded-xl font-bold text-slate-600 bg-white focus:outline-none focus:border-indigo-400" value={broadcastForm.type} onChange={e => setBroadcastForm({...broadcastForm, type: e.target.value})}>
                                             <option value="info">ℹ️ Info (Biru)</option>
                                             <option value="urgent">⚠️ Penting (Merah)</option>
-                                        </select>
+                                         </select>
                                     </div>
                                     <div className="flex-1">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Jadwal (Opsional)</label>
@@ -2129,19 +2074,19 @@
                                 
                                 <button onClick={handleSendBroadcast} className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg mt-2 flex items-center justify-center gap-2">
                                     <i data-lucide="send" width="18"></i> 
-                                    {broadcastForm.schedule ? 'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
+                                     {broadcastForm.schedule ? 'JADWALKAN KIRIM' : 'KIRIM SEKARANG'}
                                 </button>
                                 {broadcastForm.schedule && <p className="text-center text-[10px] text-slate-400 font-bold">Akan muncul otomatis pada: {new Date(broadcastForm.schedule).toLocaleString('id-ID')}</p>}
-                            </div>
+                             </div>
                         </div>
 
                         <div>
                             <h3 className="font-black text-slate-400 ml-2 text-xs uppercase tracking-widest mb-3">Arsip / Riwayat Pesan</h3>
-                            <div className="space-y-3">
+                             <div className="space-y-3">
                                 {broadcastHistory.length === 0 ? (
                                     <div className="text-center p-8 opacity-50 border-2 border-dashed border-slate-300 rounded-xl">
                                         <p className="font-bold text-sm text-slate-400">Belum ada riwayat broadcast.</p>
-                                    </div>
+                                     </div>
                                 ) : (
                                     broadcastHistory.map((item) => (
                                         <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative group">
@@ -2149,20 +2094,20 @@
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className={`text-[10px] font-black px-2 py-1 rounded text-white ${item.type === 'urgent' ? 'bg-rose-500' : 'bg-sky-500'}`}>{item.type === 'urgent' ? 'PENTING' : 'INFO'}</span>
                                                 {item.scheduledAt && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="clock" width="10"></i> Terjadwal</span>}
-                                            </div>
+                                             </div>
                                             <h4 className="font-bold text-slate-800 text-sm mb-1">{item.title}</h4>
                                             <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.message}</p>
                                             <div className="flex justify-between items-center pt-2 border-t border-slate-50">
                                                 <span className="text-[10px] text-slate-400 font-bold"><i data-lucide="user" width="10" className="inline mr-1"/>{item.sender}</span>
                                                 <div className="text-right">
-                                                    <span className="text-[10px] text-slate-400 font-bold block">{item.timestamp}</span>
+                                                     <span className="text-[10px] text-slate-400 font-bold block">{item.timestamp}</span>
                                                     {item.scheduledAt && <span className="text-[9px] text-amber-600 font-bold block">Jadwal: {new Date(item.scheduledAt).toLocaleString('id-ID')}</span>}
                                                 </div>
                                             </div>
                                         </div>
                                     ))
                                 )}
-                            </div>
+                             </div>
                         </div>
                     </div>
                 </div>
@@ -2187,7 +2132,7 @@
                             <div className="bg-slate-100 p-3 rounded-xl text-xs text-left mb-4 overflow-auto max-h-32 border border-slate-200"><code>{connectionError}</code></div>
                             <button onClick={handleSmoothRefresh} className="w-full btn-playful btn-blue py-3 rounded-xl font-bold">
                                 <i data-lucide="refresh-cw" className="inline w-4 h-4 mr-2"></i> Coba Lagi (Refresh)
-                            </button>
+                             </button>
                         </div>
                     </div>
                  );
