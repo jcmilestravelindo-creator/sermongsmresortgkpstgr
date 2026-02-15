@@ -1407,28 +1407,23 @@
                 
                 // FIX: Validasi string sebelum split
                 if (typeof settings.manualStart === 'string' && typeof settings.manualEnd === 'string') {
-                    // Cek apakah string kosong
-                    if(settings.manualStart.trim() === '' || settings.manualEnd.trim() === '') {
-                        // Jika salah satu kosong, anggap 24 jam -> LANJUT KE SHOW
+                    const [sH, sM] = settings.manualStart.split(':').map(Number);
+                    const startMins = sH * 60 + sM;
+                    
+                    const [eH, eM] = settings.manualEnd.split(':').map(Number);
+                    const endMins = eH * 60 + eM;
+
+                    let isOpen = false;
+                    if (startMins <= endMins) {
+                        // Jadwal hari yang sama (misal 07:00 - 12:00)
+                        isOpen = currentMins >= startMins && currentMins <= endMins;
                     } else {
-                        const [sH, sM] = settings.manualStart.split(':').map(Number);
-                        const startMins = sH * 60 + sM;
-                        
-                        const [eH, eM] = settings.manualEnd.split(':').map(Number);
-                        const endMins = eH * 60 + eM;
-
-                        let isOpen = false;
-                        if (startMins <= endMins) {
-                            // Jadwal hari yang sama (misal 07:00 - 12:00)
-                            isOpen = currentMins >= startMins && currentMins <= endMins;
-                        } else {
-                            // Jadwal lintas hari (misal 22:00 - 05:00)
-                            isOpen = currentMins >= startMins || currentMins <= endMins;
-                        }
-
-                        // Jika sekarang di luar jadwal, sembunyikan tombol
-                        if (!isOpen) return; 
+                        // Jadwal lintas hari (misal 22:00 - 05:00)
+                        isOpen = currentMins >= startMins || currentMins <= endMins;
                     }
+
+                    // Jika sekarang di luar jadwal, sembunyikan tombol
+                    if (!isOpen) return; 
                 }
             }
 
