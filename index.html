@@ -348,7 +348,8 @@
         </div>
        
         <div class="pro-card">
-             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Username</label>
+             
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Username</label>
   
             <input type="text" id="login-username" class="pro-input" placeholder="Masukkan Username">
             <label class="block text-xs font-bold text-gray-500 
@@ -403,7 +404,8 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                 <div class="flex gap-2">
                    <button onclick="openProfileModal()" class="text-blue-500 text-xs font-bold border border-blue-200 px-3 py-1 rounded-full">Profil</button>
             
-                 <button onclick="logout()" class="text-red-500 text-xs font-bold border border-red-200 px-3 py-1 rounded-full">Keluar</button>
+                 <button 
+onclick="logout()" class="text-red-500 text-xs font-bold border border-red-200 px-3 py-1 rounded-full">Keluar</button>
                 </div>
             </div>
         </header>
@@ -1531,53 +1533,56 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
             }
         }
 
-        // ==================== LOGIKA SETTINGS BARU (REBUILT) ====================
+        // ==================== FIX: SETTINGS & MANUAL ATTENDANCE ====================
 
-        // 1. Load Settings ke UI & Update Status Visual
         function loadSettingsToUI() {
+            // Pastikan objek settings ada
             if(!db.settings) db.settings = { manualOpen: false, manualStart: '', manualEnd: '' };
             
             const toggle = document.getElementById('sett-manual-toggle');
-            toggle.checked = db.settings.manualOpen || false;
-            
-            document.getElementById('sett-manual-start').value = db.settings.manualStart || '';
-            document.getElementById('sett-manual-end').value = db.settings.manualEnd || '';
+            const inputStart = document.getElementById('sett-manual-start');
+            const inputEnd = document.getElementById('sett-manual-end');
 
-            updateSettingsUIState(); // Update visual interaktif
+            if(toggle) toggle.checked = db.settings.manualOpen || false;
+            if(inputStart) inputStart.value = db.settings.manualStart || '';
+            if(inputEnd) inputEnd.value = db.settings.manualEnd || '';
+
+            console.log("Settings Loaded:", db.settings); // Debug di Console
+            updateSettingsUIState(); 
         }
 
-        // 2. Fungsi Visual: Mengatur Opacity & Label Status di Menu Settings
         function updateSettingsUIState() {
-            const isOn = document.getElementById('sett-manual-toggle').checked;
+            const toggle = document.getElementById('sett-manual-toggle');
             const container = document.getElementById('schedule-container');
             const label = document.getElementById('manual-status-label');
+
+            if(!toggle || !container || !label) return;
+
+            const isOn = toggle.checked;
 
             if(isOn) {
                 container.classList.remove('opacity-50', 'pointer-events-none');
                 
-                // Cek apakah mode terjadwal atau 24 jam
                 const start = document.getElementById('sett-manual-start').value;
                 const end = document.getElementById('sett-manual-end').value;
 
                 if(start && end) {
-                    label.innerHTML = `<span class="text-amber-600">🟠 AKTIF (TERJADWAL ${start}-${end})</span>`;
+                    label.innerHTML = `<span class="text-amber-600 bg-amber-100 px-2 py-0.5 rounded">🟠 TERJADWAL (${start} - ${end})</span>`;
                 } else {
-                    label.innerHTML = `<span class="text-green-600">🟢 AKTIF (MANUAL 24 JAM)</span>`;
+                    label.innerHTML = `<span class="text-green-600 bg-green-100 px-2 py-0.5 rounded">🟢 AKTIF (MANUAL 24 JAM)</span>`;
                 }
             } else {
                 container.classList.add('opacity-50', 'pointer-events-none');
-                label.innerHTML = `<span class="text-red-500">🔴 NON-AKTIF (DITUTUP)</span>`;
+                label.innerHTML = `<span class="text-red-500 bg-red-100 px-2 py-0.5 rounded">🔴 NON-AKTIF (DITUTUP)</span>`;
             }
         }
 
-        // 3. Helper untuk menghapus input jam dengan cepat
         function clearScheduleInputs() {
             document.getElementById('sett-manual-start').value = '';
             document.getElementById('sett-manual-end').value = '';
-            updateSettingsUIState(); // Refresh label status
+            updateSettingsUIState();
         }
 
-        // 4. Simpan Settings ke Database
         function saveSettings() {
             if(!db.settings) db.settings = {};
             
@@ -1585,35 +1590,43 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
             const start = document.getElementById('sett-manual-start').value;
             const end = document.getElementById('sett-manual-end').value;
 
+            // Update local state
             db.settings.manualOpen = isOpen;
             db.settings.manualStart = start;
             db.settings.manualEnd = end;
             
+            // Simpan ke Firebase
             saveDb().then(() => {
-                alert("Pengaturan Berhasil Disimpan!");
-                loadSettingsToUI(); // Refresh UI untuk memastikan sinkron
-                checkManualAttendanceVisibility(); // Terapkan efeknya langsung ke tombol absen
+                alert("✅ PENGATURAN BERHASIL DISIMPAN!\n\nStatus: " + (isOpen ? "Aktif" : "Non-Aktif") + 
+                      "\nJam: " + (start && end ? `${start}-${end}` : "24 Jam"));
+                
+                loadSettingsToUI(); 
+                checkManualAttendanceVisibility(); // Paksa cek ulang tombol
+            }).catch(err => {
+                alert("❌ Gagal menyimpan: " + err.message);
             });
         }
 
-        // 5. CORE LOGIC: Menentukan Tombol Absen Muncul/Hilang
         function checkManualAttendanceVisibility() {
             if(!currentUser) return;
 
             const btnSiswa = document.getElementById('manual-absen-container-siswa');
             const btnDash = document.getElementById('manual-absen-container-dash');
             
-            // Default: Sembunyikan dulu
+            // 1. Sembunyikan dulu (Reset)
             if(btnSiswa) btnSiswa.classList.add('hidden');
             if(btnDash) btnDash.classList.add('hidden');
 
             const settings = db.settings || {};
+            console.log("Checking Visibility...", settings); // Debug
 
-            // SYARAT 1: Fitur harus di-ON-kan oleh Admin
-            if(!settings.manualOpen) return; 
+            // SYARAT 1: Master Switch harus ON
+            if(!settings.manualOpen) {
+                console.log("Fitur dimatikan oleh Admin.");
+                return; 
+            }
 
-            // SYARAT 2: Cek Jadwal (Jika diatur)
-            // Jika jam kosong, berarti mode "Tidak Terjadwal" (Aktif 24 Jam) -> Lolos
+            // SYARAT 2: Cek Jadwal (Hanya jika jam diisi)
             if (settings.manualStart && settings.manualEnd) {
                 const now = new Date();
                 const currentMins = now.getHours() * 60 + now.getMinutes();
@@ -1626,29 +1639,34 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
 
                 let isOpenTime = false;
                 if (startMins <= endMins) {
-                    // Jadwal dalam hari yang sama (misal 08:00 - 12:00)
                     isOpenTime = currentMins >= startMins && currentMins <= endMins;
                 } else {
-                    // Jadwal lintas hari (misal 22:00 - 05:00 besoknya)
+                    // Lintas hari (misal 23:00 - 05:00)
                     isOpenTime = currentMins >= startMins || currentMins <= endMins;
                 }
 
-                // Jika di luar jam jadwal, hentikan proses (Tombol tetap hidden)
-                if (!isOpenTime) return;
+                if (!isOpenTime) {
+                    console.log("Diluar jam jadwal operasional.");
+                    return;
+                }
             }
 
-            // SYARAT 3: Cek apakah user sudah absen hari ini
-            // Agar tombol hilang jika sudah absen (opsional, bisa dihapus jika ingin multi-absen)
+            // SYARAT 3: Cek apakah user sudah absen
             const today = getTodayDate();
             const already = db.attendance.find(a => a.username === currentUser.username && a.date === today);
             
             if(already) {
-                 // Jika User sudah absen, tombol disembunyikan agar tidak spam
-                 // Kecuali Admin mungkin ingin tes, tapi logic standarnya sembunyi.
-                 return;
+                 // UPDATE PENTING: Jika Admin, tombol tetap muncul untuk testing
+                 if(currentUser.role === 'admin') {
+                     console.log("User sudah absen, tapi karena ADMIN tombol tetap dimunculkan.");
+                 } else {
+                     console.log("User sudah absen hari ini. Tombol disembunyikan.");
+                     return;
+                 }
             }
 
-            // LOLOS SEMUA SYARAT -> TAMPILKAN TOMBOL
+            // JIKA LOLOS SEMUA SYARAT -> TAMPILKAN
+            console.log("Tombol Manual DITAMPILKAN.");
             if(currentUser.role === 'siswa' && btnSiswa) {
                 btnSiswa.classList.remove('hidden');
             }
@@ -1927,12 +1945,14 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                     </td>
              
                     <td><span class="text-[10px] bg-gray-100 px-2 py-1 rounded">${u.kelas||'-'}</span></td>
-                    <td><span class="text-[10px] border px-2 py-0.5 rounded 
+                    <td><span class="text-[10px] border px-2 py-0.5 
+rounded 
                         uppercase">${u.role.replace('_',' ')}</span></td>
                     <td><span class="badge ${u.gender==='P'?'badge-gender-p':'badge-gender-l'}">${u.gender||'L'}</span></td>
                     <td><span class="badge ${u.disabled?'badge-disabled':'badge-active'}">${u.disabled?'Blocked':'Active'}</span></td>
                  
-                    <td class="text-right flex gap-1 justify-end items-center h-full pt-3">
+             
+                       <td class="text-right flex gap-1 justify-end items-center h-full pt-3">
            
                      <button onclick="openUserModal('${u.id}')" class="bg-blue-100 text-blue-600 text-xs px-2 py-1 rounded font-bold">Edit</button>
                         ${u.role!=='admin' ?
@@ -2026,13 +2046,16 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
 
                 return `<tr>
                     <td class="text-gray-500 font-mono text-xs">${l.time}</td>
-            
+           
+ 
                     <td class="font-bold 
                         text-sm">${l.name}</td>
                     <td><span class="badge badge-class">${u?u.kelas:'-'}</span></td>
                     <td><span class="text-xs ${colorClass} px-2 py-1 rounded">${statusLabel}</span></td>
-                   
-                 <td class="text-[10px] text-gray-500 italic">${l.note || '-'}</td>
+      
+             
+                 <td class="text-[10px] text-gray-500 italic">${l.note ||
+'-'}</td>
                 </tr>`;
             }).join('');
         }
@@ -2056,7 +2079,8 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                  return `<tr>
                     <td>${l.date}<br><span class="text-gray-400">${l.time}</span></td>
                     <td class="font-bold">${l.name}</td>
-                
+               
+ 
                  <td class="${colorClass} font-bold">${l.status || 'Hadir'}</td>
         
                     <td class="italic text-gray-500">${l.note || '-'}</td>
@@ -2246,9 +2270,9 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
 
         function exportExcel() {
              let csv = "Nama,Username,Kelas,Waktu,Tanggal\n";
-             const att = Array.isArray(db.attendance) ? db.attendance : [];
+            const att = Array.isArray(db.attendance) ? db.attendance : [];
              att.forEach(r => { const u = db.users.find(usr => usr.username === r.username); csv += `${r.name},${r.username},${u?u.kelas:'-'},${r.time},${r.date}\n` });
-             const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); a.download = `Absensi_${new Date().toLocaleDateString()}.csv`; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); a.download = `Absensi_${new Date().toLocaleDateString()}.csv`; a.click();
         }
         function importCSV(input) {
             const file = input.files[0];
@@ -2266,10 +2290,12 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                         let genderRaw = cols[5] ? cols[5].trim().toUpperCase() : 'L';
                         let gender = (genderRaw === 'P' || genderRaw === 'PEREMPUAN') ? 'P' : 'L';
                         if(!Array.isArray(db.users)) db.users = [];
-     
+    
+ 
                        if(name.toLowerCase()!=='nama' && !db.users.find(u=>u.username===username)) {
  
                             db.users.push({ id:'IMP_'+Date.now()+c, name, username, password, role, kelas, gender: gender, disabled:false, avatar:'https://api.dicebear.com/7.x/notionists/svg?seed='+name, posX: 50, posY: 50, folder: '-', readMsgs: [] });
+                         
                             c++;
   
                        }
@@ -2315,7 +2341,8 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                         <button onclick="renameFolder('${f}')" class="text-blue-500 hover:text-blue-700 text-[10px] font-bold border border-blue-200 px-2 rounded">Edit</button>
                         <button onclick="deleteFolderInline('${f}')" class="text-red-500 hover:text-red-700 text-[10px] font-bold border border-red-200 px-2 rounded">Hapus</button>
                     </div>
-              
+             
+ 
                 </div>`).join('');
         }
         function renameFolder(oldName) {
@@ -2428,12 +2455,13 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                         ${isEditable ? `
                         <div class="flex gap-1">
                             <button onclick="showMateriEditor('${m.id}')" class="text-blue-500 text-[10px] font-bold">Edit</button>
-                
+               
   
                             <button onclick="deleteMateri('${m.id}')" class="text-red-500 text-[10px] font-bold">Hapus</button>
                         </div>` : ''}
                     </div>
-                    
+                   
+ 
                 <p class="text-xs text-gray-600 mt-1 whitespace-pre-wrap">${m.content}</p>
                 
                     <div class="text-[9px] text-gray-400 mt-2 italic">Oleh: ${m.author}</div>
@@ -2521,12 +2549,14 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                     ${isEditable ? `
                     <td>
                         <button onclick="showJadwalEditor('${j.id}')" class="text-blue-500 mr-2">Edit</button>
-           
+          
+ 
                          <button onclick="deleteJadwal('${j.id}')" 
                             class="text-red-500">Hapus</button>
                     </td>` : ''}
                 </tr>
-            `).join('');
+      
+             `).join('');
         }
 
         function deleteJadwal(id) {
@@ -2551,6 +2581,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
           lastTime: 0,
           avgBright: 0,
           flashShown: false
+    
         };
         function monitorBrightness() {
           if (ENHANCED_SCANNER.monitor) clearInterval(ENHANCED_SCANNER.monitor);
@@ -2566,12 +2597,14 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
               const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
               let sum = 0, count = 0;
+         
               for (let i = 0; i < imgData.length; i += 40) 
  
                 {
                 sum += (imgData[i] + imgData[i+1] + imgData[i+2]) / 3;
                 count++;
               }
+             
               ENHANCED_SCANNER.avgBright = sum / count;
             
                 const fillEl = document.getElementById('brightness-fill');
@@ -2581,7 +2614,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                 fillEl.style.width = pct + '%';
               }
               const warnEl = document.getElementById('low-light-indicator');
-                if (warnEl) {
+              if (warnEl) {
                 warnEl.style.display = ENHANCED_SCANNER.avgBright < 50 ?
                 'flex' : 'none';
               }
@@ -2597,11 +2630,11 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                 ENHANCED_SCANNER.flashShown = true;
               }
               const modeEl = document.getElementById('scan-mode');
-                if (modeEl) {
+              if (modeEl) {
                 if (ENHANCED_SCANNER.avgBright < 30) modeEl.innerText = 'Max';
                 else if (ENHANCED_SCANNER.avgBright < 50) modeEl.innerText = 'Low';
                 else modeEl.innerText = 'High';
-                }
+              }
             } catch (e) {
               console.warn('Brightness monitor error:', e);
             }
@@ -2656,6 +2689,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                   const backCam = devices.find((d) =>
                     d.label.toLowerCase().includes('back') ||
                     d.label.toLowerCase().includes('belakang')
+ 
      
               );
                   currentCameraId = backCam ? backCam.id : devices[0].id;
@@ -2663,11 +2697,11 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
 
                
                 select.value = currentCameraId;
-              
+         
                 runCamera(currentCameraId);
               } else {
                 showScannerError("Tidak ada kamera ditemukan.");
-            }
+              }
             })
             .catch((err) => {
               showScannerError("Izin kamera ditolak atau tidak tersedia.");
@@ -2682,7 +2716,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
             fps: 45, // sensitivitas tinggi (lebih cepat)
             qrbox: (vw, vh) => {
               const size = Math.min(vw, vh) * 0.85;
-                return { width: size, height: size };
+              return { width: size, height: size };
             },
             aspectRatio: 1.0,
             focusMode: "continuous",
@@ -2704,8 +2738,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                 const caps = html5QrCode.getRunningTrackCameraCapabilities();
                 if (caps && caps.torchFeature && caps.torchFeature.isSupported()) {
                   torchBtn.classList.remove('hidden');
-            
-    
+       
                   } else {
                   torchBtn.classList.add('hidden');
                 }
@@ -2770,6 +2803,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
               avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=' + name,
               posX: 50,
               posY: 50,
+        
               folder: '-',
     
                 readMsgs: []
@@ -2844,6 +2878,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
               }
               isProcessing = false;
             }
+        
           }, 1800);
         }
 
@@ -2959,7 +2994,8 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                               db.users.push(bu);
                                 newUsers++;
                             }
-                        });
+          
+                      });
                     }
 
                     // 2. Merge Attendance
@@ -2973,6 +3009,7 @@ onclick="togglePass('login-password', this)" class="pass-toggle">👁️</span>
                                 db.attendance.push(ba);
                                 newAtt++;
                             }
+        
                         });
                     }
 
