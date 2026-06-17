@@ -104,16 +104,32 @@
             }
         } catch (e) { console.error("Firebase config parse error", e); }
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        window.db = db;
-        window.auth = auth;
-        window.signInAnonymously = signInAnonymously;
-        window.signInWithCustomToken = signInWithCustomToken;
-        window.onAuthStateChanged = onAuthStateChanged;
-        window.fs = { collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs };
-        window.isFirebaseInitialized = true;
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            window.db = db;
+            window.auth = auth;
+            window.signInAnonymously = signInAnonymously;
+            window.signInWithCustomToken = signInWithCustomToken;
+            window.onAuthStateChanged = onAuthStateChanged;
+            window.fs = { collection, doc, setDoc, getDoc, onSnapshot, deleteDoc, query, orderBy, writeBatch, getDocs };
+            window.isFirebaseInitialized = true;
+        } catch (e) {
+            console.error("Firebase init error", e);
+            window.firebaseInitError = (e && e.message) ? e.message : "Gagal menginisialisasi Firebase";
+        }
+    </script>
+    <script>
+        // Penanda jika modul Firebase gagal dimuat sama sekali (mis. CDN gstatic terblokir,
+        // dibuka via file://, atau tidak ada koneksi internet). Modul ES gagal secara diam-diam,
+        // jadi script klasik ini menjadi jaring pengaman: jika setelah jeda window.db belum ada
+        // dan tidak ada error tercatat, tandai sebagai kegagalan pemuatan modul.
+        window.addEventListener('error', function (ev) {
+            if (ev && ev.target && ev.target.tagName === 'SCRIPT') {
+                window.firebaseModuleLoadFailed = true;
+            }
+        }, true);
     </script>
 </head>
 <body class="bg-school-sunday text-slate-800 select-none min-h-screen">
@@ -170,6 +186,7 @@
 
         const CloudAttendance = () => {
             const [dbReady, setDbReady] = useState(false);
+            const [dbError, setDbError] = useState(null);
             // --- State Initialization ---
             const [currentUser, setCurrentUser] = useState(() => {
                 try {
@@ -256,14 +273,33 @@
             useEffect(() => { try { if(window.lucide) window.lucide.createIcons(); } catch(e){} });
             // --- INITIALIZATION CHECKER ---
             useEffect(() => {
+                let attempts = 0;
+                const MAX_ATTEMPTS = 150; // 150 x 100ms = 15 detik
                 const checkDb = setInterval(() => {
                     if (window.db && window.fs) {
                         setDbReady(true);
+                        setDbError(null);
                         clearInterval(checkDb);
+                        return;
+                    }
+                    // Jika modul Firebase melaporkan error inisialisasi, hentikan segera
+                    if (window.firebaseInitError) {
+                        setDbError(window.firebaseInitError);
+                        clearInterval(checkDb);
+                        return;
+                    }
+                    attempts++;
+                    if (attempts >= MAX_ATTEMPTS) {
+                        clearInterval(checkDb);
+                        if (window.firebaseModuleLoadFailed) {
+                            setDbError("Gagal memuat komponen database. Periksa koneksi internet Anda, lalu coba lagi.");
+                        } else {
+                            setDbError("Koneksi ke database melebihi batas waktu. Periksa internet Anda, lalu coba lagi.");
+                        }
                     }
                 }, 100);
                 return () => clearInterval(checkDb);
-            }, []);
+            }, [refreshKey]);
             // --- AUTHENTICATION & DATA SYNC ---
             useEffect(() => {
                 if (!dbReady) return;
@@ -1065,6 +1101,31 @@ const handleExportUsers = () => {
                 </div>
             );
             if (!dbReady) {
+                if (dbError) {
+                    return (
+                        <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
+                            <div className="bg-white/90 backdrop-blur-sm p-6 rounded-3xl shadow-xl max-w-sm w-full border-4 border-rose-100">
+                                <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-rose-50">
+                                    <i data-lucide="wifi-off" className="text-rose-500 w-8 h-8"></i>
+                                </div>
+                                <h1 className="text-xl font-black text-slate-700 mb-2 font-fredoka">Gagal Terhubung</h1>
+                                <p className="text-sm text-slate-500 mb-6 leading-relaxed">{dbError}</p>
+                                <button
+                                    onClick={() => { setDbError(null); setRefreshKey(k => k + 1); }}
+                                    className="w-full btn-playful btn-blue py-3 rounded-xl font-black text-lg shadow-lg flex items-center justify-center gap-2"
+                                >
+                                    <i data-lucide="refresh-cw" width="20"></i> Coba Lagi
+                                </button>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="w-full mt-3 py-2 rounded-xl font-bold text-sm text-slate-400 hover:text-slate-600 transition"
+                                >
+                                    Muat Ulang Halaman
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-school-sunday text-center p-4">
                         <div className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-xl">
