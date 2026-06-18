@@ -293,7 +293,7 @@
 
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/jsx-classic" id="app-jsx">
         const { useState, useEffect, useLayoutEffect, useRef } = React;
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -2449,6 +2449,52 @@ const handleExportUsers = () => {
         root.render(<CloudAttendance />);
         // Tandai bahwa blok Babel berhasil dieksekusi sampai akhir
         window.__appScriptRan = true;
+    </script>
+    <script>
+        // === LOADER JSX (classic runtime) ===
+        // AKAR MASALAH yang sebenarnya: Babel @babel/standalone versi baru memakai
+        // "automatic JSX runtime" sebagai default. Saat meng-compile <script type="text/babel">,
+        // ia menyisipkan `import { jsx } from "react/jsx-runtime"` ke dalam hasil compile,
+        // lalu mencoba menjalankannya sebagai script biasa -> browser menolak dengan
+        // "Cannot use import statement outside a module". Itulah error di "baris 17" yang
+        // muncul terus-menerus, bukan dari kode kita.
+        //
+        // Solusi: jangan biarkan Babel auto-memproses (script diberi type non-standar
+        // "text/jsx-classic" agar diabaikan). Kita compile sendiri dengan runtime CLASSIC
+        // (React.createElement) yang TIDAK menghasilkan `import`, lalu jalankan.
+        (function () {
+            function runApp() {
+                try {
+                    var src = document.getElementById('app-jsx').textContent;
+                    var compiled = Babel.transform(src, {
+                        presets: [['react', { runtime: 'classic' }]]
+                    }).code;
+                    // Jalankan hasil compile (tanpa import, aman sebagai script biasa)
+                    (0, eval)(compiled);
+                    window.__appScriptRan = true;
+                } catch (e) {
+                    console.error('Gagal menjalankan aplikasi:', e);
+                    window.__lastError = (e && (e.stack || e.message)) ? (e.stack || e.message) : String(e);
+                    if (window.__showFatal) {
+                        window.__showFatal('Aplikasi gagal di-compile', (window.__lastError || ''));
+                    }
+                }
+            }
+            // Pastikan Babel sudah termuat sebelum compile.
+            if (typeof Babel !== 'undefined') {
+                runApp();
+            } else {
+                var tries = 0;
+                var t = setInterval(function () {
+                    tries++;
+                    if (typeof Babel !== 'undefined') { clearInterval(t); runApp(); }
+                    else if (tries > 100) { // ~10 detik
+                        clearInterval(t);
+                        if (window.__showFatal) window.__showFatal('Babel gagal dimuat', 'Library Babel tidak termuat dari CDN. Periksa koneksi internet.');
+                    }
+                }, 100);
+            }
+        })();
     </script>
     <script>
         // Watchdog: jika setelah 8 detik blok Babel tak pernah selesai dijalankan
