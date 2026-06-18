@@ -24,6 +24,13 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
+    <!-- Firebase versi COMPAT (classic script, TANPA import/module).
+         Ini menghilangkan total statement `import` dari halaman, sehingga
+         Babel standalone tidak punya apa pun untuk ditabrak. -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
     <style>
@@ -76,16 +83,16 @@
     </style>
 
     <script>
-        // === INISIALISASI FIREBASE (via dynamic import) ===
-        // CATATAN PENTING: Sebelumnya blok ini memakai <script type="module"> dengan
-        // statement `import` statis. Babel standalone (in-browser) memindai SELURUH tag
-        // <script> di halaman dan menabrak `import` tersebut, melempar
+        // === INISIALISASI FIREBASE (versi COMPAT, tanpa import/module) ===
+        // PENTING: Versi sebelumnya memakai `import`/`type="module"`. Babel standalone
+        // (in-browser) memindai tag <script> dan menabrak statement `import`, melempar
         // "Cannot use import statement outside a module" lalu menghentikan eksekusi
-        // SEBELUM React sempat render -> layar putih.
+        // SEBELUM React render -> layar putih.
         //
-        // Solusi: gunakan script BIASA (tanpa type="module") dan muat Firebase secara
-        // dinamis dengan import() di dalam fungsi async. Dengan begitu tidak ada lagi
-        // `import` statis di halaman yang bisa ditabrak Babel.
+        // Solusi final: pakai Firebase COMPAT yang dimuat sebagai <script src> biasa di
+        // <head>. Tidak ada lagi kata `import` di seluruh halaman, sehingga Babel aman.
+        // API compat memetakan ke struktur yang sama dengan yang dipakai aplikasi:
+        // window.db, window.fs (modular-style wrappers), window.auth, dsb.
         (function () {
             // --- PWA SERVICE WORKER REGISTRATION ---
             if ('serviceWorker' in navigator) {
@@ -99,7 +106,6 @@
                 if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                     firebaseConfig = JSON.parse(__firebase_config);
                 } else {
-                    // Fallback config (jika tidak ada config global)
                     firebaseConfig = {
                         apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
                         authDomain: "asggkpstgr.firebaseapp.com",
@@ -112,35 +118,123 @@
                 }
             } catch (e) { console.error("Firebase config parse error", e); }
 
-            // Muat Firebase secara dinamis. import() dievaluasi saat runtime,
-            // bukan diparse sebagai statement module, sehingga aman dari Babel.
-            (async function initFirebase() {
-                try {
-                    var appMod = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
-                    var authMod = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
-                    var fsMod = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-
-                    var app = appMod.initializeApp(firebaseConfig);
-                    var auth = authMod.getAuth(app);
-                    var db = fsMod.getFirestore(app);
-
-                    window.db = db;
-                    window.auth = auth;
-                    window.signInAnonymously = authMod.signInAnonymously;
-                    window.signInWithCustomToken = authMod.signInWithCustomToken;
-                    window.onAuthStateChanged = authMod.onAuthStateChanged;
-                    window.fs = {
-                        collection: fsMod.collection, doc: fsMod.doc, setDoc: fsMod.setDoc,
-                        getDoc: fsMod.getDoc, onSnapshot: fsMod.onSnapshot, deleteDoc: fsMod.deleteDoc,
-                        query: fsMod.query, orderBy: fsMod.orderBy, writeBatch: fsMod.writeBatch,
-                        getDocs: fsMod.getDocs
-                    };
-                    window.isFirebaseInitialized = true;
-                } catch (e) {
-                    console.error("Firebase init error", e);
-                    window.firebaseInitError = (e && e.message) ? e.message : "Gagal menginisialisasi Firebase";
+            try {
+                if (typeof firebase === 'undefined') {
+                    throw new Error("Library Firebase gagal dimuat dari CDN (gstatic). Periksa koneksi internet.");
                 }
-            })();
+                var app = firebase.initializeApp(firebaseConfig);
+                var auth = firebase.auth();
+                var db = firebase.firestore();
+
+                window.db = db;
+                window.auth = auth;
+
+                // --- Adapter: bungkus API compat agar dipanggil dengan gaya modular ---
+                // Aplikasi memakai bentuk fungsi modular seperti collection(db, 'x'),
+                // doc(db, 'x', 'y'), getDocs(q), dst. Wrapper di bawah menerjemahkannya
+                // ke API compat (db.collection(...).doc(...)) tanpa mengubah kode aplikasi.
+
+                window.signInAnonymously = function (a) { return (a || auth).signInAnonymously(); };
+                window.signInWithCustomToken = function (a, t) { return (a || auth).signInWithCustomToken(t); };
+                window.onAuthStateChanged = function (a, cb) { return (a || auth).onAuthStateChanged(cb); };
+
+                // Bangun referensi dari argumen bergaya modular, mendukung path yang
+                // mengandung "/" di dalam satu argumen (mis. doc(db, "a/b/c/d")).
+                // wantDoc=true -> hasil akhir harus DocumentReference; false -> CollectionReference.
+                function buildRef(args, wantDoc) {
+                    var root = args[0];
+                    // Gabungkan semua segmen path menjadi satu array, pisah oleh "/"
+                    var segs = [];
+                    for (var i = 1; i < args.length; i++) {
+                        String(args[i]).split('/').forEach(function (s) {
+                            if (s !== '') segs.push(s);
+                        });
+                    }
+                    var ref = root;
+                    var idx = 0;
+                    // root adalah instance firestore: mulai dengan collection
+                    // Bergantian collection/doc sesuai posisi segmen.
+                    while (idx < segs.length) {
+                        if (ref.collection) {
+                            ref = ref.collection(segs[idx]); idx++;
+                        } else if (ref.doc) {
+                            ref = ref.doc(segs[idx]); idx++;
+                        }
+                    }
+                    return ref;
+                }
+
+                window.fs_buildRef = buildRef;
+
+                window.fs = {
+                    collection: function () { return buildRef(arguments, false); },
+                    doc: function () { return buildRef(arguments, true); },
+                    setDoc: function (ref, data, opts) { return ref.set(data, opts || {}); },
+                    getDoc: function (ref) {
+                        return ref.get().then(function (snap) {
+                            // Samakan API dengan modular: snap.exists() & snap.data()
+                            return {
+                                exists: function () { return snap.exists; },
+                                data: function () { return snap.data(); },
+                                id: snap.id,
+                                _snap: snap
+                            };
+                        });
+                    },
+                    getDocs: function (q) {
+                        return q.get().then(function (qs) {
+                            return {
+                                forEach: function (fn) { qs.forEach(fn); },
+                                docs: qs.docs,
+                                size: qs.size,
+                                empty: qs.empty
+                            };
+                        });
+                    },
+                    onSnapshot: function (ref, cb, errCb) {
+                        // Bungkus snapshot agar kompatibel dengan pemakaian modular di app:
+                        // - DocumentSnapshot: app memanggil snap.exists() (fungsi) & snap.data()
+                        //   tapi compat menyediakan .exists (properti). Kita bungkus.
+                        // - QuerySnapshot: app memakai snap.docs.map(d => d.data()) -> sudah cocok
+                        //   native di compat, teruskan apa adanya.
+                        return ref.onSnapshot(function (snap) {
+                            if (snap && typeof snap.exists === 'boolean') {
+                                // DocumentSnapshot (compat punya .exists sbg boolean)
+                                cb({
+                                    exists: function () { return snap.exists; },
+                                    data: function () { return snap.data(); },
+                                    id: snap.id,
+                                    ref: snap.ref,
+                                    _snap: snap
+                                });
+                            } else {
+                                // QuerySnapshot — teruskan langsung (punya .docs, .forEach, dll)
+                                cb(snap);
+                            }
+                        }, errCb);
+                    },
+                    deleteDoc: function (ref) { return ref.delete(); },
+                    query: function (ref) {
+                        // query(ref, orderBy(...), ...) -> terapkan constraint berurutan
+                        var q = ref;
+                        for (var i = 1; i < arguments.length; i++) {
+                            var c = arguments[i];
+                            if (typeof c === 'function') q = c(q);
+                        }
+                        return q;
+                    },
+                    orderBy: function (field, dir) {
+                        // Kembalikan fungsi constraint untuk dipakai window.fs.query
+                        return function (q) { return q.orderBy(field, dir || 'asc'); };
+                    },
+                    writeBatch: function (d) { return (d || db).batch(); },
+                };
+
+                window.isFirebaseInitialized = true;
+            } catch (e) {
+                console.error("Firebase init error", e);
+                window.firebaseInitError = (e && e.message) ? e.message : "Gagal menginisialisasi Firebase";
+            }
         })();
     </script>
     <script>
