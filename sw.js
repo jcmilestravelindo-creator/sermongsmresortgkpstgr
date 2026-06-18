@@ -1,14 +1,13 @@
+
 // === Service Worker GSM GKPS — versi network-first ===
 // Versi dinaikkan agar SW lama (gkps-app-v2/v3) otomatis dibuang.
 const CACHE_NAME = 'gkps-app-v4';
-
 // INSTALL: langsung aktif tanpa precache.
 // (Precache CDN lewat cache.add() memicu error CORS pada beberapa CDN seperti
 //  cdn.tailwindcss.com, jadi aset dibiarkan ter-cache secara alami saat fetch.)
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
-
 // ACTIVATE: hapus semua cache lama (termasuk gkps-app-v2), lalu ambil alih.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -21,21 +20,17 @@ self.addEventListener('activate', (event) => {
     }).then(() => self.clients.claim())
   );
 });
-
 // FETCH:
 // - Untuk navigasi/HTML (dokumen): NETWORK-FIRST. Selalu ambil versi baru dari
 //   server; kalau offline baru jatuh ke cache. Ini mencegah "terjebak" versi lama.
 // - Untuk aset lain (CDN, gambar): CACHE-FIRST agar cepat & hemat kuota.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-
   // Hanya tangani GET. Biarkan POST/PUT (Firebase, dsb) langsung ke jaringan.
   if (req.method !== 'GET') return;
-
   const isHTML =
     req.mode === 'navigate' ||
     (req.headers.get('accept') || '').includes('text/html');
-
   if (isHTML) {
     // NETWORK-FIRST untuk halaman
     event.respondWith(
@@ -49,7 +44,6 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-
   // CACHE-FIRST untuk aset statis
   event.respondWith(
     caches.match(req).then((cached) => {
