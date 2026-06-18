@@ -402,6 +402,9 @@
             
             const [liveSearch, setLiveSearch] = useState("");
             const [liveClassFilter, setLiveClassFilter] = useState("Semua");
+            const [statGroupBy, setStatGroupBy] = useState("status"); // status | gereja | jam
+            const [statSort, setStatSort] = useState("desc"); // desc | asc
+            const [statChurchFilter, setStatChurchFilter] = useState("Semua");
             const [isThinking, setIsThinking] = useState(false);
             const [aiResponse, setAiResponse] = useState(null);
 
@@ -1585,6 +1588,18 @@ const handleExportUsers = () => {
                                      </div>
                                 </div>
                              </button>
+
+                             <button onClick={() => setView('statistik')} className="col-span-2 bg-gradient-to-r from-violet-500 to-fuchsia-600 p-5 rounded-3xl border border-violet-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-40 h-40 bg-white/10 rounded-full -mr-12 -mt-12 blur-2xl"></div>
+                                <div className="flex items-center gap-4 relative z-10">
+                                    <div className="bg-white/20 p-3 rounded-2xl text-white"><i data-lucide="pie-chart" width="24"></i></div>
+                                    <div className="flex-1">
+                                        <h4 className="font-black text-white text-base font-fredoka">Statistik & Grafik</h4>
+                                        <p className="text-[10px] text-violet-100 font-bold mt-0.5">Rekap Kehadiran GSM (Grafik)</p>
+                                    </div>
+                                    <i data-lucide="chevron-right" width="20" className="text-white/70"></i>
+                                </div>
+                             </button>
                         </div>
 
                         <h3 className="font-black text-slate-400 text-xs uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><i data-lucide="settings" width="12"></i> Sistem & Data</h3>
@@ -1890,6 +1905,267 @@ const handleExportUsers = () => {
                               )}
                         </div>
                     </div>
+                );
+            }
+
+            if (view === 'statistik') {
+                // === REKAP KEHADIRAN GSM (GRAFIK) ===
+                // Sumber data: liveAttendance = catatan absensi pada tanggal viewDate.
+                // "Asal Gereja" pada aplikasi ini direpresentasikan oleh field `kelas`
+                // (kelompok / Pos / Resort tempat GSM bertugas).
+
+                const norm = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
+
+                // Daftar GSM hadir (status Hadir) vs tidak hadir (Izin/Sakit/Alpha)
+                const hadirRecords = liveAttendance.filter(r => r.status === 'Hadir');
+                const tidakHadirRecords = liveAttendance.filter(r => r.status && r.status !== 'Hadir');
+
+                // GSM yang belum tercatat sama sekali = participants - yang ada di liveAttendance
+                const recordedIds = new Set(liveAttendance.map(r => r.id));
+                const belumTercatat = participants.filter(p => !recordedIds.has(p.id));
+
+                const totalGSM = participants.length;
+                const totalHadir = hadirRecords.length;
+                const totalTidakHadir = tidakHadirRecords.length;
+                const totalBelum = belumTercatat.length;
+                const hadirPct = totalGSM > 0 ? Math.round((totalHadir / totalGSM) * 100) : 0;
+
+                // Daftar gereja/kelompok untuk filter
+                const churchSet = Array.from(new Set([
+                    ...liveAttendance.map(r => norm(r.kelas)),
+                    ...participants.map(p => norm(p.kelas))
+                ])).sort();
+
+                // Terapkan filter asal gereja
+                const passChurch = (kelas) => statChurchFilter === 'Semua' || norm(kelas) === statChurchFilter;
+
+                // === Bangun data grafik sesuai mode pengelompokan ===
+                let chartData = [];
+                let chartTitle = "";
+                let chartSubtitle = "";
+
+                if (statGroupBy === 'status') {
+                    chartTitle = "Berdasarkan Status Kehadiran";
+                    chartSubtitle = statChurchFilter === 'Semua' ? "Seluruh GSM" : "Kelompok: " + statChurchFilter;
+                    const buckets = { 'Hadir': 0, 'Izin': 0, 'Sakit': 0, 'Alpha': 0 };
+                    liveAttendance.forEach(r => {
+                        if (!passChurch(r.kelas)) return;
+                        if (buckets[r.status] === undefined) buckets[r.status] = 0;
+                        buckets[r.status]++;
+                    });
+                    // Belum Absen (hanya saat tanpa filter gereja, atau cocok filter)
+                    let belumCount = belumTercatat.filter(p => passChurch(p.kelas)).length;
+                    const colorMap = { 'Hadir': '#10b981', 'Izin': '#f97316', 'Sakit': '#3b82f6', 'Alpha': '#ef4444' };
+                    chartData = Object.keys(buckets).map(k => ({ label: k, value: buckets[k], color: colorMap[k] || '#64748b' }));
+                    chartData.push({ label: 'Belum Absen', value: belumCount, color: '#94a3b8' });
+                } else if (statGroupBy === 'gereja') {
+                    chartTitle = "Berdasarkan Asal Gereja / Kelompok";
+                    chartSubtitle = "Jumlah GSM yang Hadir per Kelompok";
+                    const map = {};
+                    hadirRecords.forEach(r => {
+                        if (!passChurch(r.kelas)) return;
+                        const key = norm(r.kelas);
+                        map[key] = (map[key] || 0) + 1;
+                    });
+                    const palette = ['#8b5cf6','#ec4899','#06b6d4','#10b981','#f59e0b','#ef4444','#6366f1','#14b8a6','#f43f5e','#84cc16','#a855f7','#0ea5e9'];
+                    chartData = Object.keys(map).map((k, i) => ({ label: k, value: map[k], color: palette[i % palette.length] }));
+                } else if (statGroupBy === 'jam') {
+                    chartTitle = "Berdasarkan Waktu Check-in";
+                    chartSubtitle = "Distribusi Jam Kehadiran (GSM Hadir)";
+                    const map = {};
+                    hadirRecords.forEach(r => {
+                        if (!passChurch(r.kelas)) return;
+                        if (!r.jam) return;
+                        const hour = String(r.jam).split(':')[0].padStart(2, '0');
+                        const key = hour + ":00";
+                        map[key] = (map[key] || 0) + 1;
+                    });
+                    chartData = Object.keys(map).sort().map((k, i) => ({ label: k, value: map[k], color: '#0ea5e9' }));
+                }
+
+                // Urutkan (kecuali mode jam yang sudah urut waktu, tetap bisa di-sort jumlah)
+                if (statGroupBy === 'jam' && statSort === 'time') {
+                    // sudah urut waktu
+                } else {
+                    chartData = [...chartData].sort((a, b) => statSort === 'asc' ? a.value - b.value : b.value - a.value);
+                }
+
+                const maxVal = Math.max(1, ...chartData.map(d => d.value));
+                const totalChart = chartData.reduce((s, d) => s + d.value, 0);
+
+                const StatCard = ({ icon, value, label, color }) => (
+                    <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+                        <div className={"w-9 h-9 rounded-xl flex items-center justify-center mb-1.5 " + color}><i data-lucide={icon} width="18"></i></div>
+                        <span className="text-xl font-black text-slate-800 leading-none font-fredoka">{value}</span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mt-1">{label}</span>
+                    </div>
+                );
+
+                return (
+                <div className="min-h-screen bg-slate-50 relative flex flex-col">
+                    <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+                        <div className="p-4 pb-3 flex items-center gap-3">
+                            <button onClick={() => isPeserta ? handleBackToMenu() : setView('admin_dashboard')} className="bg-slate-100 text-slate-600 p-2 rounded-xl font-bold border-b-2 border-slate-300 hover:bg-slate-200 transition active:scale-95">
+                                <i data-lucide="arrow-left" width="20"></i>
+                            </button>
+                            <div className="flex-1">
+                                <h2 className="font-black text-lg text-slate-800 leading-none font-fredoka">Statistik Kehadiran</h2>
+                                <p className="text-[10px] font-bold text-slate-400 mt-0.5">Rekap GSM Sermon Resort Tangerang</p>
+                            </div>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                                    <i data-lucide="calendar" width="12" className="text-slate-400"></i>
+                                </div>
+                                <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-100 text-slate-700 text-[11px] font-bold py-2 pl-7 pr-2 rounded-xl border-transparent focus:bg-white focus:border-violet-400 focus:ring-0 transition" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 p-4 pb-24 overflow-y-auto space-y-4">
+                        {/* Ringkasan Kartu */}
+                        <div className="grid grid-cols-4 gap-2.5">
+                            <StatCard icon="users" value={totalGSM} label="Total GSM" color="bg-slate-100 text-slate-600" />
+                            <StatCard icon="user-check" value={totalHadir} label="Hadir" color="bg-emerald-100 text-emerald-600" />
+                            <StatCard icon="user-x" value={totalTidakHadir} label="Tdk Hadir" color="bg-rose-100 text-rose-600" />
+                            <StatCard icon="help-circle" value={totalBelum} label="Belum Absen" color="bg-amber-100 text-amber-600" />
+                        </div>
+
+                        {/* Persentase Kehadiran */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-black text-slate-500 uppercase tracking-wide">Tingkat Kehadiran</span>
+                                <span className="text-lg font-black text-emerald-500 font-fredoka">{hadirPct}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-700" style={{ width: hadirPct + '%' }}></div>
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-400 mt-2">{totalHadir} dari {totalGSM} GSM tercatat hadir</p>
+                        </div>
+
+                        {/* FILTER: Kelompokkan berdasarkan */}
+                        <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Kelompokkan Berdasarkan</label>
+                                <div className="grid grid-cols-3 gap-2 mt-1.5">
+                                    {[
+                                        { key: 'status', label: 'Jumlah Hadir', icon: 'list-checks' },
+                                        { key: 'gereja', label: 'Asal Gereja', icon: 'church' },
+                                        { key: 'jam', label: 'Waktu Check-in', icon: 'clock' }
+                                    ].map(opt => (
+                                        <button key={opt.key} onClick={() => setStatGroupBy(opt.key)} className={"flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-black border-2 transition active:scale-95 " + (statGroupBy === opt.key ? 'bg-violet-500 text-white border-violet-600 shadow-md shadow-violet-200' : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100')}>
+                                            <i data-lucide={opt.icon} width="16"></i>
+                                            <span>{opt.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                                {/* Filter Asal Gereja */}
+                                <div className="relative flex-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filter Kelompok</label>
+                                    <div className="relative mt-1">
+                                        <select value={statChurchFilter} onChange={(e) => setStatChurchFilter(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 text-slate-600 text-xs font-bold py-2.5 pl-3 pr-7 rounded-xl focus:outline-none focus:border-violet-400 appearance-none">
+                                            <option value="Semua">Semua Kelompok</option>
+                                            {churchSet.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
+                                            <i data-lucide="chevron-down" width="14" className="text-slate-400"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Urutan */}
+                                <div className="relative flex-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Urutkan</label>
+                                    <div className="relative mt-1">
+                                        <select value={statSort} onChange={(e) => setStatSort(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 text-slate-600 text-xs font-bold py-2.5 pl-3 pr-7 rounded-xl focus:outline-none focus:border-violet-400 appearance-none">
+                                            <option value="desc">Terbanyak → Sedikit</option>
+                                            <option value="asc">Sedikit → Terbanyak</option>
+                                            {statGroupBy === 'jam' && <option value="time">Urut Waktu</option>}
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
+                                            <i data-lucide="chevron-down" width="14" className="text-slate-400"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* GRAFIK BATANG */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-8 h-8 bg-violet-100 text-violet-600 rounded-lg flex items-center justify-center"><i data-lucide="bar-chart-3" width="16"></i></div>
+                                <div>
+                                    <h3 className="font-black text-slate-700 text-sm leading-none font-fredoka">{chartTitle}</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">{chartSubtitle}</p>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 space-y-3">
+                                {chartData.length === 0 || totalChart === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-8 opacity-50">
+                                        <i data-lucide="bar-chart-2" className="w-10 h-10 text-slate-300 mb-2"></i>
+                                        <p className="font-bold text-xs text-slate-400">Belum ada data untuk ditampilkan</p>
+                                    </div>
+                                ) : chartData.map((d, idx) => {
+                                    const pct = Math.round((d.value / maxVal) * 100);
+                                    const sharePct = totalChart > 0 ? Math.round((d.value / totalChart) * 100) : 0;
+                                    return (
+                                        <div key={idx} className="animate-fade-in">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="text-[10px] font-black text-slate-400 w-4">{idx + 1}.</span>
+                                                    <span className="text-xs font-bold text-slate-700 truncate">{d.label}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                    <span className="text-sm font-black text-slate-800 font-fredoka">{d.value}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400">({sharePct}%)</span>
+                                                </div>
+                                            </div>
+                                            <div className="w-full h-5 bg-slate-100 rounded-lg overflow-hidden">
+                                                <div className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-1.5" style={{ width: Math.max(pct, d.value > 0 ? 8 : 0) + '%', backgroundColor: d.color }}>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Daftar GSM Tidak Hadir / Belum Absen */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <h3 className="font-black text-slate-700 text-sm mb-3 flex items-center gap-2 font-fredoka"><i data-lucide="user-x" width="16" className="text-rose-500"></i> GSM Belum / Tidak Hadir</h3>
+                            {tidakHadirRecords.filter(r => passChurch(r.kelas)).length === 0 && belumTercatat.filter(p => passChurch(p.kelas)).length === 0 ? (
+                                <p className="text-xs font-bold text-emerald-500 text-center py-3">🎉 Semua GSM hadir!</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {tidakHadirRecords.filter(r => passChurch(r.kelas)).map((r, i) => (
+                                        <div key={'th'+i} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl">
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-slate-700 truncate">{r.nama}</p>
+                                                <p className="text-[10px] font-bold text-slate-400">{norm(r.kelas)}</p>
+                                            </div>
+                                            <span className={"text-[10px] font-black px-2 py-1 rounded text-white flex-shrink-0 " + (r.status === 'Sakit' ? 'bg-blue-500' : r.status === 'Izin' ? 'bg-orange-500' : 'bg-red-500')}>{r.status}</span>
+                                        </div>
+                                    ))}
+                                    {belumTercatat.filter(p => passChurch(p.kelas)).map((p, i) => (
+                                        <div key={'bl'+i} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl">
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-slate-700 truncate">{p.nama}</p>
+                                                <p className="text-[10px] font-bold text-slate-400">{norm(p.kelas)}</p>
+                                            </div>
+                                            <span className="text-[10px] font-black px-2 py-1 rounded bg-slate-300 text-slate-600 flex-shrink-0">Belum Absen</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <button onClick={handleExportAttendance} className="w-full bg-emerald-500 text-white font-black py-3.5 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition active:scale-95 flex items-center justify-center gap-2 text-sm">
+                            <i data-lucide="download" width="18"></i> Export Data ke Excel
+                        </button>
+                    </div>
+                </div>
                 );
             }
 
