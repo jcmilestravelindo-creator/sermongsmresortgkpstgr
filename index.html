@@ -419,6 +419,7 @@
             const [showAddForm, setShowAddForm] = useState(false);
             const [formData, setFormData] = useState({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
             const [dbSearch, setDbSearch] = useState("");
+            const [dbViewMode, setDbViewMode] = useState("grid"); // grid | group
             const participantFormRef = useRef(null);
             // --- Backup & Restore ---
             const [backupBusy, setBackupBusy] = useState(false);
@@ -1146,45 +1147,64 @@
             };
 
             // Helper: gambar bar-chart sederhana ke canvas (untuk PDF, tema ungu/biru)
-            const drawBarChartCanvas = (title, entries, color, width = 1000, height = 460) => {
+            const drawBarChartCanvas = (title, entries, color, width = 1200, height = 460) => {
                 const c = document.createElement('canvas');
                 c.width = width; c.height = height;
                 const ctx = c.getContext('2d');
                 ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
-                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 28px Arial';
-                ctx.fillText(title, 30, 44);
-                const padL = 180, padR = 40, padT = 80, padB = 40;
+                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 30px Arial';
+                ctx.fillText(title, 30, 46);
+
+                // Lebar label kiri dihitung dinamis dari label terpanjang agar tidak terpotong.
+                ctx.font = 'bold 22px Arial';
+                let maxLabelW = 0;
+                entries.forEach(e => { const w = ctx.measureText(String(e.label)).width; if (w > maxLabelW) maxLabelW = w; });
+                const padL = Math.min(width * 0.42, Math.max(160, maxLabelW + 40)); // ruang label cukup, tapi tak lebih dari 42% lebar
+                const padR = 90;   // ruang untuk angka di ujung bar
+                const padT = 80, padB = 30;
                 const plotW = width - padL - padR; const plotH = height - padT - padB;
                 const max = Math.max(1, ...entries.map(e => e.value));
-                const barH = Math.min(48, plotH / Math.max(entries.length, 1) - 14);
+                const rowH = plotH / Math.max(entries.length, 1);
+                const barH = Math.min(48, rowH - 14);
+
                 entries.forEach((e, i) => {
-                    const y = padT + i * (plotH / Math.max(entries.length, 1)) + 6;
-                    // label
+                    const y = padT + i * rowH + (rowH - barH) / 2;
+                    // label (rata kanan, mepet ke bar tapi dengan jarak)
                     ctx.fillStyle = '#334155'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'right';
-                    ctx.fillText(String(e.label).slice(0, 18), padL - 16, y + barH / 2 + 8);
+                    ctx.fillText(String(e.label), padL - 14, y + barH / 2 + 8);
                     ctx.textAlign = 'left';
                     // track
                     ctx.fillStyle = '#eef2ff'; ctx.fillRect(padL, y, plotW, barH);
                     // bar
                     const w = Math.max(4, (e.value / max) * plotW);
                     ctx.fillStyle = e.color || color; ctx.fillRect(padL, y, w, barH);
-                    // value
-                    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 22px Arial';
-                    ctx.fillText(String(e.value), padL + w + 10, y + barH / 2 + 8);
+                    // value: taruh di dalam bar (putih) bila ujung dekat tepi, jika tidak di luar bar
+                    ctx.font = 'bold 22px Arial';
+                    const valStr = String(e.value);
+                    const valW = ctx.measureText(valStr).width;
+                    if (padL + w + 12 + valW > width - 8) {
+                        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'right';
+                        ctx.fillText(valStr, padL + w - 10, y + barH / 2 + 8);
+                        ctx.textAlign = 'left';
+                    } else {
+                        ctx.fillStyle = '#0f172a';
+                        ctx.fillText(valStr, padL + w + 12, y + barH / 2 + 8);
+                    }
                 });
                 return c.toDataURL('image/png');
             };
             // Helper: donat komposisi status
-            const drawDonutCanvas = (parts, width = 520, height = 460) => {
+            const drawDonutCanvas = (parts, width = 720, height = 460) => {
                 const c = document.createElement('canvas'); c.width = width; c.height = height;
                 const ctx = c.getContext('2d');
                 ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
-                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 28px Arial';
-                ctx.fillText('Komposisi Status', 30, 44);
-                const cx = 200, cy = 240, rO = 150, rI = 85;
+                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 30px Arial';
+                ctx.fillText('Komposisi Status', 30, 46);
+                const cx = 190, cy = 250, rO = 150, rI = 88;
                 const total = parts.reduce((s, p) => s + p.value, 0) || 1;
                 let ang = -Math.PI / 2;
                 parts.forEach(p => {
+                    if (p.value <= 0) return;
                     const slice = (p.value / total) * Math.PI * 2;
                     ctx.beginPath(); ctx.moveTo(cx, cy);
                     ctx.arc(cx, cy, rO, ang, ang + slice); ctx.closePath();
@@ -1193,17 +1213,18 @@
                 });
                 // lubang tengah
                 ctx.beginPath(); ctx.arc(cx, cy, rI, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
-                ctx.fillStyle = '#0f172a'; ctx.font = 'bold 34px Arial'; ctx.textAlign = 'center';
-                ctx.fillText(String(total), cx, cy - 4); ctx.font = 'bold 16px Arial'; ctx.fillStyle = '#64748b';
-                ctx.fillText('Total', cx, cy + 22); ctx.textAlign = 'left';
-                // legend
-                let ly = 140;
+                ctx.fillStyle = '#0f172a'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'center';
+                ctx.fillText(String(total), cx, cy + 2); ctx.font = 'bold 18px Arial'; ctx.fillStyle = '#64748b';
+                ctx.fillText('Total', cx, cy + 28); ctx.textAlign = 'left';
+                // legend (di kanan donat, dengan ruang lega)
+                const lx = cx + rO + 40;
+                let ly = 130;
                 parts.forEach(p => {
-                    ctx.fillStyle = p.color; ctx.fillRect(390, ly, 26, 26);
-                    ctx.fillStyle = '#334155'; ctx.font = 'bold 22px Arial';
                     const pct = Math.round((p.value / total) * 100);
-                    ctx.fillText(`${p.label}: ${p.value} (${pct}%)`, 426, ly + 21);
-                    ly += 46;
+                    ctx.fillStyle = p.color; ctx.fillRect(lx, ly, 28, 28);
+                    ctx.fillStyle = '#334155'; ctx.font = 'bold 24px Arial';
+                    ctx.fillText(`${p.label}: ${p.value} (${pct}%)`, lx + 40, ly + 23);
+                    ly += 52;
                 });
                 return c.toDataURL('image/png');
             };
@@ -1332,30 +1353,39 @@
                         { label: 'Alpha', value: rep.alpha, color: '#ef4444' },
                     ].filter(p => p.value > 0);
                     if (donutParts.length > 0) {
+                        // Donat komposisi status — full width agar legenda tidak terpotong.
                         const donutImg = drawDonutCanvas(donutParts);
-                        const dW = (pageW - M * 2) * 0.42; const dH = dW * (460 / 520);
+                        const dW = pageW - M * 2; const dH = dW * (460 / 720);
+                        // Cek ruang halaman
+                        if (y + dH > pageH - 16) { pdf.addPage(); y = 18; }
                         pdf.addImage(donutImg, 'PNG', M, y, dW, dH);
+                        y += dH + 6;
+                    }
 
+                    {
                         const churchEntries = Object.keys(rep.byChurch)
                             .map(k => ({ label: k, value: rep.byChurch[k], color: '#7c3aed' }))
-                            .sort((a, b) => b.value - a.value).slice(0, 8);
+                            .sort((a, b) => b.value - a.value).slice(0, 10);
                         if (churchEntries.length > 0) {
-                            const barImg = drawBarChartCanvas('Hadir per Kelompok', churchEntries, '#6366f1', 1000, 460);
-                            const bW = (pageW - M * 2) * 0.55; const bH = bW * (460 / 1000);
-                            pdf.addImage(barImg, 'PNG', M + dW + 6, y, bW, bH);
-                            y += Math.max(dH, bH) + 6;
-                        } else { y += dH + 6; }
+                            // Tinggi grafik menyesuaikan jumlah kelompok agar tiap baris lega.
+                            const chH = Math.max(360, 120 + churchEntries.length * 56);
+                            const barImg = drawBarChartCanvas('Hadir per Kelompok', churchEntries, '#7c3aed', 1200, chH);
+                            const bW = pageW - M * 2; const bH = bW * (chH / 1200);
+                            if (y + bH > pageH - 16) { pdf.addPage(); y = 18; }
+                            pdf.addImage(barImg, 'PNG', M, y, bW, bH);
+                            y += bH + 6;
+                        }
                     }
 
                     // Grafik Gender (Laki-laki vs Perempuan) di antara yang hadir
                     if (rep.genderL + rep.genderP > 0) {
-                        if (y > pageH - 50) { pdf.addPage(); y = 18; }
                         const genderEntries = [
                             { label: 'Laki-laki', value: rep.genderL, color: '#2563eb' },
                             { label: 'Perempuan', value: rep.genderP, color: '#db2777' },
                         ];
-                        const gImg = drawBarChartCanvas('Kehadiran per Jenis Kelamin', genderEntries, '#2563eb', 1000, 260);
-                        const gW = pageW - M * 2; const gH = gW * (260 / 1000);
+                        const gImg = drawBarChartCanvas('Kehadiran per Jenis Kelamin', genderEntries, '#2563eb', 1200, 280);
+                        const gW = pageW - M * 2; const gH = gW * (280 / 1200);
+                        if (y + gH > pageH - 16) { pdf.addPage(); y = 18; }
                         pdf.addImage(gImg, 'PNG', M, y, gW, gH);
                         y += gH + 6;
                     }
@@ -3725,6 +3755,17 @@ const handleExportUsers = () => {
                                 </div>
                             )}
 
+                            {participants.length > 0 && (
+                                <div className="flex gap-2 mb-4 bg-slate-100 p-1 rounded-xl">
+                                    <button onClick={() => setDbViewMode('grid')} className={"flex-1 py-2 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition " + (dbViewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600')}>
+                                        <i data-lucide="layout-grid" width="14"></i> Grid QR
+                                    </button>
+                                    <button onClick={() => setDbViewMode('group')} className={"flex-1 py-2 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition " + (dbViewMode === 'group' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600')}>
+                                        <i data-lucide="folder-tree" width="14"></i> Per Kelompok
+                                    </button>
+                                </div>
+                            )}
+
                             {(() => {
                                 const q = dbSearch.trim().toLowerCase();
                                 const dbList = q === '' ? participants : participants.filter(p =>
@@ -3732,17 +3773,74 @@ const handleExportUsers = () => {
                                     (p.kategori || '').toLowerCase().includes(q) ||
                                     (p.kelas || '').toLowerCase().includes(q)
                                 );
+
+                                if (q !== '' && dbList.length === 0) {
+                                    return (
+                                        <div className="flex flex-col items-center justify-center py-10 opacity-60">
+                                            <i data-lucide="search-x" className="w-10 h-10 text-slate-300 mb-2"></i>
+                                            <p className="font-bold text-sm text-slate-400">Tidak ada peserta yang cocok</p>
+                                        </div>
+                                    );
+                                }
+
+                                // ===== MODE: PER KELOMPOK =====
+                                if (dbViewMode === 'group') {
+                                    const normKelas = (k) => (k && String(k).trim() && k !== '-') ? String(k).trim() : 'Tanpa Kelompok';
+                                    const groups = {};
+                                    dbList.forEach(p => { const k = normKelas(p.kelas); (groups[k] = groups[k] || []).push(p); });
+                                    const groupNames = Object.keys(groups).sort((a, b) => {
+                                        if (a === 'Tanpa Kelompok') return 1; if (b === 'Tanpa Kelompok') return -1;
+                                        return a.localeCompare(b);
+                                    });
+                                    const labelGender = (p) => {
+                                        const g = (p.gender === 'L' || p.gender === 'P') ? p.gender : genderFromName(p.nama);
+                                        return g === 'L' ? 'L' : (g === 'P' ? 'P' : '');
+                                    };
+                                    return (
+                                        <div className="space-y-3">
+                                            {q !== '' && <p className="text-xs font-bold text-slate-400 ml-1">{dbList.length} hasil untuk "{dbSearch}"</p>}
+                                            {groupNames.map(gName => {
+                                                const members = groups[gName].slice().sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+                                                const lk = members.filter(m => labelGender(m) === 'L').length;
+                                                const pr = members.filter(m => labelGender(m) === 'P').length;
+                                                return (
+                                                    <div key={gName} className="border border-slate-200 rounded-2xl overflow-hidden">
+                                                        <div className="bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-2.5 flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <i data-lucide="users" width="16" className="text-white"></i>
+                                                                <span className="font-black text-white text-sm">{gName}</span>
+                                                            </div>
+                                                            <span className="text-[11px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full">{members.length} orang{(lk + pr) > 0 ? ` · ${lk}L/${pr}P` : ''}</span>
+                                                        </div>
+                                                        <div className="divide-y divide-slate-100">
+                                                            {members.map((p, i) => (
+                                                                <div key={p.id} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition ${editingId === p.id ? 'bg-amber-50' : ''}`}>
+                                                                    <span className="text-[11px] font-bold text-slate-300 w-5 text-right">{i + 1}</span>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="font-bold text-sm text-slate-800 truncate">{p.nama}</p>
+                                                                        <p className="text-[10px] font-bold text-slate-400">{p.kategori}{labelGender(p) ? (labelGender(p) === 'L' ? ' · Laki-laki' : ' · Perempuan') : ''}</p>
+                                                                    </div>
+                                                                    <div className="flex gap-1 flex-shrink-0">
+                                                                        <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1.5 rounded-lg hover:bg-emerald-100"><i data-lucide="qr-code" width="14"></i></button>
+                                                                        <button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1.5 rounded-lg hover:bg-blue-100"><i data-lucide="pencil" width="14"></i></button>
+                                                                        <button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1.5 rounded-lg hover:bg-red-100"><i data-lucide="trash-2" width="14"></i></button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                }
+
+                                // ===== MODE: GRID QR (default) =====
                                 return (
                                 <>
                                 {q !== '' && (
                                     <p className="text-xs font-bold text-slate-400 mb-2 ml-1">{dbList.length} hasil ditemukan untuk "{dbSearch}"</p>
                                 )}
-                                {dbList.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-10 opacity-60">
-                                        <i data-lucide="search-x" className="w-10 h-10 text-slate-300 mb-2"></i>
-                                        <p className="font-bold text-sm text-slate-400">Tidak ada peserta yang cocok</p>
-                                    </div>
-                                ) : (
                                 <div className="grid grid-cols-2 gap-3">
                                     {dbList.map(p => (
                                         <div key={p.id} className={`border p-3 rounded text-center bg-white shadow-sm hover:shadow-md transition relative ${editingId === p.id ? 'border-amber-400 bg-amber-50' : ''}`}>
@@ -3758,7 +3856,6 @@ const handleExportUsers = () => {
                                         </div>
                                     ))}
                                 </div>
-                                )}
                                 </>
                                 );
                             })()}
