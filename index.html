@@ -19,6 +19,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -416,7 +417,7 @@
             const [editThemeForm, setEditThemeForm] = useState({ title: '', weeks: [] });
             const [selectedWeek, setSelectedWeek] = useState(null);
             const [showAddForm, setShowAddForm] = useState(false);
-            const [formData, setFormData] = useState({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
+            const [formData, setFormData] = useState({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
             const [isDownloading, setIsDownloading] = useState(false);
             const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false); 
             const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
@@ -446,6 +447,21 @@
             const [statGroupBy, setStatGroupBy] = useState("status"); // status | gereja | jam
             const [statSort, setStatSort] = useState("desc"); // desc | asc
             const [statChurchFilter, setStatChurchFilter] = useState("Semua");
+            // --- Laporan PDF: periode & data rentang ---
+            // Catatan: hitung tanggal awal secara inline (lazy initializer) karena
+            // getSafeDateId() didefinisikan di bawah; memanggilnya di sini akan memicu
+            // "Cannot access 'getSafeDateId' before initialization".
+            const __todayId = () => {
+                const d = new Date();
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            };
+            const [reportPeriod, setReportPeriod] = useState("bulan"); // tanggal | bulan | berkala
+            const [reportMonth, setReportMonth] = useState(() => __todayId().slice(0, 7)); // YYYY-MM
+            const [reportStart, setReportStart] = useState(() => __todayId());
+            const [reportEnd, setReportEnd] = useState(() => __todayId());
+            const [rangeData, setRangeData] = useState(null); // {byDate:{date:[records]}, all:[records]}
+            const [rangeLoading, setRangeLoading] = useState(false);
+            const [pdfBuilding, setPdfBuilding] = useState(false);
             const [isThinking, setIsThinking] = useState(false);
             const [aiResponse, setAiResponse] = useState(null);
 
@@ -500,6 +516,12 @@
                     'download': <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></>,
                     'pie-chart': <><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></>,
                     'chevron-right': <path d="m9 18 6-6-6-6"/>,
+                    'file-text': <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M16 13H8M16 17H8M10 9H8"/></>,
+                    'calendar-days': <><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></>,
+                    'calendar-range': <><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M17 14h-6M9 18h6M7 14h.01M7 18h.01"/></>,
+                    'loader': <><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></>,
+                    'user': <><circle cx="12" cy="8" r="5"/><path d="M3 21v-1a7 7 0 0 1 14 0v1"/></>,
+                    'venus-mars': <><circle cx="12" cy="9" r="4"/><path d="M12 13v8M9 18h6"/></>,
                 };
                 return <svg {...common}>{paths[name] || null}</svg>;
             };
@@ -714,7 +736,7 @@
             const setView = (newView) => {
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
-                setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
+                setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
                 setSelfPassword('');
                 setResetForm({ username: '', newPassword: '', token: '' }); 
                 setIsLogoutModalOpen(false); setIsInstallModalOpen(false);
@@ -865,6 +887,7 @@
                                 nama: p.nama,
                                 kategori: p.kategori,
                                 kelas: p.kelas || '-',
+                                gender: p.gender || '',
                                 jam: jam,
                                 status: 'Hadir',
                                 timestamp: now.getTime(),
@@ -898,6 +921,7 @@
                     nama: p.nama,
                     kategori: p.kategori,
                     kelas: p.kelas || '-',
+                    gender: p.gender || '',
                     jam: jam,
                     status: status,
                     timestamp: now.getTime(),
@@ -991,6 +1015,357 @@
                 const workbook = window.XLSX.utils.book_new();
                 window.XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
                 window.XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
+            };
+
+            // === LAPORAN PDF: util & pengambilan data rentang tanggal ===
+            const fmtDateId = (d) => {
+                try { return new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }); }
+                catch (e) { return d; }
+            };
+            const buildDateList = () => {
+                // Hasilkan array tanggal 'YYYY-MM-DD' sesuai periode terpilih.
+                const out = [];
+                const pushRange = (start, end) => {
+                    let s = new Date(start + 'T00:00:00');
+                    const e = new Date(end + 'T00:00:00');
+                    if (isNaN(s) || isNaN(e) || s > e) return;
+                    // batasi maksimal 92 hari agar tidak terlalu berat
+                    let guard = 0;
+                    while (s <= e && guard < 366) {
+                        const y = s.getFullYear();
+                        const m = String(s.getMonth() + 1).padStart(2, '0');
+                        const d = String(s.getDate()).padStart(2, '0');
+                        out.push(`${y}-${m}-${d}`);
+                        s.setDate(s.getDate() + 1);
+                        guard++;
+                    }
+                };
+                if (reportPeriod === 'tanggal') {
+                    out.push(viewDate);
+                } else if (reportPeriod === 'bulan') {
+                    const [y, m] = reportMonth.split('-').map(Number);
+                    const last = new Date(y, m, 0).getDate();
+                    pushRange(`${reportMonth}-01`, `${reportMonth}-${String(last).padStart(2, '0')}`);
+                } else {
+                    pushRange(reportStart, reportEnd);
+                }
+                return out;
+            };
+            const fetchRangeAttendance = async () => {
+                const db = window.db; const { collection, getDocs } = window.fs;
+                const basePath = `artifacts/${appId}/public/data`;
+                const dates = buildDateList();
+                if (dates.length === 0) { alert("Rentang tanggal tidak valid."); return null; }
+                setRangeLoading(true);
+                const byDate = {}; const all = [];
+                try {
+                    // ambil paralel namun dibatasi per-batch agar stabil
+                    const batchSize = 8;
+                    for (let i = 0; i < dates.length; i += batchSize) {
+                        const slice = dates.slice(i, i + batchSize);
+                        const results = await Promise.all(slice.map(async (dt) => {
+                            try {
+                                const snap = await getDocs(collection(db, `${basePath}/attendance/${dt}/records`));
+                                const recs = snap.docs.map(d => ({ ...d.data(), _date: dt }));
+                                return { dt, recs };
+                            } catch (e) { return { dt, recs: [] }; }
+                        }));
+                        results.forEach(({ dt, recs }) => { byDate[dt] = recs; recs.forEach(r => all.push(r)); });
+                    }
+                    const data = { byDate, all, dates };
+                    setRangeData(data);
+                    setRangeLoading(false);
+                    return data;
+                } catch (e) {
+                    setRangeLoading(false);
+                    alert("Gagal mengambil data: " + (e.message || e));
+                    return null;
+                }
+            };
+
+            // Bangun blok-blok ringkasan dari sekumpulan record absensi
+            const computeReport = (records) => {
+                const norm = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
+                const genderOf = (r) => {
+                    if (r.gender === 'L' || r.gender === 'P') return r.gender;
+                    const p = participants.find(pp => pp.id === r.id);
+                    return (p && (p.gender === 'L' || p.gender === 'P')) ? p.gender : '?';
+                };
+                const hadir = records.filter(r => r.status === 'Hadir').length;
+                const izin = records.filter(r => r.status === 'Izin').length;
+                const sakit = records.filter(r => r.status === 'Sakit').length;
+                const alpha = records.filter(r => r.status === 'Alpha').length;
+                const hadirRecs = records.filter(r => r.status === 'Hadir');
+                const genderL = hadirRecs.filter(r => genderOf(r) === 'L').length;
+                const genderP = hadirRecs.filter(r => genderOf(r) === 'P').length;
+                const byChurch = {};
+                hadirRecs.forEach(r => { const k = norm(r.kelas); byChurch[k] = (byChurch[k] || 0) + 1; });
+                const byHour = {};
+                hadirRecs.forEach(r => { if (r.jam) { const h = String(r.jam).split(':')[0].padStart(2, '0') + ':00'; byHour[h] = (byHour[h] || 0) + 1; } });
+                return { total: records.length, hadir, izin, sakit, alpha, genderL, genderP, byChurch, byHour };
+            };
+
+            // Helper: gambar bar-chart sederhana ke canvas (untuk PDF, tema ungu/biru)
+            const drawBarChartCanvas = (title, entries, color, width = 1000, height = 460) => {
+                const c = document.createElement('canvas');
+                c.width = width; c.height = height;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 28px Arial';
+                ctx.fillText(title, 30, 44);
+                const padL = 180, padR = 40, padT = 80, padB = 40;
+                const plotW = width - padL - padR; const plotH = height - padT - padB;
+                const max = Math.max(1, ...entries.map(e => e.value));
+                const barH = Math.min(48, plotH / Math.max(entries.length, 1) - 14);
+                entries.forEach((e, i) => {
+                    const y = padT + i * (plotH / Math.max(entries.length, 1)) + 6;
+                    // label
+                    ctx.fillStyle = '#334155'; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'right';
+                    ctx.fillText(String(e.label).slice(0, 18), padL - 16, y + barH / 2 + 8);
+                    ctx.textAlign = 'left';
+                    // track
+                    ctx.fillStyle = '#eef2ff'; ctx.fillRect(padL, y, plotW, barH);
+                    // bar
+                    const w = Math.max(4, (e.value / max) * plotW);
+                    ctx.fillStyle = e.color || color; ctx.fillRect(padL, y, w, barH);
+                    // value
+                    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 22px Arial';
+                    ctx.fillText(String(e.value), padL + w + 10, y + barH / 2 + 8);
+                });
+                return c.toDataURL('image/png');
+            };
+            // Helper: donat komposisi status
+            const drawDonutCanvas = (parts, width = 520, height = 460) => {
+                const c = document.createElement('canvas'); c.width = width; c.height = height;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 28px Arial';
+                ctx.fillText('Komposisi Status', 30, 44);
+                const cx = 200, cy = 240, rO = 150, rI = 85;
+                const total = parts.reduce((s, p) => s + p.value, 0) || 1;
+                let ang = -Math.PI / 2;
+                parts.forEach(p => {
+                    const slice = (p.value / total) * Math.PI * 2;
+                    ctx.beginPath(); ctx.moveTo(cx, cy);
+                    ctx.arc(cx, cy, rO, ang, ang + slice); ctx.closePath();
+                    ctx.fillStyle = p.color; ctx.fill();
+                    ang += slice;
+                });
+                // lubang tengah
+                ctx.beginPath(); ctx.arc(cx, cy, rI, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+                ctx.fillStyle = '#0f172a'; ctx.font = 'bold 34px Arial'; ctx.textAlign = 'center';
+                ctx.fillText(String(total), cx, cy - 4); ctx.font = 'bold 16px Arial'; ctx.fillStyle = '#64748b';
+                ctx.fillText('Total', cx, cy + 22); ctx.textAlign = 'left';
+                // legend
+                let ly = 140;
+                parts.forEach(p => {
+                    ctx.fillStyle = p.color; ctx.fillRect(390, ly, 26, 26);
+                    ctx.fillStyle = '#334155'; ctx.font = 'bold 22px Arial';
+                    const pct = Math.round((p.value / total) * 100);
+                    ctx.fillText(`${p.label}: ${p.value} (${pct}%)`, 426, ly + 21);
+                    ly += 46;
+                });
+                return c.toDataURL('image/png');
+            };
+            // Helper: tren harian (line) untuk periode bulan/berkala
+            const drawTrendCanvas = (series, width = 1040, height = 420) => {
+                const c = document.createElement('canvas'); c.width = width; c.height = height;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = '#1e293b'; ctx.font = 'bold 28px Arial';
+                ctx.fillText('Tren Kehadiran Harian', 30, 44);
+                const padL = 70, padR = 30, padT = 75, padB = 70;
+                const plotW = width - padL - padR, plotH = height - padT - padB;
+                const max = Math.max(1, ...series.map(s => s.value));
+                // grid & sumbu
+                ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+                for (let g = 0; g <= 4; g++) {
+                    const y = padT + (plotH / 4) * g;
+                    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+                    ctx.fillStyle = '#94a3b8'; ctx.font = '16px Arial'; ctx.textAlign = 'right';
+                    ctx.fillText(String(Math.round(max - (max / 4) * g)), padL - 10, y + 5); ctx.textAlign = 'left';
+                }
+                const n = series.length;
+                const stepX = n > 1 ? plotW / (n - 1) : plotW;
+                // area + line
+                ctx.beginPath();
+                series.forEach((s, i) => {
+                    const x = padL + stepX * i;
+                    const y = padT + plotH - (s.value / max) * plotH;
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 3; ctx.stroke();
+                // titik & label x (jarang agar tidak penuh)
+                const labelEvery = Math.ceil(n / 12);
+                series.forEach((s, i) => {
+                    const x = padL + stepX * i;
+                    const y = padT + plotH - (s.value / max) * plotH;
+                    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = '#7c3aed'; ctx.fill();
+                    if (i % labelEvery === 0) {
+                        ctx.fillStyle = '#64748b'; ctx.font = '15px Arial'; ctx.textAlign = 'center';
+                        ctx.fillText(s.label, x, height - padB + 28); ctx.textAlign = 'left';
+                    }
+                });
+                return c.toDataURL('image/png');
+            };
+
+            const handleExportPDF = async () => {
+                const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+                if (!jsPDFCtor) { alert("Library PDF belum dimuat. Periksa koneksi internet."); return; }
+                setPdfBuilding(true);
+                try {
+                    const data = await fetchRangeAttendance();
+                    if (!data) { setPdfBuilding(false); return; }
+                    const rep = computeReport(data.all);
+                    const totalGSM = participants.length;
+
+                    // Judul periode
+                    let periodLabel = "";
+                    if (reportPeriod === 'tanggal') periodLabel = fmtDateId(viewDate);
+                    else if (reportPeriod === 'bulan') {
+                        const [yy, mm] = reportMonth.split('-').map(Number);
+                        periodLabel = new Date(yy, mm - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                    } else periodLabel = `${fmtDateId(reportStart)} — ${fmtDateId(reportEnd)}`;
+
+                    const pdf = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                    const pageW = pdf.internal.pageSize.getWidth();
+                    const pageH = pdf.internal.pageSize.getHeight();
+                    const M = 14; let y = 0;
+
+                    // Header berwarna (ungu→biru)
+                    pdf.setFillColor(124, 58, 237); pdf.rect(0, 0, pageW, 30, 'F');
+                    pdf.setFillColor(37, 99, 235); pdf.rect(0, 28, pageW, 4, 'F');
+                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17);
+                    pdf.text("Laporan Kehadiran GSM", M, 13);
+                    pdf.setFontSize(10); pdf.setFont('helvetica', 'normal');
+                    pdf.text("Sermon GSM Resort Tangerang", M, 20);
+                    pdf.setFontSize(9);
+                    pdf.text("Periode: " + periodLabel, M, 26);
+                    pdf.setTextColor(255, 255, 255); pdf.setFontSize(8);
+                    pdf.text("Dibuat: " + new Date().toLocaleString('id-ID'), pageW - M, 13, { align: 'right' });
+                    y = 40;
+
+                    // Kartu ringkasan
+                    const hadirPct = rep.total > 0 ? Math.round((rep.hadir / rep.total) * 100) : 0;
+                    const cards = [
+                        { l: 'Total Catatan', v: rep.total, c: [241, 245, 249], t: [30, 41, 59] },
+                        { l: 'Hadir', v: rep.hadir, c: [209, 250, 229], t: [4, 120, 87] },
+                        { l: 'Izin', v: rep.izin, c: [255, 237, 213], t: [194, 65, 12] },
+                        { l: 'Sakit', v: rep.sakit, c: [219, 234, 254], t: [29, 78, 216] },
+                        { l: 'Alpha', v: rep.alpha, c: [254, 226, 226], t: [185, 28, 28] },
+                    ];
+                    const cw = (pageW - M * 2 - 4 * 4) / 5;
+                    cards.forEach((cd, i) => {
+                        const x = M + i * (cw + 4);
+                        pdf.setFillColor(cd.c[0], cd.c[1], cd.c[2]); pdf.roundedRect(x, y, cw, 20, 2, 2, 'F');
+                        pdf.setTextColor(cd.t[0], cd.t[1], cd.t[2]); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15);
+                        pdf.text(String(cd.v), x + cw / 2, y + 10, { align: 'center' });
+                        pdf.setFontSize(7); pdf.setTextColor(100, 116, 139);
+                        pdf.text(cd.l, x + cw / 2, y + 16, { align: 'center' });
+                    });
+                    y += 26;
+
+                    // Bar tingkat kehadiran
+                    pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10);
+                    pdf.text(`Tingkat Kehadiran: ${hadirPct}%`, M, y);
+                    y += 3; pdf.setFillColor(226, 232, 240); pdf.roundedRect(M, y, pageW - M * 2, 5, 2, 2, 'F');
+                    pdf.setFillColor(16, 185, 129); pdf.roundedRect(M, y, (pageW - M * 2) * (hadirPct / 100), 5, 2, 2, 'F');
+                    y += 12;
+
+                    // Grafik 1: Tren harian (jika bukan per tanggal)
+                    if (reportPeriod !== 'tanggal') {
+                        const series = data.dates.map(dt => ({
+                            label: dt.slice(8) + '/' + dt.slice(5, 7),
+                            value: (data.byDate[dt] || []).filter(r => r.status === 'Hadir').length
+                        }));
+                        const trendImg = drawTrendCanvas(series);
+                        const imgH = (pageW - M * 2) * (420 / 1040);
+                        pdf.addImage(trendImg, 'PNG', M, y, pageW - M * 2, imgH);
+                        y += imgH + 6;
+                    }
+
+                    // Grafik 2 & 3: Donut komposisi + Bar per kelompok berdampingan
+                    const donutParts = [
+                        { label: 'Hadir', value: rep.hadir, color: '#10b981' },
+                        { label: 'Izin', value: rep.izin, color: '#f97316' },
+                        { label: 'Sakit', value: rep.sakit, color: '#3b82f6' },
+                        { label: 'Alpha', value: rep.alpha, color: '#ef4444' },
+                    ].filter(p => p.value > 0);
+                    if (donutParts.length > 0) {
+                        const donutImg = drawDonutCanvas(donutParts);
+                        const dW = (pageW - M * 2) * 0.42; const dH = dW * (460 / 520);
+                        pdf.addImage(donutImg, 'PNG', M, y, dW, dH);
+
+                        const churchEntries = Object.keys(rep.byChurch)
+                            .map(k => ({ label: k, value: rep.byChurch[k], color: '#7c3aed' }))
+                            .sort((a, b) => b.value - a.value).slice(0, 8);
+                        if (churchEntries.length > 0) {
+                            const barImg = drawBarChartCanvas('Hadir per Kelompok', churchEntries, '#6366f1', 1000, 460);
+                            const bW = (pageW - M * 2) * 0.55; const bH = bW * (460 / 1000);
+                            pdf.addImage(barImg, 'PNG', M + dW + 6, y, bW, bH);
+                            y += Math.max(dH, bH) + 6;
+                        } else { y += dH + 6; }
+                    }
+
+                    // Grafik Gender (Laki-laki vs Perempuan) di antara yang hadir
+                    if (rep.genderL + rep.genderP > 0) {
+                        if (y > pageH - 50) { pdf.addPage(); y = 18; }
+                        const genderEntries = [
+                            { label: 'Laki-laki', value: rep.genderL, color: '#2563eb' },
+                            { label: 'Perempuan', value: rep.genderP, color: '#db2777' },
+                        ];
+                        const gImg = drawBarChartCanvas('Kehadiran per Jenis Kelamin', genderEntries, '#2563eb', 1000, 260);
+                        const gW = pageW - M * 2; const gH = gW * (260 / 1000);
+                        pdf.addImage(gImg, 'PNG', M, y, gW, gH);
+                        y += gH + 6;
+                    }
+
+                    // Cek halaman baru untuk tabel rincian harian
+                    if (reportPeriod !== 'tanggal') {
+                        if (y > pageH - 60) { pdf.addPage(); y = 18; }
+                        pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
+                        pdf.text("Rincian Per Tanggal", M, y); y += 6;
+                        // header tabel
+                        const cols = [
+                            { h: 'Tanggal', w: 55 }, { h: 'Hadir', w: 25 }, { h: 'Izin', w: 25 },
+                            { h: 'Sakit', w: 25 }, { h: 'Alpha', w: 25 }
+                        ];
+                        let tx = M;
+                        pdf.setFillColor(124, 58, 237); pdf.rect(M, y, pageW - M * 2, 8, 'F');
+                        pdf.setTextColor(255, 255, 255); pdf.setFontSize(9);
+                        cols.forEach(c => { pdf.text(c.h, tx + 2, y + 5.5); tx += c.w; });
+                        y += 8;
+                        pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'normal');
+                        data.dates.forEach((dt, idx) => {
+                            const recs = data.byDate[dt] || [];
+                            if (recs.length === 0) return; // lewati hari kosong di tabel
+                            if (y > pageH - 14) { pdf.addPage(); y = 18; }
+                            if (idx % 2 === 0) { pdf.setFillColor(248, 250, 252); pdf.rect(M, y, pageW - M * 2, 7, 'F'); }
+                            const rr = computeReport(recs);
+                            let cx2 = M;
+                            const row = [fmtDateId(dt), rr.hadir, rr.izin, rr.sakit, rr.alpha];
+                            cols.forEach((c, ci) => { pdf.text(String(row[ci]), cx2 + 2, y + 5); cx2 += c.w; });
+                            y += 7;
+                        });
+                    }
+
+                    // Footer setiap halaman
+                    const pageCount = pdf.internal.getNumberOfPages();
+                    for (let p = 1; p <= pageCount; p++) {
+                        pdf.setPage(p);
+                        pdf.setDrawColor(226, 232, 240); pdf.line(M, pageH - 10, pageW - M, pageH - 10);
+                        pdf.setTextColor(148, 163, 184); pdf.setFontSize(7);
+                        pdf.text("Sermon GSM Resort Tangerang — Laporan Otomatis", M, pageH - 6);
+                        pdf.text(`Halaman ${p} / ${pageCount}`, pageW - M, pageH - 6, { align: 'right' });
+                    }
+
+                    const fileTag = reportPeriod === 'bulan' ? reportMonth : (reportPeriod === 'tanggal' ? viewDate : `${reportStart}_sd_${reportEnd}`);
+                    pdf.save(`Laporan_Kehadiran_${fileTag}.pdf`);
+                } catch (e) {
+                    alert("Gagal membuat PDF: " + (e.message || e));
+                } finally {
+                    setPdfBuilding(false);
+                }
             };
             const handleResetDailyData = async () => {
                 if (!currentUser) return;
@@ -1202,12 +1577,12 @@ const handleExportUsers = () => {
                 saveToCloud(`participants/${id}`, pData);
                 alert("Data Peserta Tersimpan!");
                 setEditingId(null);
-                setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '' });
+                setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
                 setShowAddForm(false);
             };
             const startEditParticipant = (p) => {
                 setEditingId(p.id);
-                setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '' });
+                setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '', gender: p.gender || '' });
                 setShowAddForm(true);
             };
 
@@ -2002,6 +2377,42 @@ const handleExportUsers = () => {
                 const totalBelum = belumTercatat.length;
                 const hadirPct = totalGSM > 0 ? Math.round((totalHadir / totalGSM) * 100) : 0;
 
+                // Helper filter kelompok (didefinisikan lebih awal agar bisa dipakai dashboard)
+                const passChurchKelas = (kelas) => statChurchFilter === 'Semua' || norm(kelas) === statChurchFilter;
+                const passChurchSafe = (rec) => passChurchKelas(rec.kelas);
+
+                // === Data tambahan untuk DASHBOARD ===
+                // Peta id peserta -> gender (untuk catatan lama yang belum simpan gender)
+                const genderOf = (rec) => {
+                    if (rec.gender === 'L' || rec.gender === 'P') return rec.gender;
+                    const p = participants.find(pp => pp.id === rec.id);
+                    return (p && (p.gender === 'L' || p.gender === 'P')) ? p.gender : '?';
+                };
+                // Komposisi status (untuk donat)
+                const statusComposition = [
+                    { label: 'Hadir', value: liveAttendance.filter(r => r.status === 'Hadir' && passChurchSafe(r)).length, color: '#10b981' },
+                    { label: 'Izin', value: liveAttendance.filter(r => r.status === 'Izin' && passChurchSafe(r)).length, color: '#f97316' },
+                    { label: 'Sakit', value: liveAttendance.filter(r => r.status === 'Sakit' && passChurchSafe(r)).length, color: '#3b82f6' },
+                    { label: 'Alpha', value: liveAttendance.filter(r => r.status === 'Alpha' && passChurchSafe(r)).length, color: '#ef4444' },
+                    { label: 'Belum', value: belumTercatat.filter(p => passChurchKelas(p.kelas)).length, color: '#cbd5e1' },
+                ];
+                // Statistik gender (di antara yang HADIR)
+                const hadirFiltered = hadirRecords.filter(r => passChurchSafe(r));
+                const genL = hadirFiltered.filter(r => genderOf(r) === 'L').length;
+                const genP = hadirFiltered.filter(r => genderOf(r) === 'P').length;
+                const genU = hadirFiltered.filter(r => genderOf(r) === '?').length;
+                // Gender di seluruh peserta terdaftar (untuk konteks)
+                const allL = participants.filter(p => p.gender === 'L').length;
+                const allP = participants.filter(p => p.gender === 'P').length;
+                // Distribusi jam check-in
+                const hourMap = {};
+                hadirFiltered.forEach(r => { if (r.jam) { const h = String(r.jam).split(':')[0].padStart(2, '0') + ':00'; hourMap[h] = (hourMap[h] || 0) + 1; } });
+                const hourSeries = Object.keys(hourMap).sort().map(k => ({ label: k, value: hourMap[k] }));
+                // Per kelompok (hadir)
+                const churchMap = {};
+                hadirFiltered.forEach(r => { const k = norm(r.kelas); churchMap[k] = (churchMap[k] || 0) + 1; });
+                const churchSeries = Object.keys(churchMap).map(k => ({ label: k, value: churchMap[k] })).sort((a, b) => b.value - a.value);
+
                 // Daftar gereja/kelompok untuk filter
                 const churchSet = Array.from(new Set([
                     ...liveAttendance.map(r => norm(r.kelas)),
@@ -2073,6 +2484,140 @@ const handleExportUsers = () => {
                     </div>
                 );
 
+                // ====== KOMPONEN GRAFIK SVG ESTETIK (tanpa library) ======
+                const polar = (cx, cy, r, deg) => { const a = (deg - 90) * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+                const arcPath = (cx, cy, rO, rI, start, end) => {
+                    const [x1, y1] = polar(cx, cy, rO, end); const [x2, y2] = polar(cx, cy, rO, start);
+                    const [x3, y3] = polar(cx, cy, rI, start); const [x4, y4] = polar(cx, cy, rI, end);
+                    const large = end - start <= 180 ? 0 : 1;
+                    return `M ${x1} ${y1} A ${rO} ${rO} 0 ${large} 0 ${x2} ${y2} L ${x3} ${y3} A ${rI} ${rI} 0 ${large} 1 ${x4} ${y4} Z`;
+                };
+                // Gauge setengah lingkaran untuk tingkat kehadiran
+                const Gauge = ({ pct }) => {
+                    const cx = 90, cy = 90, rO = 78, rI = 56;
+                    const end = -90 + (pct / 100) * 180;
+                    return (
+                        <svg viewBox="0 0 180 110" className="w-full" style={{ maxHeight: 140 }}>
+                            <defs>
+                                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stopColor="#7c3aed" /><stop offset="100%" stopColor="#2563eb" />
+                                </linearGradient>
+                            </defs>
+                            <path d={arcPath(cx, cy, rO, rI, -90, 90)} fill="#eef2ff" />
+                            {pct > 0 && <path d={arcPath(cx, cy, rO, rI, -90, end)} fill="url(#gaugeGrad)" />}
+                            <text x={cx} y={cy - 12} textAnchor="middle" className="font-fredoka" style={{ fontSize: 30, fontWeight: 800, fill: '#1e293b' }}>{pct}%</text>
+                            <text x={cx} y={cy + 6} textAnchor="middle" style={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}>KEHADIRAN</text>
+                        </svg>
+                    );
+                };
+                // Donat komposisi status
+                const Donut = ({ parts }) => {
+                    const total = parts.reduce((s, p) => s + p.value, 0);
+                    const cx = 80, cy = 80, rO = 72, rI = 46;
+                    let acc = 0;
+                    return (
+                        <div className="flex items-center gap-4">
+                            <svg viewBox="0 0 160 160" style={{ width: 140, height: 140, flexShrink: 0 }}>
+                                {total === 0 ? <circle cx={cx} cy={cy} r={(rO + rI) / 2} fill="none" stroke="#eef2ff" strokeWidth={rO - rI} /> :
+                                    parts.filter(p => p.value > 0).map((p, i) => {
+                                        const start = (acc / total) * 360; acc += p.value; const end = (acc / total) * 360;
+                                        return <path key={i} d={arcPath(cx, cy, rO, rI, start, end === 360 ? 359.99 : end)} fill={p.color} />;
+                                    })}
+                                <text x={cx} y={cy - 4} textAnchor="middle" className="font-fredoka" style={{ fontSize: 26, fontWeight: 800, fill: '#1e293b' }}>{total}</text>
+                                <text x={cx} y={cy + 14} textAnchor="middle" style={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }}>TOTAL</text>
+                            </svg>
+                            <div className="flex-1 space-y-1.5">
+                                {parts.map((p, i) => {
+                                    const pct = total > 0 ? Math.round((p.value / total) * 100) : 0;
+                                    return (
+                                        <div key={i} className="flex items-center gap-2">
+                                            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }}></span>
+                                            <span className="text-xs font-bold text-slate-600 flex-1">{p.label}</span>
+                                            <span className="text-xs font-black text-slate-800">{p.value}</span>
+                                            <span className="text-[10px] font-bold text-slate-400 w-9 text-right">{pct}%</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                };
+                // Visual gender Laki vs Perempuan
+                const GenderSplit = ({ l, p, u }) => {
+                    const tot = l + p + u || 1;
+                    const lPct = Math.round((l / tot) * 100), pPct = Math.round((p / tot) * 100);
+                    return (
+                        <div>
+                            <div className="flex items-end justify-around mb-3">
+                                <div className="flex flex-col items-center">
+                                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 mb-1">
+                                        <Ico name="user" size={30} className="text-white" />
+                                    </div>
+                                    <span className="text-2xl font-black text-slate-800 font-fredoka leading-none">{l}</span>
+                                    <span className="text-[10px] font-bold text-blue-500">Laki-laki</span>
+                                </div>
+                                <div className="text-slate-300 font-black text-lg pb-6">vs</div>
+                                <div className="flex flex-col items-center">
+                                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-400 to-rose-600 flex items-center justify-center shadow-lg shadow-pink-200 mb-1">
+                                        <Ico name="user" size={30} className="text-white" />
+                                    </div>
+                                    <span className="text-2xl font-black text-slate-800 font-fredoka leading-none">{p}</span>
+                                    <span className="text-[10px] font-bold text-pink-500">Perempuan</span>
+                                </div>
+                            </div>
+                            <div className="w-full h-4 rounded-full overflow-hidden flex bg-slate-100">
+                                <div className="h-full bg-gradient-to-r from-sky-400 to-blue-600 flex items-center justify-center" style={{ width: lPct + '%' }}>
+                                    {lPct >= 12 && <span className="text-[9px] font-black text-white">{lPct}%</span>}
+                                </div>
+                                <div className="h-full bg-gradient-to-r from-pink-400 to-rose-600 flex items-center justify-center" style={{ width: pPct + '%' }}>
+                                    {pPct >= 12 && <span className="text-[9px] font-black text-white">{pPct}%</span>}
+                                </div>
+                            </div>
+                            {u > 0 && <p className="text-[10px] text-slate-400 font-bold text-center mt-2">{u} GSM hadir belum punya data jenis kelamin — lengkapi di menu Peserta</p>}
+                        </div>
+                    );
+                };
+                // Bar chart estetik horizontal
+                const FancyBars = ({ data, max, gradientId }) => (
+                    <div className="space-y-2.5">
+                        {data.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-6 opacity-50">
+                                <Ico name="bar-chart-2" size={36} className="text-slate-300 mb-2" />
+                                <p className="font-bold text-xs text-slate-400">Belum ada data</p>
+                            </div>
+                        ) : data.map((d, i) => {
+                            const w = Math.round((d.value / max) * 100);
+                            return (
+                                <div key={i}>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-bold text-slate-600 truncate">{d.label}</span>
+                                        <span className="text-xs font-black text-slate-800">{d.value}</span>
+                                    </div>
+                                    <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full rounded-full transition-all duration-700" style={{ width: Math.max(w, d.value > 0 ? 6 : 0) + '%', background: d.color || 'linear-gradient(90deg,#7c3aed,#2563eb)' }}></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+                // Sparkline batang untuk jam check-in
+                const HourBars = ({ series }) => {
+                    const max = Math.max(1, ...series.map(s => s.value));
+                    return (
+                        <div className="flex items-end justify-between gap-1.5 h-28">
+                            {series.length === 0 ? <p className="text-xs font-bold text-slate-400 m-auto">Belum ada check-in</p> :
+                                series.map((s, i) => (
+                                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                                        <span className="text-[9px] font-black text-slate-500">{s.value}</span>
+                                        <div className="w-full rounded-t-lg bg-gradient-to-t from-cyan-500 to-sky-400" style={{ height: Math.max(6, (s.value / max) * 80) + 'px' }}></div>
+                                        <span className="text-[8px] font-bold text-slate-400">{s.label.slice(0, 2)}</span>
+                                    </div>
+                                ))}
+                        </div>
+                    );
+                };
+
                 return (
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
                     <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
@@ -2102,16 +2647,60 @@ const handleExportUsers = () => {
                             <StatCard icon="help-circle" value={totalBelum} label="Belum Absen" color="bg-amber-100 text-amber-600" />
                         </div>
 
-                        {/* Persentase Kehadiran */}
+                        {/* DASHBOARD: Gauge + Donut */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-7 h-7 bg-violet-100 text-violet-600 rounded-lg flex items-center justify-center"><Ico name="pie-chart" size={14} /></div>
+                                    <span className="text-xs font-black text-slate-600 uppercase tracking-wide">Tingkat Kehadiran</span>
+                                </div>
+                                <Gauge pct={hadirPct} />
+                                <p className="text-[11px] font-bold text-slate-400 text-center -mt-1">{totalHadir} dari {totalGSM} GSM tercatat hadir</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-7 h-7 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center"><Ico name="list-checks" size={14} /></div>
+                                    <span className="text-xs font-black text-slate-600 uppercase tracking-wide">Komposisi Status</span>
+                                </div>
+                                <Donut parts={statusComposition} />
+                            </div>
+                        </div>
+
+                        {/* DASHBOARD: Statistik Gender */}
                         <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-black text-slate-500 uppercase tracking-wide">Tingkat Kehadiran</span>
-                                <span className="text-lg font-black text-emerald-500 font-fredoka">{hadirPct}%</span>
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-7 h-7 bg-pink-100 text-pink-600 rounded-lg flex items-center justify-center"><Ico name="venus-mars" size={14} /></div>
+                                <div>
+                                    <span className="text-xs font-black text-slate-600 uppercase tracking-wide">Statistik Jenis Kelamin</span>
+                                    <p className="text-[10px] font-bold text-slate-400">GSM yang hadir{statChurchFilter !== 'Semua' ? ' · ' + statChurchFilter : ''}</p>
+                                </div>
                             </div>
-                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-700" style={{ width: hadirPct + '%' }}></div>
+                            <GenderSplit l={genL} p={genP} u={genU} />
+                            {(allL > 0 || allP > 0) && (
+                                <div className="mt-3 pt-3 border-t border-slate-100 flex justify-around text-center">
+                                    <div><span className="text-sm font-black text-blue-600 font-fredoka">{allL}</span><p className="text-[9px] font-bold text-slate-400">L Terdaftar</p></div>
+                                    <div><span className="text-sm font-black text-pink-600 font-fredoka">{allP}</span><p className="text-[9px] font-bold text-slate-400">P Terdaftar</p></div>
+                                    <div><span className="text-sm font-black text-slate-600 font-fredoka">{participants.length}</span><p className="text-[9px] font-bold text-slate-400">Total GSM</p></div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* DASHBOARD: distribusi jam + per kelompok ringkas */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-7 h-7 bg-cyan-100 text-cyan-600 rounded-lg flex items-center justify-center"><Ico name="clock" size={14} /></div>
+                                    <span className="text-xs font-black text-slate-600 uppercase tracking-wide">Distribusi Jam Check-in</span>
+                                </div>
+                                <HourBars series={hourSeries} />
                             </div>
-                            <p className="text-[10px] font-bold text-slate-400 mt-2">{totalHadir} dari {totalGSM} GSM tercatat hadir</p>
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-7 h-7 bg-violet-100 text-violet-600 rounded-lg flex items-center justify-center"><Ico name="church" size={14} /></div>
+                                    <span className="text-xs font-black text-slate-600 uppercase tracking-wide">Hadir per Kelompok</span>
+                                </div>
+                                <FancyBars data={churchSeries.slice(0, 6)} max={Math.max(1, ...churchSeries.map(d => d.value))} />
+                            </div>
                         </div>
 
                         {/* FILTER: Kelompokkan berdasarkan */}
@@ -2231,6 +2820,63 @@ const handleExportUsers = () => {
                                     ))}
                                 </div>
                             )}
+                        </div>
+
+                        {/* === LAPORAN PDF GRAFIK === */}
+                        <div className="bg-gradient-to-br from-violet-50 to-blue-50 p-4 rounded-2xl border-2 border-violet-100 shadow-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-8 h-8 bg-violet-600 text-white rounded-lg flex items-center justify-center"><Ico name="file-text" size={16} /></div>
+                                <div>
+                                    <h3 className="font-black text-slate-700 text-sm leading-none font-fredoka">Laporan PDF Grafik</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">Rekap profesional siap cetak</p>
+                                </div>
+                            </div>
+
+                            {/* Pilih periode */}
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Periode Laporan</label>
+                            <div className="grid grid-cols-3 gap-2 mt-1.5 mb-3">
+                                {[
+                                    { key: 'tanggal', label: 'Per Tanggal', icon: 'calendar' },
+                                    { key: 'bulan', label: 'Per Bulan', icon: 'calendar-days' },
+                                    { key: 'berkala', label: 'Berkala', icon: 'calendar-range' }
+                                ].map(opt => (
+                                    <button key={opt.key} onClick={() => setReportPeriod(opt.key)} className={"flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-black border-2 transition active:scale-95 " + (reportPeriod === opt.key ? 'bg-violet-600 text-white border-violet-700 shadow-md shadow-violet-200' : 'bg-white text-slate-500 border-slate-100 hover:bg-slate-50')}>
+                                        <Ico name={opt.icon} size={16} />
+                                        <span>{opt.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Input sesuai periode */}
+                            {reportPeriod === 'tanggal' && (
+                                <div className="mb-3">
+                                    <label className="text-[10px] font-bold text-slate-400 ml-1">Tanggal</label>
+                                    <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-violet-400" />
+                                </div>
+                            )}
+                            {reportPeriod === 'bulan' && (
+                                <div className="mb-3">
+                                    <label className="text-[10px] font-bold text-slate-400 ml-1">Bulan</label>
+                                    <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-violet-400" />
+                                </div>
+                            )}
+                            {reportPeriod === 'berkala' && (
+                                <div className="flex gap-2 mb-3">
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 ml-1">Dari</label>
+                                        <input type="date" value={reportStart} onChange={(e) => setReportStart(e.target.value)} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-violet-400" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-slate-400 ml-1">Sampai</label>
+                                        <input type="date" value={reportEnd} onChange={(e) => setReportEnd(e.target.value)} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-violet-400" />
+                                    </div>
+                                </div>
+                            )}
+
+                            <button onClick={handleExportPDF} disabled={pdfBuilding} className={"w-full text-white font-black py-3.5 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2 text-sm " + (pdfBuilding ? 'bg-slate-400 cursor-wait' : 'bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 shadow-violet-200')}>
+                                {pdfBuilding ? (<><span className="inline-block animate-spin"><Ico name="loader" size={18} /></span> Menyusun Laporan...</>) : (<><Ico name="file-text" size={18} /> Export Laporan PDF</>)}
+                            </button>
+                            <p className="text-[10px] text-slate-400 font-bold text-center mt-2">Grafik tren, komposisi status & per kelompok dalam satu PDF</p>
                         </div>
 
                         <button onClick={handleExportAttendance} className="w-full bg-emerald-500 text-white font-black py-3.5 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition active:scale-95 flex items-center justify-center gap-2 text-sm">
@@ -2630,9 +3276,14 @@ const handleExportUsers = () => {
                                         <select className="w-full p-2 border rounded mb-2" value={formData.kelas} onChange={e => setFormData({...formData, kelas: e.target.value})}>
                                             <option value="">-- Pilih Kelas --</option>{classList.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
+                                        <select className="w-full p-2 border rounded mb-2" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
+                                            <option value="">-- Jenis Kelamin --</option>
+                                            <option value="L">Laki-laki</option>
+                                            <option value="P">Perempuan</option>
+                                        </select>
                                         <div className="flex gap-2">
                                             <button onClick={handleAddOrUpdateParticipant} className={`flex-1 text-white px-3 py-2 rounded font-bold ${editingId ? 'bg-amber-500' : 'bg-indigo-600'}`}>{editingId ? 'Update' : 'Simpan'}</button>
-                                            {editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
+                                            {editingId && <button onClick={() => { setEditingId(null); setFormData({nama:'', kategori:'Anak Sekolah Minggu', kelas: '', gender: ''}); setShowAddForm(false); }} className="bg-gray-400 text-white px-3 py-2 rounded">Batal</button>}
                                         </div>
                                     </div>
                                 )}
