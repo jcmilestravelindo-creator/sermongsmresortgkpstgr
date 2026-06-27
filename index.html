@@ -420,6 +420,12 @@
             const [formData, setFormData] = useState({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
             const [dbSearch, setDbSearch] = useState("");
             const participantFormRef = useRef(null);
+            // --- Backup & Restore ---
+            const [backupBusy, setBackupBusy] = useState(false);
+            const [restoreBusy, setRestoreBusy] = useState(false);
+            const [backupLog, setBackupLog] = useState([]);
+            const [backupStartDate, setBackupStartDate] = useState("2025-01-01");
+            const [restoreFileData, setRestoreFileData] = useState(null);
             const [isDownloading, setIsDownloading] = useState(false);
             const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false); 
             const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
@@ -1388,6 +1394,195 @@
                     setPdfBuilding(false);
                 }
             };
+
+            // ====== BACKUP & RESTORE ======
+            const addBackupLog = (msg) => setBackupLog(prev => [...prev, msg]);
+
+            // Buat daftar tanggal dari backupStartDate sampai hari ini (untuk memindai attendance)
+            const buildBackupDateList = () => {
+                const out = [];
+                let s = new Date(backupStartDate + 'T00:00:00');
+                const e = new Date(getSafeDateId() + 'T00:00:00');
+                if (isNaN(s)) return out;
+                let guard = 0;
+                while (s <= e && guard < 1000) {
+                    const y = s.getFullYear(), m = String(s.getMonth() + 1).padStart(2, '0'), d = String(s.getDate()).padStart(2, '0');
+                    out.push(`${y}-${m}-${d}`);
+                    s.setDate(s.getDate() + 1); guard++;
+                }
+                return out;
+            };
+
+            const handleBackup = async () => {
+                if (!window.db || !window.fs) { alert("Database belum siap."); return; }
+                setBackupBusy(true); setBackupLog([]);
+                const db = window.db; const { collection, getDocs, doc, getDoc } = window.fs;
+                const basePath = `artifacts/${appId}/public/data`;
+                try {
+                    const backup = {
+                        _meta: {
+                            app: "SM GKPS Resort Tangerang",
+                            type: "full-backup",
+                            version: 1,
+                            appId: appId,
+                            createdAt: new Date().toISOString(),
+                            createdBy: (currentUser && currentUser.nama) || 'admin',
+                        },
+                        collections: {},
+                        docs: {},
+                        attendance: {},
+                    };
+
+                    // 1) Koleksi sederhana
+                    const simpleCols = ['users', 'participants', 'theme_archives', 'broadcast_history'];
+                    for (const col of simpleCols) {
+                        addBackupLog(`Membaca ${col}...`);
+                        try {
+                            const snap = await getDocs(collection(db, `${basePath}/${col}`));
+                            backup.collections[col] = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+                            addBackupLog(`  ✓ ${col}: ${backup.collections[col].length} dokumen`);
+                        } catch (e) { backup.collections[col] = []; addBackupLog(`  ⚠ ${col}: gagal (${e.message})`); }
+                    }
+
+                    // 2) Dokumen tunggal
+                    const singleDocs = [['config', 'session'], ['config', 'system'], ['theme', 'current'], ['announcements', 'active']];
+                    for (const [col, id] of singleDocs) {
+                        try {
+                            const ds = await getDoc(doc(db, `${basePath}/${col}`, id));
+                            if (ds.exists()) { backup.docs[`${col}/${id}`] = ds.data(); addBackupLog(`  ✓ ${col}/${id}`); }
+                        } catch (e) { /* abaikan dokumen yang tidak ada */ }
+                    }
+
+                    // 3) Attendance per tanggal (pindai rentang)
+                    const dates = buildBackupDateList();
+                    addBackupLog(`Memindai absensi ${dates.length} hari (sejak ${backupStartDate})...`);
+                    let foundDays = 0, totalRecs = 0;
+                    const batchSize = 10;
+                    for (let i = 0; i < dates.length; i += batchSize) {
+                        const slice = dates.slice(i, i + batchSize);
+                        const results = await Promise.all(slice.map(async (dt) => {
+                            try {
+                                const snap = await getDocs(collection(db, `${basePath}/attendance/${dt}/records`));
+                                return { dt, recs: snap.docs.map(d => ({ _id: d.id, ...d.data() })) };
+                            } catch (e) { return { dt, recs: [] }; }
+                        }));
+                        results.forEach(({ dt, recs }) => {
+                            if (recs.length > 0) { backup.attendance[dt] = recs; foundDays++; totalRecs += recs.length; }
+                        });
+                        if (i % 50 === 0) addBackupLog(`  ...diproses ${Math.min(i + batchSize, dates.length)}/${dates.length} hari`);
+                    }
+                    addBackupLog(`  ✓ Absensi: ${foundDays} hari, ${totalRecs} catatan`);
+
+                    backup._meta.summary = {
+                        users: (backup.collections.users || []).length,
+                        participants: (backup.collections.participants || []).length,
+                        attendanceDays: foundDays,
+                        attendanceRecords: totalRecs,
+                    };
+
+                    // Unduh sebagai file JSON
+                    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Backup_GKPS_${getSafeDateId()}_${new Date().getHours()}${String(new Date().getMinutes()).padStart(2,'0')}.json`;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    addBackupLog(`✅ Backup selesai & file diunduh.`);
+                } catch (e) {
+                    addBackupLog(`❌ Gagal: ${e.message || e}`);
+                    alert("Backup gagal: " + (e.message || e));
+                } finally {
+                    setBackupBusy(false);
+                }
+            };
+
+            const handleRestoreFile = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const parsed = JSON.parse(ev.target.result);
+                        if (!parsed._meta || parsed._meta.type !== 'full-backup') {
+                            alert("File tidak dikenali sebagai backup aplikasi ini.");
+                            setRestoreFileData(null); return;
+                        }
+                        setRestoreFileData(parsed);
+                    } catch (err) {
+                        alert("File JSON tidak valid: " + err.message);
+                        setRestoreFileData(null);
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const handleRestore = async () => {
+                if (!restoreFileData) { alert("Pilih file backup dulu."); return; }
+                const m = restoreFileData._meta || {};
+                const sum = m.summary || {};
+                const confirmMsg = `PULIHKAN DATA dari backup?\n\nDibuat: ${m.createdAt ? new Date(m.createdAt).toLocaleString('id-ID') : '-'}\nPeserta: ${sum.participants ?? '?'}\nUser: ${sum.users ?? '?'}\nHari absensi: ${sum.attendanceDays ?? '?'}\nCatatan absensi: ${sum.attendanceRecords ?? '?'}\n\nData yang ada akan ditimpa oleh data backup.\nKetik "PULIHKAN" untuk melanjutkan.`;
+                const ans = prompt(confirmMsg);
+                if (ans !== 'PULIHKAN') { alert("Restore dibatalkan."); return; }
+
+                setRestoreBusy(true); setBackupLog([]);
+                const db = window.db; const { doc, setDoc } = window.fs;
+                const basePath = `artifacts/${appId}/public/data`;
+                try {
+                    let writes = 0;
+                    const writeDoc = async (path, id, data) => {
+                        const clean = { ...data }; delete clean._id;
+                        await setDoc(doc(db, path, id), clean, { merge: true });
+                        writes++;
+                    };
+
+                    // 1) Koleksi
+                    for (const col of Object.keys(restoreFileData.collections || {})) {
+                        const arr = restoreFileData.collections[col] || [];
+                        addBackupLog(`Memulihkan ${col} (${arr.length})...`);
+                        for (let i = 0; i < arr.length; i += 12) {
+                            const slice = arr.slice(i, i + 12);
+                            await Promise.all(slice.map(item => {
+                                const id = item._id || item.id || item.username;
+                                if (!id) return Promise.resolve();
+                                return writeDoc(`${basePath}/${col}`, String(id), item);
+                            }));
+                        }
+                        addBackupLog(`  ✓ ${col}`);
+                    }
+
+                    // 2) Dokumen tunggal
+                    for (const key of Object.keys(restoreFileData.docs || {})) {
+                        const [col, id] = key.split('/');
+                        await writeDoc(`${basePath}/${col}`, id, restoreFileData.docs[key]);
+                        addBackupLog(`  ✓ ${key}`);
+                    }
+
+                    // 3) Attendance
+                    const attDates = Object.keys(restoreFileData.attendance || {});
+                    addBackupLog(`Memulihkan absensi ${attDates.length} hari...`);
+                    for (const dt of attDates) {
+                        const recs = restoreFileData.attendance[dt] || [];
+                        for (let i = 0; i < recs.length; i += 12) {
+                            const slice = recs.slice(i, i + 12);
+                            await Promise.all(slice.map(rec => {
+                                const id = rec._id || rec.id;
+                                if (!id) return Promise.resolve();
+                                return writeDoc(`${basePath}/attendance/${dt}/records`, String(id), rec);
+                            }));
+                        }
+                    }
+                    addBackupLog(`✅ Restore selesai. Total ${writes} dokumen ditulis.`);
+                    alert(`Restore berhasil! ${writes} dokumen dipulihkan. Aplikasi akan memuat ulang data.`);
+                    setRestoreFileData(null);
+                } catch (e) {
+                    addBackupLog(`❌ Gagal: ${e.message || e}`);
+                    alert("Restore gagal: " + (e.message || e));
+                } finally {
+                    setRestoreBusy(false);
+                }
+            };
+
             const handleResetDailyData = async () => {
                 if (!currentUser) return;
                 const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal: ${viewDate}.\nData yang dihapus tidak bisa kembali!`);
@@ -2021,7 +2216,7 @@ const handleExportUsers = () => {
                             <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm text-center">
                                  <div className="text-amber-500 mb-2 flex justify-center bg-amber-50 p-2 rounded-full w-fit mx-auto"><i data-lucide="shield" width="16"></i></div>
                                 <h3 className="font-black text-xl text-slate-700 leading-none mb-1">{totalUsers}</h3>
-                                 <p className="text-[9px] font-bold text-slate-400 uppercase">Total Admin</p>
+                                 <p className="text-[9px] font-bold text-slate-400 uppercase">Total Akun</p>
                             </div>
                         </div>
 
@@ -2101,6 +2296,17 @@ const handleExportUsers = () => {
                                     <div className="text-left flex-1">
                                         <h4 className="font-bold text-slate-700 text-sm">Database Peserta</h4>
                                           <p className="text-[10px] text-slate-400 font-bold">Import CSV/Excel & Export QR</p>
+                                    </div>
+                                     <i data-lucide="chevron-right" width="16" className="text-slate-300"></i>
+                                </button>
+                            )}
+
+                             {isAdmin && (
+                                <button onClick={() => setView('backup_restore')} className="w-full bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 hover:bg-slate-50 transition active:scale-95">
+                                     <div className="w-10 h-10 bg-teal-100 text-teal-600 rounded-xl flex items-center justify-center"><i data-lucide="database-backup" width="20"></i></div>
+                                    <div className="text-left flex-1">
+                                        <h4 className="font-bold text-slate-700 text-sm">Backup & Restore</h4>
+                                          <p className="text-[10px] text-slate-400 font-bold">Cadangkan & Pulihkan Seluruh Data</p>
                                     </div>
                                      <i data-lucide="chevron-right" width="16" className="text-slate-300"></i>
                                 </button>
@@ -3222,6 +3428,75 @@ const handleExportUsers = () => {
                     </div>
                 );
             }
+
+            if (view === 'backup_restore') return (
+                <div key="view-backup_restore" className="min-h-screen bg-slate-50 p-4">
+                    <div className="max-w-md mx-auto">
+                        <button onClick={() => setView('admin_dashboard')} className="mb-4 btn-playful btn-white px-4 py-2 rounded-xl w-fit flex gap-2 font-bold"><i data-lucide="arrow-left"></i> Kembali</button>
+
+                        <div className="bg-white rounded-2xl shadow p-6 mb-4">
+                            <div className="flex items-center gap-3 mb-1">
+                                <div className="w-10 h-10 bg-teal-100 text-teal-600 rounded-xl flex items-center justify-center"><i data-lucide="database-backup" width="22"></i></div>
+                                <div>
+                                    <h2 className="font-black text-lg text-slate-800 font-fredoka leading-none">Backup & Restore</h2>
+                                    <p className="text-[11px] font-bold text-slate-400 mt-0.5">Cadangkan & pulihkan seluruh data aplikasi</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* BACKUP */}
+                        <div className="bg-white rounded-2xl shadow p-5 mb-4">
+                            <h3 className="font-black text-slate-700 text-sm mb-1 flex items-center gap-2"><i data-lucide="download" width="16" className="text-teal-600"></i> Buat Backup</h3>
+                            <p className="text-xs text-slate-500 mb-3">Mengunduh 1 file JSON berisi seluruh data: peserta, user, pengaturan, tema, dan riwayat absensi.</p>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pindai Absensi Sejak Tanggal</label>
+                            <input type="date" value={backupStartDate} onChange={e => setBackupStartDate(e.target.value)} className="w-full mt-1 mb-1 bg-slate-50 border-2 border-slate-100 text-slate-700 text-sm font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-teal-400" />
+                            <p className="text-[10px] text-slate-400 mb-3 ml-1">Pilih tanggal lebih awal agar semua riwayat absensi ikut tercadangkan (mis. awal tahun aplikasi mulai dipakai).</p>
+                            <button onClick={handleBackup} disabled={backupBusy} className={"w-full text-white font-black py-3.5 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2 text-sm " + (backupBusy ? 'bg-slate-400 cursor-wait' : 'bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 shadow-teal-200')}>
+                                {backupBusy ? (<><span className="inline-block animate-spin"><i data-lucide="loader" width="18"></i></span> Mencadangkan...</>) : (<><i data-lucide="download" width="18"></i> Unduh File Backup</>)}
+                            </button>
+                        </div>
+
+                        {/* RESTORE */}
+                        <div className="bg-white rounded-2xl shadow p-5 mb-4">
+                            <h3 className="font-black text-slate-700 text-sm mb-1 flex items-center gap-2"><i data-lucide="upload" width="16" className="text-orange-500"></i> Pulihkan dari Backup</h3>
+                            <p className="text-xs text-slate-500 mb-3">Pilih file backup (.json) untuk memulihkan data ke database. Data yang ada akan ditimpa oleh isi backup.</p>
+                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center relative hover:bg-slate-50 transition">
+                                <input type="file" accept=".json,application/json" onChange={handleRestoreFile} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                <i data-lucide="file-up" className="mx-auto text-orange-400 w-7 h-7 mb-1"></i>
+                                <span className="text-sm font-bold text-orange-600 block">Pilih File Backup (.json)</span>
+                            </div>
+                            {restoreFileData && (
+                                <div className="mt-3 bg-orange-50 border border-orange-200 rounded-xl p-3">
+                                    <p className="text-xs font-black text-orange-700 mb-1 flex items-center gap-1"><i data-lucide="file-check" width="14"></i> File backup terbaca</p>
+                                    <div className="text-[11px] font-bold text-slate-600 space-y-0.5">
+                                        <p>Dibuat: {restoreFileData._meta.createdAt ? new Date(restoreFileData._meta.createdAt).toLocaleString('id-ID') : '-'}</p>
+                                        <p>Peserta: {restoreFileData._meta.summary?.participants ?? '?'} · User: {restoreFileData._meta.summary?.users ?? '?'}</p>
+                                        <p>Absensi: {restoreFileData._meta.summary?.attendanceDays ?? '?'} hari ({restoreFileData._meta.summary?.attendanceRecords ?? '?'} catatan)</p>
+                                    </div>
+                                    <button onClick={handleRestore} disabled={restoreBusy} className={"w-full mt-3 text-white font-black py-3 rounded-xl shadow transition active:scale-95 flex items-center justify-center gap-2 text-sm " + (restoreBusy ? 'bg-slate-400 cursor-wait' : 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700')}>
+                                        {restoreBusy ? (<><span className="inline-block animate-spin"><i data-lucide="loader" width="16"></i></span> Memulihkan...</>) : (<><i data-lucide="upload" width="16"></i> Pulihkan Sekarang</>)}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* LOG */}
+                        {backupLog.length > 0 && (
+                            <div className="bg-slate-900 rounded-2xl shadow p-4 mb-4">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Log Proses</p>
+                                <div className="font-mono text-[11px] text-emerald-300 space-y-0.5 max-h-48 overflow-y-auto">
+                                    {backupLog.map((l, i) => <div key={i} className="whitespace-pre-wrap">{l}</div>)}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                            <p className="text-xs font-bold text-blue-700 flex items-start gap-2"><i data-lucide="info" width="16" className="flex-shrink-0 mt-0.5"></i> <span>Simpan file backup di tempat aman (Google Drive, dll). Lakukan backup rutin, terutama setelah sermon. File ini cukup untuk membangun ulang aplikasi bila terjadi crash.</span></p>
+                        </div>
+                    </div>
+                    {deleteConfig.show && <DeleteConfirmModal />}
+                </div>
+            );
 
             if (view === 'manage_users') return (
                 <div key="view-manage_users" className="min-h-screen bg-slate-50 p-4">
