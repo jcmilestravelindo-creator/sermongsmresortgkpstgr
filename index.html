@@ -848,8 +848,21 @@
                     alert("Tidak ada data peserta untuk diexport!");
                     return;
                 }
-                // Menggunakan library XLSX yang sudah ada di tag head
-                const ws = window.XLSX.utils.json_to_sheet(participants);
+                // Tampilkan jenis kelamin yang mudah dibaca: pakai field gender bila ada,
+                // jika kosong tebak dari awalan nama (B/Bang = Laki-laki, K/Kak = Perempuan).
+                const labelGender = (p) => {
+                    const g = (p.gender === 'L' || p.gender === 'P') ? p.gender : genderFromName(p.nama);
+                    return g === 'L' ? 'Laki-laki' : (g === 'P' ? 'Perempuan' : '-');
+                };
+                const dataToExport = participants.map((p, index) => ({
+                    "No": index + 1,
+                    "Nama": p.nama || "-",
+                    "Kategori": p.kategori || "-",
+                    "Kelas": p.kelas || "-",
+                    "Jenis Kelamin": labelGender(p),
+                }));
+                const ws = window.XLSX.utils.json_to_sheet(dataToExport);
+                ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 14 }];
                 const wb = window.XLSX.utils.book_new();
                 window.XLSX.utils.book_append_sheet(wb, ws, "DatabasePeserta");
                 window.XLSX.writeFile(wb, `Database_Peserta_GSM_GKPS_${getSafeDateId()}.xlsx`);
@@ -1602,21 +1615,104 @@
                     }
                 }
             };
-            const handleCSV = (e) => {
+            const handleCSV = async (e) => {
                 const file = e.target.files[0];
-                if (!file) return; const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const lines = ev.target.result.split('\n').filter(l => l.trim());
-                    let count = 0;
-                    lines.slice(1).forEach((line, idx) => {
-                        const [nama, kategori, kelas] = line.split(',').map(s => s?.trim());
-                        if (nama) {
-                            const id = `GSM-${Date.now()}-${idx}`;
-                            saveToCloud(`participants/${id}`, { id, nama, kategori: kategori || 'Umum', kelas: kelas || '-' }); count++;
+                if (!file) return;
+
+                // Normalisasi untuk pencocokan: nama + kelas (huruf kecil, rapat).
+                const keyOf = (nama, kelas) => (String(nama || '').trim().toLowerCase() + '||' + String(kelas || '-').trim().toLowerCase());
+                // Peta peserta yang sudah ada -> agar bisa diperbarui (anti-dobel), bukan ditambah.
+                const existingMap = {};
+                participants.forEach(p => { existingMap[keyOf(p.nama, p.kelas)] = p; });
+
+                const normGender = (g) => {
+                    if (!g) return '';
+                    const s = String(g).trim().toLowerCase();
+                    if (s === 'l' || s.startsWith('laki') || s === 'm' || s === 'male') return 'L';
+                    if (s === 'p' || s.startsWith('perempuan') || s === 'wanita' || s === 'f' || s === 'female') return 'P';
+                    return '';
+                };
+
+                // Proses sekumpulan baris objek {nama, kategori, kelas, gender}
+                const processRows = async (rows) => {
+                    let added = 0, updated = 0, skipped = 0;
+                    let i = 0;
+                    for (const r of rows) {
+                        const nama = String(r.nama || '').trim();
+                        if (!nama) { skipped++; continue; }
+                        const kategori = String(r.kategori || 'Umum').trim() || 'Umum';
+                        const kelas = String(r.kelas || '-').trim() || '-';
+                        const gender = normGender(r.gender);
+                        const k = keyOf(nama, kelas);
+                        const found = existingMap[k];
+                        if (found) {
+                            // Perbarui data lama memakai ID yang sudah ada -> tidak menambah duplikat.
+                            const merged = { id: found.id, nama, kategori, kelas, gender: gender || found.gender || '' };
+                            await saveToCloud(`participants/${found.id}`, merged);
+                            existingMap[k] = merged; // cegah dobel dalam file yang sama
+                            updated++;
+                        } else {
+                            const id = `GSM-${Date.now()}-${i}`;
+                            const obj = { id, nama, kategori, kelas, gender };
+                            await saveToCloud(`participants/${id}`, obj);
+                            existingMap[k] = obj; // baris berikutnya yang sama tidak dobel
+                            added++;
                         }
-                    });
-                    alert(`Mengupload ${count} data...`);
-                }; reader.readAsText(file);
+                        i++;
+                    }
+                    alert(`Import selesai:\n• ${added} peserta baru ditambahkan\n• ${updated} peserta diperbarui (sudah ada)\n• ${skipped} baris dilewati (nama kosong)\n\nTidak ada data yang terduplikasi.`);
+                };
+
+                try {
+                    if (file.name.match(/\.(xlsx|xls)$/i)) {
+                        // ===== File Excel (termasuk hasil Export Database rapi) =====
+                        if (!window.XLSX) return alert("Library Excel belum dimuat. Pastikan terhubung ke internet.");
+                        const buf = await file.arrayBuffer();
+                        const wb = window.XLSX.read(buf);
+                        const sheet = wb.Sheets[wb.SheetNames[0]];
+                        const json = window.XLSX.utils.sheet_to_json(sheet, { defval: '' });
+                        const rows = json.map(row => ({
+                            nama: row['Nama'] ?? row['nama'] ?? row['NAMA'] ?? '',
+                            kategori: row['Kategori'] ?? row['kategori'] ?? row['KATEGORI'] ?? 'Umum',
+                            kelas: row['Kelas'] ?? row['kelas'] ?? row['KELAS'] ?? '-',
+                            gender: row['Jenis Kelamin'] ?? row['Gender'] ?? row['gender'] ?? row['JenisKelamin'] ?? '',
+                        }));
+                        await processRows(rows);
+                    } else {
+                        // ===== File CSV =====
+                        const text = await file.text();
+                        const lines = text.split('\n').filter(l => l.trim());
+                        if (lines.length === 0) return alert("File kosong.");
+                        // Deteksi apakah baris pertama adalah header (mengandung kata 'nama')
+                        const firstCols = lines[0].split(',').map(s => (s || '').trim().toLowerCase());
+                        const hasHeader = firstCols.some(c => c.includes('nama'));
+                        // Tentukan indeks kolom berdasarkan header bila ada
+                        let idxNama = 0, idxKat = 1, idxKelas = 2, idxGender = -1;
+                        if (hasHeader) {
+                            const find = (names) => firstCols.findIndex(c => names.some(n => c.includes(n)));
+                            idxNama = find(['nama']); idxNama = idxNama < 0 ? 0 : idxNama;
+                            idxKat = find(['kategori']); idxKat = idxKat < 0 ? 1 : idxKat;
+                            idxKelas = find(['kelas']); idxKelas = idxKelas < 0 ? 2 : idxKelas;
+                            idxGender = find(['kelamin', 'gender']);
+                        }
+                        const dataLines = hasHeader ? lines.slice(1) : lines;
+                        const rows = dataLines.map(line => {
+                            const cols = line.split(',').map(s => (s ?? '').trim());
+                            return {
+                                nama: cols[idxNama] || '',
+                                kategori: cols[idxKat] || 'Umum',
+                                kelas: cols[idxKelas] || '-',
+                                gender: idxGender >= 0 ? (cols[idxGender] || '') : '',
+                            };
+                        });
+                        await processRows(rows);
+                    }
+                } catch (err) {
+                    alert("Gagal import: " + (err.message || err));
+                } finally {
+                    // reset input agar file yang sama bisa dipilih lagi
+                    try { e.target.value = ''; } catch (e2) {}
+                }
             };
 
             const handleSendBroadcast = () => {
@@ -3569,8 +3665,8 @@ const handleExportUsers = () => {
                                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center relative hover:bg-slate-50 transition">
                                     <input type="file" accept=".csv, .xlsx, .xls" onChange={handleCSV} className="absolute inset-0 opacity-0 cursor-pointer" />
                                     <i data-lucide="upload-cloud" className="mx-auto text-indigo-400 w-8 h-8 mb-2"></i>
-                                    <span className="text-sm font-bold text-indigo-600 block">Upload CSV ke Cloud</span>
-                                    <span className="text-xs text-gray-400">Format: Nama,Kategori,Kelas</span>
+                                    <span className="text-sm font-bold text-indigo-600 block">Upload CSV / Excel ke Cloud</span>
+                                    <span className="text-xs text-gray-400">Kolom: Nama, Kategori, Kelas, Jenis Kelamin · Anti-duplikat (data sama akan diperbarui)</span>
                                 </div>
                                 <button onClick={() => setShowAddForm(!showAddForm)} className="w-full text-sm font-bold text-indigo-600 hover:bg-indigo-50 py-2 rounded transition">+ Input Manual</button>
                                 {showAddForm && (
