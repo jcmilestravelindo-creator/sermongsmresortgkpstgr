@@ -421,6 +421,7 @@
             const [dbSearch, setDbSearch] = useState("");
             const [dbViewMode, setDbViewMode] = useState("grid"); // grid | group
             const participantFormRef = useRef(null);
+            const userFormRef = useRef(null);
             // --- Backup & Restore ---
             const [backupBusy, setBackupBusy] = useState(false);
             const [restoreBusy, setRestoreBusy] = useState(false);
@@ -506,7 +507,7 @@
 
             const [viewDate, setViewDate] = useState(getSafeDateId());
             const [refreshKey, setRefreshKey] = useState(0);
-            const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "PAGI", "UMUM", "Pendeta", "Pembimbing", "Pengurus", "PMJ"];
+            const classList = ["Daud", "Daniel", "Paulus", "Ester", "Pos PI Timotius", "Pos PI Abaraham", "GKPS-PersBSD", "PAGI", "UMUM", "Pendeta", "Pembimbing", "Pengurus", "PMJ"];
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-gkps-app';
             const defaultTheme = { title: "", weeks: [] };
             // --- Effects for Refs ---
@@ -1890,6 +1891,69 @@ const handleExportUsers = () => {
             const startEditUser = (u) => {
                 setEditingId(u.username);
                 setNewUser(u);
+                // Gulir ke form edit agar langsung terlihat, sama seperti di halaman Database.
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        try {
+                            if (userFormRef.current) {
+                                userFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            } else {
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                        } catch (e) { window.scrollTo(0, 0); }
+                    }, 50);
+                });
+            };
+
+            // Perbaikan sekali-klik: rapikan spasi berlebih pada data user "Joharmen Damanik".
+            // Mencari user (baik di field Username maupun Nama) yang cocok secara longgar
+            // (tanpa peduli jumlah spasi), lalu merapikannya jadi 1 spasi standar seperti user lain.
+            const collapseSpaces = (s) => String(s || '').trim().replace(/\s+/g, ' ');
+            const handleFixJoharmenSpacing = async () => {
+                const targetNorm = 'joharmen damanik';
+                const matched = users.filter(u =>
+                    collapseSpaces(u.username).toLowerCase() === targetNorm ||
+                    collapseSpaces(u.nama).toLowerCase() === targetNorm
+                );
+
+                if (matched.length === 0) {
+                    alert('User "Joharmen Damanik" tidak ditemukan di database (dicek dari Username maupun Nama).');
+                    return;
+                }
+
+                for (const u of matched) {
+                    const cleanUsername = collapseSpaces(u.username);
+                    const cleanNama = collapseSpaces(u.nama);
+                    const usernameChanged = cleanUsername !== u.username;
+                    const namaChanged = cleanNama !== u.nama;
+
+                    if (!usernameChanged && !namaChanged) {
+                        alert(`Data user "${u.nama || u.username}" sudah rapi, tidak ada spasi berlebih.`);
+                        continue;
+                    }
+
+                    const confirmMsg =
+                        `Perbaiki spasi berlebih pada user berikut?\n\n` +
+                        `Username: "${u.username}" -> "${cleanUsername}"\n` +
+                        `Nama: "${u.nama || '-'}" -> "${cleanNama || '-'}"\n\n` +
+                        `Lanjutkan?`;
+                    if (!confirm(confirmMsg)) continue;
+
+                    try {
+                        if (usernameChanged) {
+                            // Username adalah ID dokumen di database, jadi kalau username-nya
+                            // sendiri yang punya spasi ganda, harus pindah ke dokumen baru
+                            // (dengan username yang sudah rapi) lalu hapus dokumen lama.
+                            await saveToCloud(`users/${cleanUsername}`, { ...u, username: cleanUsername, nama: cleanNama });
+                            deleteFromCloud(`users/${u.username}`);
+                        } else {
+                            await saveToCloud(`users/${u.username}`, { nama: cleanNama });
+                        }
+                        alert(`Berhasil dirapikan!\nUsername: "${cleanUsername}"\nNama: "${cleanNama}"`);
+                    } catch (e) {
+                        alert("Gagal memperbaiki data user: " + e.message);
+                    }
+                }
             };
 
             const initiateAdminReset = (u) => {
@@ -1921,6 +1985,49 @@ const handleExportUsers = () => {
                 setEditingId(null);
                 setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
                 setShowAddForm(false);
+            };
+            // Migrasi sekali-klik: pindahkan nama-nama tertentu ke Kelas "GKPS-PersBSD".
+            // Pencocokan nama dibuat longgar (trim + lowercase + rapikan spasi ganda)
+            // supaya tetap cocok meski ada perbedaan kecil spasi/kapitalisasi di database.
+            const handleMigratePersBSD = async () => {
+                const targetNames = [
+                    "K Nilma",
+                    "K Wahyu Asrina Saragih",
+                    "K Ria",
+                    "K Meirini",
+                    "K Desra",
+                    "K Ernala",
+                    "B Martuah",
+                ];
+                const normName = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                const targetSet = new Set(targetNames.map(normName));
+                const matched = participants.filter(p => targetSet.has(normName(p.nama)));
+                const foundNormNames = new Set(matched.map(p => normName(p.nama)));
+                const notFound = targetNames.filter(n => !foundNormNames.has(normName(n)));
+
+                if (matched.length === 0) {
+                    alert("Tidak ada satupun nama dari daftar yang ditemukan di database.\n\nPastikan nama di database sama persis (atau mirip) dengan:\n" + targetNames.join('\n'));
+                    return;
+                }
+
+                const confirmMsg =
+                    `Akan memindahkan ${matched.length} orang ke Kelas "GKPS-PersBSD":\n\n` +
+                    matched.map(p => `- ${p.nama} (kelas lama: ${p.kelas || '-'})`).join('\n') +
+                    (notFound.length ? `\n\nTidak ditemukan di database (dilewati):\n${notFound.map(n => '- ' + n).join('\n')}` : '') +
+                    `\n\nLanjutkan?`;
+                if (!confirm(confirmMsg)) return;
+
+                try {
+                    for (const p of matched) {
+                        await saveToCloud(`participants/${p.id}`, { kelas: 'GKPS-PersBSD' });
+                    }
+                    alert(
+                        `Berhasil! ${matched.length} orang sudah dipindahkan ke Kelas GKPS-PersBSD.` +
+                        (notFound.length ? `\n\n${notFound.length} nama tidak ditemukan di database:\n${notFound.join('\n')}` : '')
+                    );
+                } catch (e) {
+                    alert("Gagal melakukan migrasi: " + e.message);
+                }
             };
             const startEditParticipant = (p) => {
                 setEditingId(p.id);
@@ -3643,9 +3750,13 @@ const handleExportUsers = () => {
                                 <span className="text-[9px] text-gray-400">Simpan ke File Excel</span>
                             </button>
                         </div>
+
+                        <button onClick={handleFixJoharmenSpacing} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition shadow-lg mb-4">
+                            <i data-lucide="wand-2" width="18"></i> Perbaiki Spasi: Joharmen Damanik
+                        </button>
                     
-                        <div className="bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 border-slate-100">
-                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
+                        <div ref={userFormRef} className={`bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 transition ${editingId ? 'border-amber-300' : 'border-slate-100'}`}>
+                            <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User: {newUser.nama || newUser.username}</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
                              <div className="space-y-3">
                                  <input placeholder="Username" disabled={!!editingId} className={`w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600 ${editingId ? 'bg-slate-100' : 'bg-white'}`} value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
                                 <input placeholder="Password" className="w-full border-2 p-3 rounded-xl focus:outline-none focus:border-blue-400 font-bold text-slate-600" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
@@ -3731,6 +3842,9 @@ const handleExportUsers = () => {
                                     </button>
                                     <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
                                         {isDownloading ? 'Sedang Download...' : <><i data-lucide="download" width="20"></i> Download Semua QR</>}
+                                    </button>
+                                    <button onClick={handleMigratePersBSD} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
+                                        <i data-lucide="shuffle" width="20"></i> Migrasi Nama ke Kelas GKPS-PersBSD
                                     </button>
                                 </div>
                             )}
