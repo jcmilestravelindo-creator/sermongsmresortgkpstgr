@@ -81,6 +81,13 @@
         /* AI Typing Effect */
         .typing-cursor::after { content: '|'; animation: blink 1s step-start infinite; }
         @keyframes blink { 50% { opacity: 0; } }
+
+        /* === SPIN WHEEL === */
+        .wheel-svg { transition: transform 5s cubic-bezier(0.15, 0.9, 0.25, 1); transform-origin: 50% 50%; }
+        @keyframes winnerPop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        .winner-pop { animation: winnerPop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        @keyframes confettiFall { 0% { transform: translateY(-20px) rotate(0deg); opacity: 1; } 100% { transform: translateY(320px) rotate(540deg); opacity: 0; } }
+        .confetti-piece { position: absolute; width: 10px; height: 14px; top: 0; animation: confettiFall 1.6s ease-in forwards; }
     </style>
 
     <script>
@@ -475,6 +482,14 @@
             const [isThinking, setIsThinking] = useState(false);
             const [aiResponse, setAiResponse] = useState(null);
 
+            // --- Spin Wheel Doorprize ---
+            const [spinCategory, setSpinCategory] = useState('early'); // 'early' (<19:00) | 'second' (19:00-20:00)
+            const [spinAngle, setSpinAngle] = useState(0);
+            const [isSpinning, setIsSpinning] = useState(false);
+            const [spinWinner, setSpinWinner] = useState(null);
+            const [spinWinnerHistory, setSpinWinnerHistory] = useState([]); // pemenang yg sudah keluar (id), agar tidak double
+            const [spinExcludeWinners, setSpinExcludeWinners] = useState(true);
+
             // --- Refs & Helpers ---
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
@@ -503,6 +518,37 @@
             const resolveGender = (obj, fallbackName) => {
                 if (obj && (obj.gender === 'L' || obj.gender === 'P')) return obj.gender;
                 return genderFromName((obj && obj.nama) || fallbackName);
+            };
+
+            // --- Spin Wheel Helpers ---
+            // Ambil jam desimal check-in dari sebuah record kehadiran.
+            // Prioritas: timestamp (ms, paling akurat) -> field 'jam' (HH:MM).
+            const getCheckInHour = (rec) => {
+                if (rec && typeof rec.timestamp === 'number' && rec.timestamp > 0) {
+                    const d = new Date(rec.timestamp);
+                    return d.getHours() + d.getMinutes() / 60;
+                }
+                if (rec && rec.jam) {
+                    const parts = String(rec.jam).split(':');
+                    const h = parseInt(parts[0], 10);
+                    const m = parseInt(parts[1], 10) || 0;
+                    if (!isNaN(h)) return h + m / 60;
+                }
+                return null;
+            };
+            // Daftar peserta yang memenuhi syarat undian sesuai kategori waktu.
+            //  - 'early'  : hadir SEBELUM jam 19:00 (early birds)
+            //  - 'second' : hadir antara 19:00 s/d 20:00 (sesi kedua)
+            // Hanya status 'Hadir' yang ikut. Peserta izin/sakit/alpha dikecualikan.
+            const getSpinEligible = (category) => {
+                return liveAttendance.filter(r => {
+                    if (r.status && r.status !== 'Hadir') return false;
+                    const h = getCheckInHour(r);
+                    if (h === null) return false;
+                    if (category === 'early') return h < 19;
+                    if (category === 'second') return h >= 19 && h < 20;
+                    return false;
+                });
             };
 
             const [viewDate, setViewDate] = useState(getSafeDateId());
@@ -543,6 +589,7 @@
                     'bar-chart-2': <><path d="M18 20V10M12 20V4M6 20v-6"/></>,
                     'download': <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></>,
                     'pie-chart': <><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></>,
+                    'ferris-wheel': <><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 22v-4M20 12h-4M4 12h4M17.66 6.34l-2.83 2.83M6.34 17.66l2.83-2.83M17.66 17.66l-2.83-2.83M6.34 6.34l2.83 2.83M2 12a10 10 0 0 1 20 0"/></>,
                     'chevron-right': <path d="m9 18 6-6-6-6"/>,
                     'file-text': <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M16 13H8M16 17H8M10 9H8"/></>,
                     'calendar-days': <><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></>,
@@ -969,6 +1016,52 @@
                     scanner: currentUser.nama + ' (Manual)'
                 };
                 saveToCloud(`attendance/${todayStr}/records/${p.id}`, attendanceData);
+            };
+
+            // --- Spin Wheel: eksekusi putaran ---
+            const handleSpin = () => {
+                if (isSpinning) return;
+                let pool = getSpinEligible(spinCategory);
+                if (spinExcludeWinners) {
+                    pool = pool.filter(p => !spinWinnerHistory.includes(p.id));
+                }
+                if (pool.length === 0) {
+                    playErrorSound && playErrorSound();
+                    alert(spinExcludeWinners
+                        ? "🎡 Tidak ada peserta tersisa untuk diundi (semua sudah pernah menang atau belum ada yang memenuhi syarat waktu)."
+                        : "🎡 Belum ada peserta yang memenuhi syarat waktu untuk kategori ini.");
+                    return;
+                }
+                setIsSpinning(true);
+                setSpinWinner(null);
+
+                // Pilih pemenang acak
+                const winnerIdx = Math.floor(Math.random() * pool.length);
+                const winner = pool[winnerIdx];
+
+                // Hitung sudut target agar segmen pemenang berhenti tepat di penunjuk (atas, 12 o'clock).
+                const seg = 360 / pool.length;
+                const segCenter = winnerIdx * seg + seg / 2;
+                const spins = 6; // jumlah putaran penuh sebelum berhenti
+                // Penunjuk berada di atas (0deg). Kita putar searah jarum jam.
+                const target = spins * 360 + (360 - segCenter);
+                // Akumulasi dari sudut saat ini agar animasi selalu maju.
+                const base = spinAngle - (spinAngle % 360);
+                setSpinAngle(base + target);
+
+                setTimeout(() => {
+                    setSpinWinner(winner);
+                    setIsSpinning(false);
+                    setSpinWinnerHistory(prev => prev.includes(winner.id) ? prev : [...prev, winner.id]);
+                    playNotificationSound && playNotificationSound();
+                }, 5100); // sinkron dengan durasi transisi CSS (5s)
+            };
+
+            const handleResetSpin = () => {
+                if (isSpinning) return;
+                setSpinWinner(null);
+                setSpinWinnerHistory([]);
+                setSpinAngle(0);
             };
 
             const handleSaveConfig = () => {
@@ -2571,6 +2664,19 @@ const handleExportUsers = () => {
                                     <div className="flex-1">
                                         <h4 className="font-black text-white text-base font-fredoka">Statistik & Grafik</h4>
                                         <p className="text-[10px] text-violet-100 font-bold mt-0.5">Rekap Kehadiran GSM (Grafik)</p>
+                                    </div>
+                                    <Ico name="chevron-right" size={20} className="text-white/70" />
+                                </div>
+                             </button>
+
+                             {/* FITUR BARU: SPIN WHEEL DOORPRIZE */}
+                             <button onClick={() => setView('spin_wheel')} className="col-span-2 bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 p-5 rounded-3xl border border-orange-500 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-40 h-40 bg-white/10 rounded-full -mr-12 -mt-12 blur-2xl"></div>
+                                <div className="flex items-center gap-4 relative z-10">
+                                    <div className="bg-white/20 p-3 rounded-2xl text-white group-hover:rotate-12 transition-transform"><Ico name="ferris-wheel" size={24} /></div>
+                                    <div className="flex-1">
+                                        <h4 className="font-black text-white text-base font-fredoka">Spin Wheel Doorprize</h4>
+                                        <p className="text-[10px] text-orange-100 font-bold mt-0.5">Undian Early Birds & Sesi Kedua</p>
                                     </div>
                                     <Ico name="chevron-right" size={20} className="text-white/70" />
                                 </div>
@@ -4203,6 +4309,220 @@ const handleExportUsers = () => {
                     </div>
                 </div>
             );
+            if (view === 'spin_wheel') {
+                const eligibleAll = getSpinEligible(spinCategory);
+                const pool = spinExcludeWinners
+                    ? eligibleAll.filter(p => !spinWinnerHistory.includes(p.id))
+                    : eligibleAll;
+
+                // Palet warna segmen (berulang)
+                const palette = ['#f59e0b','#ef4444','#8b5cf6','#3b82f6','#10b981','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'];
+                const R = 150, CX = 160, CY = 160;
+                const nSeg = pool.length;
+                const segAngle = nSeg > 0 ? 360 / nSeg : 360;
+
+                const polar = (angleDeg, radius) => {
+                    const a = (angleDeg - 90) * Math.PI / 180; // -90 agar 0deg di atas
+                    return [CX + radius * Math.cos(a), CY + radius * Math.sin(a)];
+                };
+                const buildSegments = () => {
+                    if (nSeg === 0) return null;
+                    if (nSeg === 1) {
+                        // Lingkaran penuh untuk satu peserta
+                        return (
+                            <g>
+                                <circle cx={CX} cy={CY} r={R} fill={palette[0]} stroke="#fff" strokeWidth="2" />
+                                <text x={CX} y={CY - R + 26} textAnchor="middle" fill="#fff" fontSize="11" fontWeight="bold" transform={`rotate(0 ${CX} ${CY})`}>
+                                    {pool[0].nama.length > 16 ? pool[0].nama.slice(0,15)+'…' : pool[0].nama}
+                                </text>
+                            </g>
+                        );
+                    }
+                    return pool.map((p, i) => {
+                        const start = i * segAngle;
+                        const end = start + segAngle;
+                        const [x1, y1] = polar(start, R);
+                        const [x2, y2] = polar(end, R);
+                        const largeArc = segAngle > 180 ? 1 : 0;
+                        const d = `M ${CX} ${CY} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${R} ${R} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+                        const mid = start + segAngle / 2;
+                        const [tx, ty] = polar(mid, R * 0.62);
+                        const short = p.nama.length > 14 ? p.nama.slice(0,13) + '…' : p.nama;
+                        const showLabel = nSeg <= 24;
+                        return (
+                            <g key={p.id}>
+                                <path d={d} fill={palette[i % palette.length]} stroke="#ffffff" strokeWidth="1.5" />
+                                {showLabel && (
+                                    <text x={tx.toFixed(2)} y={ty.toFixed(2)} fill="#ffffff" fontSize={nSeg > 14 ? "7" : "9"} fontWeight="bold"
+                                        textAnchor="middle" dominantBaseline="middle"
+                                        transform={`rotate(${mid} ${tx.toFixed(2)} ${ty.toFixed(2)})`}>
+                                        {short}
+                                    </text>
+                                )}
+                            </g>
+                        );
+                    });
+                };
+
+                const catLabel = spinCategory === 'early' ? 'Early Birds (sebelum 19:00)' : 'Sesi Kedua (19:00 – 20:00)';
+
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 p-4 pb-24 relative overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-4 relative z-10">
+                            <button onClick={() => setView(isPeserta ? 'menu' : 'admin_dashboard')} className="bg-white/10 text-white p-3 rounded-xl hover:bg-white/20 transition active:scale-95 backdrop-blur-sm"><i data-lucide="arrow-left" width="20"></i></button>
+                            <div className="text-right">
+                                <h2 className="font-black text-2xl text-white font-fredoka flex items-center gap-2 justify-end"><i data-lucide="ferris-wheel" width="24" className="text-amber-400"></i> Spin Wheel</h2>
+                                <p className="text-[10px] font-bold text-amber-300/80 uppercase tracking-widest">Undian Doorprize GSM</p>
+                            </div>
+                        </div>
+
+                        {/* Pilihan Kategori */}
+                        <div className="grid grid-cols-2 gap-3 mb-5 relative z-10">
+                            <button
+                                onClick={() => { if (!isSpinning) { setSpinCategory('early'); setSpinWinner(null); } }}
+                                className={`p-3 rounded-2xl border-2 text-left transition active:scale-95 ${spinCategory === 'early' ? 'bg-amber-400 border-amber-300 text-slate-900 shadow-lg shadow-amber-500/30' : 'bg-white/5 border-white/10 text-white/70'}`}>
+                                <div className="flex items-center gap-2 mb-1"><i data-lucide="sunrise" width="16"></i><span className="font-black text-xs">EARLY BIRDS</span></div>
+                                <p className="text-[10px] font-bold opacity-80">Hadir sebelum 19:00</p>
+                            </button>
+                            <button
+                                onClick={() => { if (!isSpinning) { setSpinCategory('second'); setSpinWinner(null); } }}
+                                className={`p-3 rounded-2xl border-2 text-left transition active:scale-95 ${spinCategory === 'second' ? 'bg-pink-400 border-pink-300 text-slate-900 shadow-lg shadow-pink-500/30' : 'bg-white/5 border-white/10 text-white/70'}`}>
+                                <div className="flex items-center gap-2 mb-1"><i data-lucide="moon-star" width="16"></i><span className="font-black text-xs">SESI KEDUA</span></div>
+                                <p className="text-[10px] font-bold opacity-80">Hadir 19:00 – 20:00</p>
+                            </button>
+                        </div>
+
+                        {/* Info peserta */}
+                        <div className="flex items-center justify-center gap-4 mb-4 relative z-10">
+                            <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-2">
+                                <i data-lucide="users" width="14" className="text-emerald-400"></i>
+                                <span className="text-white font-black text-sm">{pool.length}</span>
+                                <span className="text-white/60 text-[10px] font-bold uppercase">Kandidat</span>
+                            </div>
+                            {spinWinnerHistory.length > 0 && (
+                                <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full flex items-center gap-2">
+                                    <i data-lucide="trophy" width="14" className="text-amber-400"></i>
+                                    <span className="text-white font-black text-sm">{spinWinnerHistory.length}</span>
+                                    <span className="text-white/60 text-[10px] font-bold uppercase">Menang</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Roda */}
+                        <div className="relative flex items-center justify-center mb-2" style={{ height: '340px' }}>
+                            {pool.length === 0 ? (
+                                <div className="text-center px-6">
+                                    <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4"><i data-lucide="hourglass" width="36" className="text-white/40"></i></div>
+                                    <p className="text-white/70 font-bold text-sm">Belum ada kandidat untuk<br/>{catLabel}</p>
+                                    <p className="text-white/40 text-[11px] font-bold mt-2">Kandidat muncul otomatis dari data check-in hari ini.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Penunjuk (pointer) di atas */}
+                                    <div className="absolute z-20" style={{ top: '-2px' }}>
+                                        <svg width="34" height="34" viewBox="0 0 34 34">
+                                            <path d="M17 30 L4 6 L30 6 Z" fill="#fbbf24" stroke="#fff" strokeWidth="2" />
+                                        </svg>
+                                    </div>
+                                    {/* SVG Wheel */}
+                                    <svg width="320" height="320" viewBox="0 0 320 320" className="wheel-svg drop-shadow-2xl"
+                                        style={{ transform: `rotate(${spinAngle}deg)` }}>
+                                        <circle cx={CX} cy={CY} r={R + 6} fill="#0f172a" stroke="#fbbf24" strokeWidth="4" />
+                                        {buildSegments()}
+                                        <circle cx={CX} cy={CY} r="22" fill="#fff" stroke="#fbbf24" strokeWidth="4" />
+                                        <circle cx={CX} cy={CY} r="8" fill="#fbbf24" />
+                                    </svg>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Tombol aksi */}
+                        <div className="max-w-sm mx-auto space-y-3 relative z-10">
+                            <button
+                                onClick={handleSpin}
+                                disabled={isSpinning || pool.length === 0}
+                                className={`w-full btn-playful py-4 rounded-2xl font-black text-lg font-fredoka flex items-center justify-center gap-2 transition ${isSpinning || pool.length === 0 ? 'bg-slate-600 text-slate-400 border-slate-700 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-900 border-orange-700 hover:scale-[1.02]'}`}>
+                                {isSpinning
+                                    ? (<><span className="spinner" style={{ width:'20px', height:'20px' }}></span> Memutar...</>)
+                                    : (<><i data-lucide="play" width="20"></i> PUTAR RODA</>)}
+                            </button>
+
+                            <div className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-2.5">
+                                <label className="flex items-center gap-2 text-white/80 text-[11px] font-bold cursor-pointer">
+                                    <input type="checkbox" checked={spinExcludeWinners} disabled={isSpinning}
+                                        onChange={(e) => setSpinExcludeWinners(e.target.checked)}
+                                        className="w-4 h-4 rounded accent-amber-400" />
+                                    Pemenang tidak diundi ulang
+                                </label>
+                                <button onClick={handleResetSpin} disabled={isSpinning}
+                                    className="text-rose-300 text-[11px] font-bold flex items-center gap-1 hover:text-rose-200 disabled:opacity-40">
+                                    <i data-lucide="rotate-ccw" width="12"></i> Reset
+                                </button>
+                            </div>
+
+                            {/* Daftar pemenang */}
+                            {spinWinnerHistory.length > 0 && (
+                                <div className="bg-white/5 rounded-2xl p-4 mt-2">
+                                    <h4 className="text-amber-300 font-black text-[11px] uppercase tracking-widest mb-2 flex items-center gap-1"><i data-lucide="award" width="12"></i> Pemenang Sesi Ini</h4>
+                                    <div className="space-y-1.5 max-h-40 overflow-auto">
+                                        {spinWinnerHistory.map((wid, idx) => {
+                                            const w = liveAttendance.find(x => x.id === wid);
+                                            if (!w) return null;
+                                            return (
+                                                <div key={wid} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-1.5">
+                                                    <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-900 text-[10px] font-black flex items-center justify-center flex-shrink-0">{idx+1}</span>
+                                                    <span className="text-white font-bold text-xs flex-1 truncate">{w.nama}</span>
+                                                    <span className="text-white/40 text-[10px] font-bold">{w.kelas || '-'}</span>
+                                                    <span className="text-emerald-300 text-[10px] font-bold">{w.jam}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Pemenang */}
+                        {spinWinner && !isSpinning && (
+                            <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSpinWinner(null)}>
+                                {/* Confetti */}
+                                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                                    {Array.from({ length: 24 }).map((_, i) => (
+                                        <div key={i} className="confetti-piece" style={{
+                                            left: `${(i * 4.3) % 100}%`,
+                                            background: ['#f59e0b','#ef4444','#8b5cf6','#3b82f6','#10b981','#ec4899'][i % 6],
+                                            animationDelay: `${(i % 8) * 0.12}s`,
+                                            borderRadius: i % 2 ? '50%' : '2px'
+                                        }}></div>
+                                    ))}
+                                </div>
+                                <div className="winner-pop bg-gradient-to-br from-amber-50 to-white rounded-[2rem] p-8 max-w-sm w-full text-center shadow-2xl border-4 border-amber-300 relative z-10" onClick={(e) => e.stopPropagation()}>
+                                    <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-300">
+                                        <i data-lucide="trophy" width="40" className="text-white"></i>
+                                    </div>
+                                    <p className="text-amber-500 font-black text-xs uppercase tracking-[0.2em] mb-1">🎉 Selamat Pemenang 🎉</p>
+                                    <h3 className="text-3xl font-black text-slate-800 font-fredoka mb-2 leading-tight">{spinWinner.nama}</h3>
+                                    <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
+                                        {spinWinner.kelas && spinWinner.kelas !== '-' && (
+                                            <span className="bg-indigo-100 text-indigo-700 text-[11px] font-black px-3 py-1 rounded-full">{spinWinner.kelas}</span>
+                                        )}
+                                        <span className="bg-emerald-100 text-emerald-700 text-[11px] font-black px-3 py-1 rounded-full flex items-center gap-1"><i data-lucide="clock" width="11"></i> {spinWinner.jam}</span>
+                                    </div>
+                                    <p className="text-slate-400 text-[11px] font-bold mt-2 mb-5">{catLabel}</p>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setSpinWinner(null)} className="flex-1 btn-playful bg-slate-100 text-slate-600 border-slate-300 py-3 rounded-xl font-black text-sm">Tutup</button>
+                                        <button onClick={() => { setSpinWinner(null); setTimeout(handleSpin, 200); }}
+                                            disabled={pool.length === 0}
+                                            className="flex-1 btn-playful bg-gradient-to-r from-amber-400 to-orange-500 text-white border-orange-700 py-3 rounded-xl font-black text-sm disabled:opacity-50">Putar Lagi</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
             if (view === 'change_password') return (
                 <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
                     <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-lg border-2 border-indigo-100 text-center">
