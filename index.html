@@ -550,270 +550,8 @@
                     'loader': <><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></>,
                     'user': <><circle cx="12" cy="8" r="5"/><path d="M3 21v-1a7 7 0 0 1 14 0v1"/></>,
                     'venus-mars': <><circle cx="12" cy="9" r="4"/><path d="M12 13v8M9 18h6"/></>,
-                    'gift': <><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></>,
-                    'trophy': <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z"/></>,
-                    'sparkles': <><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/><path d="M5 3v4M19 17v4M3 5h4M17 19h4"/></>,
-                    'rotate-cw': <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></>,
-                    'sunrise': <><path d="M12 2v8M4.93 10.93l1.41 1.41M2 18h2M20 18h2M17.66 12.34l1.41-1.41M22 22H2M8 6l4-4 4 4M16 18a4 4 0 0 0-8 0"/></>,
-                    'moon': <><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></>,
-                    'ferris-wheel': <><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M22 12h-4M6 12H2M19.07 4.93l-2.83 2.83M7.76 16.24l-2.83 2.83M19.07 19.07l-2.83-2.83M7.76 7.76 4.93 4.93"/></>,
                 };
                 return <svg {...common}>{paths[name] || null}</svg>;
-            };
-
-            // ============================================================
-            // FITUR BARU: SPIN WHEEL DOORPRIZE
-            // Komponen mandiri; hooks-nya terisolasi di sini sehingga TIDAK
-            // mengganggu urutan hooks komponen utama. Menerima data absensi
-            // (records) via props, memfilter berdasarkan jam check-in.
-            // ============================================================
-            const SpinWheelView = ({ records, viewDate, onBack }) => {
-                const { useState: uState, useMemo: uMemo, useRef: uRef } = React;
-                // Kategori: 'early' = check-in < 19:00, 'mid' = 19:00 s/d 20:00
-                const [category, setCategory] = uState('early');
-                const [rotation, setRotation] = uState(0);
-                const [spinning, setSpinning] = uState(false);
-                const [winner, setWinner] = uState(null);
-                // Pemenang yang sudah keluar (agar bisa dikecualikan bila diinginkan)
-                const [pastWinners, setPastWinners] = uState([]); // {id, nama, category}
-                const [excludeWinners, setExcludeWinners] = uState(true);
-                const wheelRef = uRef(null);
-
-                // Ambil jam (0-23) & menit dari sebuah record kehadiran.
-                const getHourMinute = (r) => {
-                    // Prioritas: timestamp (epoch ms) -> paling akurat.
-                    if (r && typeof r.timestamp === 'number' && r.timestamp > 0) {
-                        const d = new Date(r.timestamp);
-                        return d.getHours() * 60 + d.getMinutes();
-                    }
-                    // Fallback: field 'jam' berformat "HH:MM".
-                    if (r && r.jam && typeof r.jam === 'string') {
-                        const parts = r.jam.split(':');
-                        const h = parseInt(parts[0], 10);
-                        const m = parseInt(parts[1], 10) || 0;
-                        if (!isNaN(h)) return h * 60 + m;
-                    }
-                    return null;
-                };
-
-                const EARLY_CUTOFF = 19 * 60;   // 19:00
-                const MID_CUTOFF = 20 * 60;      // 20:00
-
-                // Hanya peserta berstatus Hadir yang ikut undian.
-                const eligibleAll = uMemo(() => {
-                    return (records || []).filter(r => r && r.status === 'Hadir' && getHourMinute(r) !== null);
-                }, [records]);
-
-                const pool = uMemo(() => {
-                    let list = eligibleAll.filter(r => {
-                        const t = getHourMinute(r);
-                        if (category === 'early') return t < EARLY_CUTOFF;
-                        return t >= EARLY_CUTOFF && t < MID_CUTOFF; // 19:00 - 19:59:59
-                    });
-                    if (excludeWinners) {
-                        const wonIds = new Set(pastWinners.map(w => w.id));
-                        list = list.filter(r => !wonIds.has(r.id));
-                    }
-                    // Urutkan agar warna segmen stabil.
-                    return list.slice().sort((a, b) => String(a.nama).localeCompare(String(b.nama)));
-                }, [eligibleAll, category, excludeWinners, pastWinners]);
-
-                const segColors = ['#f97316','#3b82f6','#10b981','#ef4444','#8b5cf6','#ec4899','#eab308','#14b8a6','#6366f1','#f43f5e'];
-                const n = pool.length;
-                const size = 300;
-                const cx = size / 2, cy = size / 2, radius = size / 2 - 4;
-
-                const polar = (angleDeg, r) => {
-                    const a = (angleDeg - 90) * Math.PI / 180;
-                    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-                };
-
-                const buildSegments = () => {
-                    if (n === 0) return null;
-                    if (n === 1) {
-                        // Satu peserta -> lingkaran penuh.
-                        return (
-                            <g>
-                                <circle cx={cx} cy={cy} r={radius} fill={segColors[0]} stroke="#fff" strokeWidth="2" />
-                                <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize="13" fontWeight="800" transform={`rotate(0 ${cx} ${cy})`}>
-                                    {String(pool[0].nama).slice(0, 16)}
-                                </text>
-                            </g>
-                        );
-                    }
-                    const seg = 360 / n;
-                    return pool.map((p, i) => {
-                        const start = i * seg;
-                        const end = (i + 1) * seg;
-                        const p1 = polar(start, radius);
-                        const p2 = polar(end, radius);
-                        const largeArc = seg > 180 ? 1 : 0;
-                        const d = `M ${cx} ${cy} L ${p1.x} ${p1.y} A ${radius} ${radius} 0 ${largeArc} 1 ${p2.x} ${p2.y} Z`;
-                        const mid = start + seg / 2;
-                        const labelPos = polar(mid, radius * 0.62);
-                        const short = String(p.nama).length > 14 ? String(p.nama).slice(0, 13) + '…' : String(p.nama);
-                        return (
-                            <g key={p.id || i}>
-                                <path d={d} fill={segColors[i % segColors.length]} stroke="#ffffff" strokeWidth="1.5" />
-                                <text
-                                    x={labelPos.x} y={labelPos.y}
-                                    textAnchor="middle" dominantBaseline="middle"
-                                    fill="#ffffff" fontSize={n > 16 ? 8 : n > 10 ? 9 : 11} fontWeight="700"
-                                    transform={`rotate(${mid} ${labelPos.x} ${labelPos.y})`}
-                                >
-                                    {short}
-                                </text>
-                            </g>
-                        );
-                    });
-                };
-
-                const doSpin = () => {
-                    if (spinning || n === 0) return;
-                    setWinner(null);
-                    const seg = 360 / n;
-                    const winnerIndex = Math.floor(Math.random() * n);
-                    // Sudut tengah segmen pemenang.
-                    const segMid = winnerIndex * seg + seg / 2;
-                    // Pointer berada di atas (0°/12 o'clock). Kita ingin segMid berhenti di atas.
-                    const spins = 6 + Math.floor(Math.random() * 3); // 6-8 putaran penuh
-                    const baseTarget = spins * 360 + (360 - segMid);
-                    // Tambah dari rotasi terkini agar arah selalu maju.
-                    const current = rotation % 360;
-                    const target = rotation - current + baseTarget;
-                    setSpinning(true);
-                    setRotation(target);
-                    window.setTimeout(() => {
-                        setSpinning(false);
-                        const w = pool[winnerIndex];
-                        setWinner(w);
-                        setPastWinners(prev => [{ id: w.id, nama: w.nama, category, at: Date.now() }, ...prev]);
-                    }, 5200);
-                };
-
-                const catMeta = {
-                    early: { label: 'Early Birds', sub: 'Check-in sebelum 19:00', icon: 'sunrise', color: 'from-amber-400 to-orange-500' },
-                    mid:   { label: 'Jam 19:00 – 20:00', sub: 'Check-in antara 19:00–20:00', icon: 'moon', color: 'from-indigo-500 to-violet-600' },
-                };
-
-                return (
-                    <div className="min-h-screen bg-slate-50 p-4 pb-20 animate-bounce-in">
-                        <div className="flex items-center justify-between mb-4 sticky top-0 bg-slate-50/90 backdrop-blur-md py-2 z-20">
-                            <button onClick={onBack} className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-100 transition shadow-sm active:scale-95"><Ico name="arrow-left" size={20} /></button>
-                            <div className="text-right">
-                                <h2 className="font-black text-2xl text-slate-800 font-fredoka flex items-center gap-2 justify-end"><Ico name="gift" size={22} className="text-orange-500" /> Spin Wheel</h2>
-                                <p className="text-xs font-bold text-slate-400">Undian Doorprize · {viewDate}</p>
-                            </div>
-                        </div>
-
-                        {/* Pilih kategori */}
-                        <div className="grid grid-cols-2 gap-3 mb-5">
-                            {['early','mid'].map(key => {
-                                const m = catMeta[key];
-                                const active = category === key;
-                                const count = eligibleAll.filter(r => {
-                                    const t = getHourMinute(r);
-                                    if (key === 'early') return t < EARLY_CUTOFF;
-                                    return t >= EARLY_CUTOFF && t < MID_CUTOFF;
-                                }).length;
-                                return (
-                                    <button key={key} onClick={() => { if (!spinning) { setCategory(key); setWinner(null); } }}
-                                        className={`p-4 rounded-2xl border-2 text-left transition active:scale-95 relative overflow-hidden ${active ? `bg-gradient-to-br ${m.color} border-transparent text-white shadow-lg` : 'bg-white border-slate-200 text-slate-600'}`}>
-                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${active ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'}`}><Ico name={m.icon} size={18} /></div>
-                                        <h4 className={`font-black text-sm ${active ? 'text-white' : 'text-slate-700'}`}>{m.label}</h4>
-                                        <p className={`text-[10px] font-bold ${active ? 'text-white/80' : 'text-slate-400'}`}>{m.sub}</p>
-                                        <span className={`inline-block mt-1 text-[10px] font-black px-2 py-0.5 rounded-full ${active ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'}`}>{count} peserta</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        {/* Roda */}
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex flex-col items-center mb-5">
-                            {n === 0 ? (
-                                <div className="py-16 text-center">
-                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300"><Ico name="ferris-wheel" size={32} /></div>
-                                    <p className="font-black text-slate-500 text-sm">Belum ada peserta memenuhi syarat</p>
-                                    <p className="text-[11px] text-slate-400 font-bold mt-1">
-                                        {category === 'early' ? 'Belum ada yang check-in sebelum jam 19:00.' : 'Belum ada yang check-in antara jam 19:00–20:00.'}
-                                    </p>
-                                    {excludeWinners && pastWinners.some(w => w.category === category) && (
-                                        <p className="text-[11px] text-amber-500 font-bold mt-2">Semua kandidat mungkin sudah pernah menang. Matikan "kecualikan pemenang" untuk mengundi ulang.</p>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="relative" style={{ width: size, maxWidth: '100%' }}>
-                                    {/* Pointer */}
-                                    <div className="absolute left-1/2 -translate-x-1/2 -top-1 z-10" style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.25))' }}>
-                                        <svg width="34" height="34" viewBox="0 0 34 34"><path d="M17 32 L4 6 Q17 14 30 6 Z" fill="#ef4444" stroke="#fff" strokeWidth="2"/></svg>
-                                    </div>
-                                    <svg
-                                        ref={wheelRef}
-                                        viewBox={`0 0 ${size} ${size}`}
-                                        width={size} height={size}
-                                        style={{
-                                            width: '100%', height: 'auto',
-                                            transform: `rotate(${rotation}deg)`,
-                                            transition: spinning ? 'transform 5s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
-                                        }}
-                                    >
-                                        <circle cx={cx} cy={cy} r={radius + 3} fill="#1e293b" />
-                                        {buildSegments()}
-                                        <circle cx={cx} cy={cy} r="22" fill="#1e293b" stroke="#fff" strokeWidth="3" />
-                                        <circle cx={cx} cy={cy} r="8" fill="#f97316" />
-                                    </svg>
-                                </div>
-                            )}
-
-                            <button
-                                onClick={doSpin}
-                                disabled={spinning || n === 0}
-                                className={`mt-5 w-full py-4 rounded-2xl font-black text-lg text-white flex items-center justify-center gap-2 transition active:scale-95 ${spinning || n === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-gradient-to-r from-orange-500 to-pink-500 shadow-lg hover:shadow-xl'}`}
-                            >
-                                <Ico name={spinning ? 'loader' : 'rotate-cw'} size={20} className={spinning ? 'animate-spin' : ''} />
-                                {spinning ? 'Memutar...' : `PUTAR (${n} peserta)`}
-                            </button>
-
-                            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
-                                <input type="checkbox" checked={excludeWinners} disabled={spinning} onChange={e => setExcludeWinners(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                                <span className="text-[11px] font-bold text-slate-500">Kecualikan yang sudah pernah menang</span>
-                            </label>
-                        </div>
-
-                        {/* Pemenang */}
-                        {winner && !spinning && (
-                            <div className="bg-gradient-to-br from-amber-400 via-orange-500 to-pink-500 rounded-3xl p-6 text-center shadow-xl mb-5 animate-bounce-in relative overflow-hidden">
-                                <div className="absolute inset-0 opacity-20" style={{ background: 'radial-gradient(circle at 30% 20%, #fff 0%, transparent 40%)' }}></div>
-                                <div className="relative z-10">
-                                    <div className="w-14 h-14 bg-white/25 rounded-full flex items-center justify-center mx-auto mb-3 text-white"><Ico name="trophy" size={30} /></div>
-                                    <p className="text-white/80 font-bold text-xs uppercase tracking-widest mb-1">Pemenang</p>
-                                    <h3 className="text-white font-black text-2xl font-fredoka leading-tight break-words">{winner.nama}</h3>
-                                    {winner.kelas && winner.kelas !== '-' && <p className="text-white/80 font-bold text-sm mt-1">{winner.kelas}</p>}
-                                    <p className="text-white/70 font-bold text-[11px] mt-2">Check-in {winner.jam || '-'} · {catMeta[category].label}</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Riwayat pemenang */}
-                        {pastWinners.length > 0 && (
-                            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h4 className="font-black text-slate-600 text-xs uppercase tracking-widest flex items-center gap-2"><Ico name="sparkles" size={14} className="text-orange-400" /> Riwayat Pemenang</h4>
-                                    <button onClick={() => { if (confirm('Kosongkan riwayat pemenang?')) setPastWinners([]); }} className="text-[10px] font-bold text-rose-400 hover:text-rose-600">Reset</button>
-                                </div>
-                                <div className="space-y-1.5 max-h-52 overflow-y-auto">
-                                    {pastWinners.map((w, i) => (
-                                        <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
-                                            <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-[11px] font-black flex items-center justify-center flex-shrink-0">{pastWinners.length - i}</span>
-                                            <span className="flex-1 font-bold text-slate-700 text-sm truncate">{w.nama}</span>
-                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 flex-shrink-0">{catMeta[w.category] ? catMeta[w.category].label : w.category}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                );
             };
             // --- INITIALIZATION CHECKER ---
             useEffect(() => {
@@ -1317,6 +1055,24 @@
                 const worksheet = window.XLSX.utils.json_to_sheet(dataToExport);
                 const workbook = window.XLSX.utils.book_new();
                 window.XLSX.utils.book_append_sheet(workbook, worksheet, "Absensi");
+
+                // Sheet tambahan: Rasio Kehadiran per Kelompok (hadir dibanding total GSM terdaftar)
+                const normK = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
+                const totalPerKelompokXls = {};
+                participants.forEach(p => { const k = normK(p.kelas); totalPerKelompokXls[k] = (totalPerKelompokXls[k] || 0) + 1; });
+                const hadirPerKelompokXls = {};
+                liveAttendance.filter(r => r.status === 'Hadir').forEach(r => { const k = normK(r.kelas); hadirPerKelompokXls[k] = (hadirPerKelompokXls[k] || 0) + 1; });
+                const ratioRowsXls = Array.from(new Set([...Object.keys(totalPerKelompokXls), ...Object.keys(hadirPerKelompokXls)]))
+                    .map(k => {
+                        const hadir = hadirPerKelompokXls[k] || 0;
+                        const total = totalPerKelompokXls[k] || 0;
+                        const pct = total > 0 ? Math.round((hadir / total) * 100) : 0;
+                        return { 'Kelompok': k, 'Hadir': hadir, 'Total GSM': total, 'Persentase (%)': pct };
+                    })
+                    .sort((a, b) => b['Persentase (%)'] - a['Persentase (%)']);
+                const ratioSheetXls = window.XLSX.utils.json_to_sheet(ratioRowsXls);
+                window.XLSX.utils.book_append_sheet(workbook, ratioSheetXls, "Rasio per Kelompok");
+
                 window.XLSX.writeFile(workbook, `Absensi_${viewDate}.xlsx`);
             };
 
@@ -1637,6 +1393,55 @@
                             if (y + bH > pageH - 16) { pdf.addPage(); y = 18; }
                             pdf.addImage(barImg, 'PNG', M, y, bW, bH);
                             y += bH + 6;
+                        }
+                    }
+
+                    // Tabel: Rasio Kehadiran per Kelompok (hadir dibanding total GSM terdaftar di kelompok tsb)
+                    {
+                        const normK = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
+                        const totalPerKelompokPdf = {};
+                        participants.forEach(p => { const k = normK(p.kelas); totalPerKelompokPdf[k] = (totalPerKelompokPdf[k] || 0) + 1; });
+                        const ratioRows = Array.from(new Set([...Object.keys(totalPerKelompokPdf), ...Object.keys(rep.byChurch)]))
+                            .map(k => {
+                                const hadir = rep.byChurch[k] || 0;
+                                const total = totalPerKelompokPdf[k] || 0;
+                                const pct = total > 0 ? Math.round((hadir / total) * 100) : 0;
+                                return { kelompok: k, hadir, total, pct };
+                            })
+                            .sort((a, b) => b.pct - a.pct || b.hadir - a.hadir);
+
+                        if (ratioRows.length > 0) {
+                            if (y > pageH - 40) { pdf.addPage(); y = 18; }
+                            pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
+                            pdf.text("Rasio Kehadiran per Kelompok", M, y); y += 6;
+                            const cols2 = [
+                                { h: 'Kelompok', w: (pageW - M * 2) - 25 - 22 - 28 },
+                                { h: 'Hadir', w: 25 }, { h: 'Total GSM', w: 28 }, { h: 'Rasio', w: 22 }
+                            ];
+                            let tx2 = M;
+                            pdf.setFillColor(124, 58, 237); pdf.rect(M, y, pageW - M * 2, 8, 'F');
+                            pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+                            cols2.forEach(c => { pdf.text(c.h, tx2 + 2, y + 5.5); tx2 += c.w; });
+                            y += 8;
+                            pdf.setFont('helvetica', 'normal');
+                            ratioRows.forEach((r, idx) => {
+                                if (y > pageH - 14) {
+                                    pdf.addPage(); y = 18;
+                                    // ulang header tabel di halaman baru
+                                    let txh = M;
+                                    pdf.setFillColor(124, 58, 237); pdf.rect(M, y, pageW - M * 2, 8, 'F');
+                                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+                                    cols2.forEach(c => { pdf.text(c.h, txh + 2, y + 5.5); txh += c.w; });
+                                    y += 8; pdf.setFont('helvetica', 'normal');
+                                }
+                                if (idx % 2 === 0) { pdf.setFillColor(248, 250, 252); pdf.rect(M, y, pageW - M * 2, 7, 'F'); }
+                                pdf.setTextColor(30, 41, 59); pdf.setFontSize(9);
+                                let cx3 = M;
+                                const row2 = [r.kelompok, String(r.hadir), String(r.total), `${r.pct}%`];
+                                row2.forEach((val, ci) => { pdf.text(val, cx3 + 2, y + 5); cx3 += cols2[ci].w; });
+                                y += 7;
+                            });
+                            y += 6;
                         }
                     }
 
@@ -2770,20 +2575,6 @@ const handleExportUsers = () => {
                                     <Ico name="chevron-right" size={20} className="text-white/70" />
                                 </div>
                              </button>
-
-                             {/* FITUR BARU: SPIN WHEEL DOORPRIZE */}
-                             <button onClick={() => setView('spin_wheel')} className="col-span-2 bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 p-5 rounded-3xl border border-orange-500 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
-                                <div className="absolute right-0 top-0 w-40 h-40 bg-white/20 rounded-full -mr-12 -mt-12 blur-2xl"></div>
-                                <div className="absolute left-10 bottom-0 w-24 h-24 bg-white/10 rounded-full -mb-10 blur-xl"></div>
-                                <div className="flex items-center gap-4 relative z-10">
-                                    <div className="bg-white/25 p-3 rounded-2xl text-white group-hover:rotate-45 transition-transform duration-500"><Ico name="ferris-wheel" size={24} /></div>
-                                    <div className="flex-1">
-                                        <h4 className="font-black text-white text-base font-fredoka">Spin Wheel Doorprize</h4>
-                                        <p className="text-[10px] text-orange-50 font-bold mt-0.5">Undian Early Birds &amp; Jam 19–20</p>
-                                    </div>
-                                    <Ico name="chevron-right" size={20} className="text-white/80" />
-                                </div>
-                             </button>
                         </div>
 
                         <h3 className="font-black text-slate-400 text-xs uppercase tracking-widest mb-3 ml-1 flex items-center gap-2"><i data-lucide="settings" width="12"></i> Sistem & Data</h3>
@@ -3162,6 +2953,22 @@ const handleExportUsers = () => {
                 hadirFiltered.forEach(r => { const k = norm(r.kelas); churchMap[k] = (churchMap[k] || 0) + 1; });
                 const churchSeries = Object.keys(churchMap).map(k => ({ label: k, value: churchMap[k] })).sort((a, b) => b.value - a.value);
 
+                // === Rasio Kehadiran per Kelompok ===
+                // Membandingkan jumlah GSM yang HADIR pada tanggal ini dengan jumlah TOTAL
+                // GSM yang terdaftar di kelompok tersebut. Contoh: 5 hadir dari 32 total GKPS-Tangerang -> 5/32 (16%).
+                const totalPerKelompokMap = {};
+                participants.forEach(p => { const k = norm(p.kelas); totalPerKelompokMap[k] = (totalPerKelompokMap[k] || 0) + 1; });
+                const hadirPerKelompokMap = {};
+                hadirRecords.forEach(r => { const k = norm(r.kelas); hadirPerKelompokMap[k] = (hadirPerKelompokMap[k] || 0) + 1; });
+                const kelompokRatioList = Array.from(new Set([...Object.keys(totalPerKelompokMap), ...Object.keys(hadirPerKelompokMap)]))
+                    .map(k => {
+                        const hadir = hadirPerKelompokMap[k] || 0;
+                        const total = totalPerKelompokMap[k] || 0;
+                        const pct = total > 0 ? Math.round((hadir / total) * 100) : 0;
+                        return { kelompok: k, hadir, total, pct };
+                    })
+                    .sort((a, b) => b.pct - a.pct || b.hadir - a.hadir);
+
                 // Daftar gereja/kelompok untuk filter
                 const churchSet = Array.from(new Set([
                     ...liveAttendance.map(r => norm(r.kelas)),
@@ -3366,6 +3173,32 @@ const handleExportUsers = () => {
                         </div>
                     );
                 };
+                // Bar rasio "hadir / total kelompok" — merah jika rendah, kuning sedang, hijau tinggi
+                const RatioBars = ({ data }) => (
+                    <div className="space-y-3">
+                        {data.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-6 opacity-50">
+                                <Ico name="bar-chart-2" size={36} className="text-slate-300 mb-2" />
+                                <p className="font-bold text-xs text-slate-400">Belum ada data kelompok</p>
+                            </div>
+                        ) : data.map((d, i) => {
+                            const barColor = d.pct >= 75 ? '#10b981' : d.pct >= 40 ? '#f59e0b' : '#ef4444';
+                            return (
+                                <div key={i}>
+                                    <div className="flex items-center justify-between mb-1 gap-2">
+                                        <span className="text-xs font-bold text-slate-600 truncate flex-1">{d.kelompok}</span>
+                                        <span className="text-xs font-black text-slate-800 flex-shrink-0 whitespace-nowrap">
+                                            {d.hadir}/{d.total} <span className="text-slate-400 font-bold">({d.pct}%)</span>
+                                        </span>
+                                    </div>
+                                    <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full rounded-full transition-all duration-700" style={{ width: Math.max(d.pct, d.hadir > 0 ? 4 : 0) + '%', backgroundColor: barColor }}></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
 
                 return (
                 <div className="min-h-screen bg-slate-50 relative flex flex-col">
@@ -3450,6 +3283,27 @@ const handleExportUsers = () => {
                                 </div>
                                 <FancyBars data={churchSeries.slice(0, 6)} max={Math.max(1, ...churchSeries.map(d => d.value))} />
                             </div>
+                        </div>
+
+                        {/* RASIO KEHADIRAN PER KELOMPOK: hadir dibanding total GSM terdaftar di kelompok tsb */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className="flex items-center gap-2 mb-1">
+                                <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center"><Ico name="percent" size={16} /></div>
+                                <div>
+                                    <h3 className="font-black text-slate-700 text-sm leading-none font-fredoka">Rasio Kehadiran per Kelompok</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">GSM hadir dibanding total GSM terdaftar di tiap kelompok</p>
+                                </div>
+                            </div>
+                            <div className="mt-4">
+                                <RatioBars data={kelompokRatioList} />
+                            </div>
+                            {kelompokRatioList.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-slate-100 flex justify-around text-center">
+                                    <div><span className="text-sm font-black text-emerald-600 font-fredoka">{totalHadir}</span><p className="text-[9px] font-bold text-slate-400">Total Hadir</p></div>
+                                    <div><span className="text-sm font-black text-slate-600 font-fredoka">{totalGSM}</span><p className="text-[9px] font-bold text-slate-400">Total GSM</p></div>
+                                    <div><span className="text-sm font-black text-violet-600 font-fredoka">{hadirPct}%</span><p className="text-[9px] font-bold text-slate-400">Rata-rata</p></div>
+                                </div>
+                            )}
                         </div>
 
                         {/* FILTER: Kelompokkan berdasarkan */}
@@ -4349,16 +4203,6 @@ const handleExportUsers = () => {
                     </div>
                 </div>
             );
-            if (view === 'spin_wheel') {
-                return (
-                    <SpinWheelView
-                        records={liveAttendance}
-                        viewDate={viewDate}
-                        onBack={() => isPeserta ? handleBackToMenu() : setView('admin_dashboard')}
-                    />
-                );
-            }
-
             if (view === 'change_password') return (
                 <div className="min-h-screen bg-slate-50 p-4 flex items-center justify-center">
                     <div className="max-w-sm w-full bg-white p-8 rounded-3xl shadow-lg border-2 border-indigo-100 text-center">
