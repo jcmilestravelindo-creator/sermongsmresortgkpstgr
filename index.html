@@ -2926,7 +2926,15 @@ const handleExportUsers = () => {
             if (view === 'attendance_manager') {
                 let filteredParticipants = [];
                 if (isPeserta) {
-                    const mySelf = participants.find(p => p.nama.toLowerCase() === safeUser.nama.toLowerCase());
+                    const myName = collapseSpaces(safeUser.nama).toLowerCase();
+                    // Cocokkan nama dengan normalisasi spasi (exact), lalu fallback ke pencocokan longgar
+                    let mySelf = participants.find(p => collapseSpaces(p.nama).toLowerCase() === myName);
+                    if (!mySelf && myName) {
+                        mySelf = participants.find(p => {
+                            const pn = collapseSpaces(p.nama).toLowerCase();
+                            return pn.includes(myName) || myName.includes(pn);
+                        });
+                    }
                     if (mySelf) filteredParticipants = [mySelf];
                 } else {
                     filteredParticipants = participants.filter(p => p.nama.toLowerCase().includes(filterManual.toLowerCase()));
