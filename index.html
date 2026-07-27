@@ -479,6 +479,16 @@
             const [rangeData, setRangeData] = useState(null); // {byDate:{date:[records]}, all:[records]}
             const [rangeLoading, setRangeLoading] = useState(false);
             const [pdfBuilding, setPdfBuilding] = useState(false);
+            // === Laporan Per Peserta (individual) ===
+            const [lpSearch, setLpSearch] = useState("");            // filter cari nama peserta
+            const [lpSelectedId, setLpSelectedId] = useState(null);  // id peserta terpilih
+            const [lpData, setLpData] = useState(null);              // {rows:[{date,status,jam}], summary:{...}}
+            const [lpLoading, setLpLoading] = useState(false);
+            // === Laporan Massal (semua peserta) ===
+            const [mpData, setMpData] = useState(null);              // {rows:[{...perPeserta}], meta:{...}}
+            const [mpLoading, setMpLoading] = useState(false);
+            const [mpSort, setMpSort] = useState("desc");            // desc = terbanyak, asc = tersedikit
+            const [mpPage, setMpPage] = useState(0);                 // halaman tampilan layar
             const [isThinking, setIsThinking] = useState(false);
             const [aiResponse, setAiResponse] = useState(null);
 
@@ -597,6 +607,12 @@
                     'loader': <><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></>,
                     'user': <><circle cx="12" cy="8" r="5"/><path d="M3 21v-1a7 7 0 0 1 14 0v1"/></>,
                     'venus-mars': <><circle cx="12" cy="9" r="4"/><path d="M12 13v8M9 18h6"/></>,
+                    'search': <><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
+                    'list': <><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></>,
+                    'x': <><path d="M18 6 6 18M6 6l12 12"/></>,
+                    'chevron-left': <path d="m15 18-6-6 6-6"/>,
+                    'arrow-down-wide': <><path d="M11 5h10M11 9h7M11 13h4M3 17l3 3 3-3M6 4v16"/></>,
+                    'arrow-up-wide': <><path d="M11 5h4M11 9h7M11 13h10M3 7l3-3 3 3M6 20V4"/></>,
                 };
                 return <svg {...common}>{paths[name] || null}</svg>;
             };
@@ -1256,6 +1272,366 @@
                 const byHour = {};
                 hadirRecs.forEach(r => { if (r.jam) { const h = String(r.jam).split(':')[0].padStart(2, '0') + ':00'; byHour[h] = (byHour[h] || 0) + 1; } });
                 return { total: records.length, hadir, izin, sakit, alpha, genderL, genderP, byChurch, byHour };
+            };
+
+            // ============================================================
+            // === LAPORAN PER PESERTA (INDIVIDUAL) =======================
+            // Membangun riwayat kehadiran satu peserta lintas periode.
+            // Menggunakan buildDateList() + fetchRangeAttendance() yang sudah ada.
+            // ============================================================
+            const buildParticipantReport = async () => {
+                if (!lpSelectedId) { alert("Pilih peserta terlebih dahulu."); return null; }
+                const target = participants.find(p => p.id === lpSelectedId);
+                if (!target) { alert("Data peserta tidak ditemukan."); return null; }
+                setLpLoading(true);
+                try {
+                    const data = await fetchRangeAttendance();
+                    if (!data) { setLpLoading(false); return null; }
+                    const tId = String(target.id);
+                    const tNama = collapseSpaces(target.nama).toLowerCase();
+                    const rows = data.dates.map(dt => {
+                        const recs = data.byDate[dt] || [];
+                        // cocokkan berdasarkan id dulu, fallback ke nama ternormalisasi
+                        let rec = recs.find(r => String(r.id) === tId);
+                        if (!rec) rec = recs.find(r => collapseSpaces(r.nama || '').toLowerCase() === tNama);
+                        return {
+                            date: dt,
+                            status: rec ? (rec.status || 'Hadir') : 'Tidak Ada Sesi',
+                            jam: rec ? (rec.jam || '') : '',
+                            hasSession: recs.length > 0
+                        };
+                    });
+                    // ringkasan: hanya hitung tanggal yang ada sesi absensinya
+                    const sessionRows = rows.filter(r => r.hasSession);
+                    const cnt = { Hadir: 0, Izin: 0, Sakit: 0, Alpha: 0 };
+                    sessionRows.forEach(r => { if (cnt[r.status] !== undefined) cnt[r.status]++; else cnt.Alpha++; });
+                    const totalSesi = sessionRows.length;
+                    const persenHadir = totalSesi > 0 ? Math.round((cnt.Hadir / totalSesi) * 100) : 0;
+                    const summary = {
+                        nama: target.nama,
+                        kelas: target.kelas || '-',
+                        kategori: target.kategori || '-',
+                        totalSesi, persenHadir,
+                        hadir: cnt.Hadir, izin: cnt.Izin, sakit: cnt.Sakit, alpha: cnt.Alpha
+                    };
+                    const result = { rows, summary };
+                    setLpData(result);
+                    setLpLoading(false);
+                    return result;
+                } catch (e) {
+                    setLpLoading(false);
+                    alert("Gagal membangun laporan: " + (e.message || e));
+                    return null;
+                }
+            };
+
+            const lpPeriodLabel = () => {
+                if (reportPeriod === 'tanggal') return fmtDateId(viewDate);
+                if (reportPeriod === 'bulan') {
+                    const [yy, mm] = reportMonth.split('-').map(Number);
+                    const namaBln = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+                    return `${namaBln[mm - 1]} ${yy}`;
+                }
+                return `${fmtDateId(reportStart)} — ${fmtDateId(reportEnd)}`;
+            };
+
+            const statusColorPDF = (s) => {
+                if (s === 'Hadir') return [16, 185, 129];
+                if (s === 'Izin') return [249, 115, 22];
+                if (s === 'Sakit') return [59, 130, 246];
+                if (s === 'Alpha') return [239, 68, 68];
+                return [148, 163, 184];
+            };
+
+            const handleExportParticipantPDF = async () => {
+                const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+                if (!jsPDFCtor) { alert("Library PDF belum dimuat. Periksa koneksi internet."); return; }
+                const rep = lpData || await buildParticipantReport();
+                if (!rep) return;
+                const { rows, summary } = rep;
+                const pdf = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const pageW = pdf.internal.pageSize.getWidth();
+                const pageH = pdf.internal.pageSize.getHeight();
+                const M = 14; let y = 0;
+                // Header
+                pdf.setFillColor(124, 58, 237); pdf.rect(0, 0, pageW, 30, 'F');
+                pdf.setFillColor(37, 99, 235); pdf.rect(0, 28, pageW, 4, 'F');
+                pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16);
+                pdf.text("Laporan Kehadiran Peserta", M, 12);
+                pdf.setFontSize(10); pdf.setFont('helvetica', 'normal');
+                pdf.text("Sermon GSM Resort Tangerang", M, 19);
+                pdf.setFontSize(8);
+                pdf.text("Periode: " + lpPeriodLabel(), M, 25);
+                pdf.text("Dibuat: " + new Date().toLocaleString('id-ID'), pageW - M, 12, { align: 'right' });
+                y = 40;
+                // Identitas peserta
+                pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13);
+                pdf.text(summary.nama, M, y); y += 6;
+                pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(100, 116, 139);
+                pdf.text(`Kategori: ${summary.kategori}   •   Kelompok: ${summary.kelas}`, M, y); y += 8;
+                // Kartu ringkasan
+                const cards = [
+                    { label: 'Total Sesi', val: String(summary.totalSesi), col: [100, 116, 139] },
+                    { label: 'Hadir', val: String(summary.hadir), col: [16, 185, 129] },
+                    { label: 'Izin', val: String(summary.izin), col: [249, 115, 22] },
+                    { label: 'Sakit', val: String(summary.sakit), col: [59, 130, 246] },
+                    { label: 'Alpha', val: String(summary.alpha), col: [239, 68, 68] }
+                ];
+                const cardW = (pageW - M * 2 - 4 * 3) / 5;
+                cards.forEach((c, i) => {
+                    const cx = M + i * (cardW + 3);
+                    pdf.setFillColor(c.col[0], c.col[1], c.col[2]); pdf.roundedRect(cx, y, cardW, 18, 2, 2, 'F');
+                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13);
+                    pdf.text(c.val, cx + cardW / 2, y + 8, { align: 'center' });
+                    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7);
+                    pdf.text(c.label, cx + cardW / 2, y + 14, { align: 'center' });
+                });
+                y += 24;
+                // Persentase kehadiran
+                pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10);
+                pdf.text(`Persentase Kehadiran: ${summary.persenHadir}%`, M, y); y += 4;
+                const barW = pageW - M * 2;
+                pdf.setFillColor(226, 232, 240); pdf.roundedRect(M, y, barW, 5, 2, 2, 'F');
+                const fillW = Math.max(1, barW * summary.persenHadir / 100);
+                pdf.setFillColor(124, 58, 237); pdf.roundedRect(M, y, fillW, 5, 2, 2, 'F');
+                y += 12;
+                // Tabel riwayat
+                pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(30, 41, 59);
+                pdf.text("Riwayat Kehadiran", M, y); y += 4;
+                const col1 = M, col2 = M + 70, col3 = M + 110;
+                pdf.setFillColor(124, 58, 237); pdf.rect(M, y, barW, 7, 'F');
+                pdf.setTextColor(255, 255, 255); pdf.setFontSize(8); pdf.setFont('helvetica', 'bold');
+                pdf.text("Tanggal", col1 + 2, y + 5);
+                pdf.text("Status", col2 + 2, y + 5);
+                pdf.text("Jam Absen", col3 + 2, y + 5);
+                y += 7;
+                pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+                rows.forEach((r, idx) => {
+                    if (y > pageH - 20) { pdf.addPage(); y = 20; }
+                    if (idx % 2 === 0) { pdf.setFillColor(248, 250, 252); pdf.rect(M, y, barW, 7, 'F'); }
+                    pdf.setTextColor(51, 65, 85);
+                    pdf.text(fmtDateId(r.date), col1 + 2, y + 5);
+                    const sc = statusColorPDF(r.status);
+                    pdf.setTextColor(sc[0], sc[1], sc[2]); pdf.setFont('helvetica', 'bold');
+                    pdf.text(r.status, col2 + 2, y + 5);
+                    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(100, 116, 139);
+                    pdf.text(r.jam || '-', col3 + 2, y + 5);
+                    y += 7;
+                });
+                // Footer
+                pdf.setFontSize(7); pdf.setTextColor(148, 163, 184);
+                pdf.text("Laporan otomatis — Sermon GSM Resort Tangerang", pageW / 2, pageH - 8, { align: 'center' });
+                const safe = collapseSpaces(summary.nama).replace(/[^\w]+/g, '_');
+                const tag = reportPeriod === 'bulan' ? reportMonth : (reportPeriod === 'tanggal' ? viewDate : `${reportStart}_sd_${reportEnd}`);
+                pdf.save(`Laporan_${safe}_${tag}.pdf`);
+            };
+
+            const handleExportParticipantExcel = async () => {
+                if (!window.XLSX) { alert("Library Excel belum dimuat."); return; }
+                const rep = lpData || await buildParticipantReport();
+                if (!rep) return;
+                const { rows, summary } = rep;
+                const wb = window.XLSX.utils.book_new();
+                // Sheet 1: Ringkasan
+                const ringkasan = [
+                    ["LAPORAN KEHADIRAN PESERTA"],
+                    ["Sermon GSM Resort Tangerang"],
+                    [],
+                    ["Nama", summary.nama],
+                    ["Kategori", summary.kategori],
+                    ["Kelompok", summary.kelas],
+                    ["Periode", lpPeriodLabel()],
+                    [],
+                    ["Total Sesi", summary.totalSesi],
+                    ["Hadir", summary.hadir],
+                    ["Izin", summary.izin],
+                    ["Sakit", summary.sakit],
+                    ["Alpha", summary.alpha],
+                    ["Persentase Kehadiran", summary.persenHadir + "%"]
+                ];
+                const ws1 = window.XLSX.utils.aoa_to_sheet(ringkasan);
+                ws1['!cols'] = [{ wch: 22 }, { wch: 30 }];
+                window.XLSX.utils.book_append_sheet(wb, ws1, "Ringkasan");
+                // Sheet 2: Riwayat
+                const riwayat = rows.map(r => ({
+                    Tanggal: fmtDateId(r.date),
+                    Status: r.status,
+                    "Jam Absen": r.jam || '-'
+                }));
+                const ws2 = window.XLSX.utils.json_to_sheet(riwayat);
+                ws2['!cols'] = [{ wch: 24 }, { wch: 16 }, { wch: 14 }];
+                window.XLSX.utils.book_append_sheet(wb, ws2, "Riwayat");
+                const safe = collapseSpaces(summary.nama).replace(/[^\w]+/g, '_');
+                const tag = reportPeriod === 'bulan' ? reportMonth : (reportPeriod === 'tanggal' ? viewDate : `${reportStart}_sd_${reportEnd}`);
+                window.XLSX.writeFile(wb, `Laporan_${safe}_${tag}.xlsx`);
+            };
+
+            // ============================================================
+            // === LAPORAN MASSAL (SEMUA PESERTA) =========================
+            // Rekap kehadiran seluruh peserta dalam satu periode + sort.
+            // ============================================================
+            const buildAllParticipantsReport = async () => {
+                if (participants.length === 0) { alert("Data peserta kosong."); return null; }
+                setMpLoading(true);
+                try {
+                    const data = await fetchRangeAttendance();
+                    if (!data) { setMpLoading(false); return null; }
+                    // total sesi = jumlah tanggal yang punya minimal 1 record
+                    const sessionDates = data.dates.filter(dt => (data.byDate[dt] || []).length > 0);
+                    const totalSesi = sessionDates.length;
+                    // rincian tiap tanggal-sesi (untuk diagnostik anomali)
+                    const sessionDetail = sessionDates.map(dt => ({
+                        date: dt,
+                        count: (data.byDate[dt] || []).length,
+                        hadir: (data.byDate[dt] || []).filter(r => (r.status || 'Hadir') === 'Hadir').length
+                    }));
+                    // index record per tanggal berdasarkan id & nama untuk lookup cepat
+                    const rows = participants.map(p => {
+                        const pId = String(p.id);
+                        const pNama = collapseSpaces(p.nama).toLowerCase();
+                        const cnt = { Hadir: 0, Izin: 0, Sakit: 0, Alpha: 0 };
+                        sessionDates.forEach(dt => {
+                            const recs = data.byDate[dt] || [];
+                            let rec = recs.find(r => String(r.id) === pId);
+                            if (!rec) rec = recs.find(r => collapseSpaces(r.nama || '').toLowerCase() === pNama);
+                            if (rec) {
+                                const s = rec.status || 'Hadir';
+                                if (cnt[s] !== undefined) cnt[s]++; else cnt.Alpha++;
+                            } else {
+                                cnt.Alpha++; // tidak tercatat pada sesi tsb = Alpha
+                            }
+                        });
+                        const persen = totalSesi > 0 ? Math.round((cnt.Hadir / totalSesi) * 100) : 0;
+                        return {
+                            id: p.id, nama: p.nama, kelas: p.kelas || '-', kategori: p.kategori || '-',
+                            hadir: cnt.Hadir, izin: cnt.Izin, sakit: cnt.Sakit, alpha: cnt.Alpha, persen
+                        };
+                    });
+                    const result = { rows, meta: { totalSesi, totalPeserta: rows.length, sessionDetail } };
+                    setMpData(result);
+                    setMpPage(0);
+                    setMpLoading(false);
+                    return result;
+                } catch (e) {
+                    setMpLoading(false);
+                    alert("Gagal membangun laporan: " + (e.message || e));
+                    return null;
+                }
+            };
+
+            // urutkan berdasarkan hadir (lalu persen), sesuai arah mpSort
+            const sortMpRows = (rows, dir) => {
+                const arr = [...rows];
+                arr.sort((a, b) => {
+                    if (b.hadir !== a.hadir) return dir === 'desc' ? b.hadir - a.hadir : a.hadir - b.hadir;
+                    if (b.persen !== a.persen) return dir === 'desc' ? b.persen - a.persen : a.persen - b.persen;
+                    return collapseSpaces(a.nama).localeCompare(collapseSpaces(b.nama));
+                });
+                return arr;
+            };
+
+            const handleExportAllPDF = async () => {
+                const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+                if (!jsPDFCtor) { alert("Library PDF belum dimuat. Periksa koneksi internet."); return; }
+                const rep = mpData || await buildAllParticipantsReport();
+                if (!rep) return;
+                const sorted = sortMpRows(rep.rows, mpSort);
+                const pdf = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const pageW = pdf.internal.pageSize.getWidth();
+                const pageH = pdf.internal.pageSize.getHeight();
+                const M = 12;
+                const sortLabel = mpSort === 'desc' ? 'Kehadiran Terbanyak' : 'Kehadiran Tersedikit';
+                let pageNo = 0;
+                const drawHeader = () => {
+                    pageNo++;
+                    pdf.setFillColor(37, 99, 235); pdf.rect(0, 0, pageW, 26, 'F');
+                    pdf.setFillColor(6, 182, 212); pdf.rect(0, 24, pageW, 3, 'F');
+                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15);
+                    pdf.text("Laporan Kehadiran Semua Peserta", M, 11);
+                    pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
+                    pdf.text("Sermon GSM Resort Tangerang", M, 17);
+                    pdf.setFontSize(7.5);
+                    pdf.text("Periode: " + lpPeriodLabel() + "   |   Urut: " + sortLabel + "   |   Total Sesi: " + rep.meta.totalSesi, M, 22);
+                    pdf.text("Dibuat: " + new Date().toLocaleString('id-ID'), pageW - M, 11, { align: 'right' });
+                };
+                // kolom tabel
+                const cols = [
+                    { key: 'no', label: 'No', x: M, w: 10 },
+                    { key: 'nama', label: 'Nama', x: M + 10, w: 58 },
+                    { key: 'kelas', label: 'Kelompok', x: M + 68, w: 34 },
+                    { key: 'hadir', label: 'H', x: M + 102, w: 12 },
+                    { key: 'izin', label: 'I', x: M + 114, w: 12 },
+                    { key: 'sakit', label: 'S', x: M + 126, w: 12 },
+                    { key: 'alpha', label: 'A', x: M + 138, w: 12 },
+                    { key: 'persen', label: '%', x: M + 150, w: 24 }
+                ];
+                const rowH = 7;
+                let y;
+                const drawTableHead = () => {
+                    pdf.setFillColor(37, 99, 235); pdf.rect(M, y, pageW - M * 2, rowH, 'F');
+                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+                    cols.forEach(c => {
+                        const align = ['hadir', 'izin', 'sakit', 'alpha', 'persen'].includes(c.key) ? 'center' : 'left';
+                        const tx = align === 'center' ? c.x + c.w / 2 : c.x + 2;
+                        pdf.text(c.label, tx, y + 5, { align });
+                    });
+                    y += rowH;
+                };
+                drawHeader(); y = 32; drawTableHead();
+                pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+                sorted.forEach((r, i) => {
+                    if (y > pageH - 16) {
+                        pdf.setFontSize(7); pdf.setTextColor(148, 163, 184);
+                        pdf.text("Halaman " + pageNo, pageW - M, pageH - 6, { align: 'right' });
+                        pdf.addPage(); drawHeader(); y = 32; drawTableHead();
+                        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+                    }
+                    if (i % 2 === 0) { pdf.setFillColor(241, 245, 249); pdf.rect(M, y, pageW - M * 2, rowH, 'F'); }
+                    pdf.setTextColor(51, 65, 85);
+                    const nama = r.nama.length > 34 ? r.nama.slice(0, 33) + '…' : r.nama;
+                    const kelas = String(r.kelas).length > 20 ? String(r.kelas).slice(0, 19) + '…' : r.kelas;
+                    pdf.text(String(i + 1), cols[0].x + 2, y + 5);
+                    pdf.text(nama, cols[1].x + 2, y + 5);
+                    pdf.setTextColor(100, 116, 139); pdf.text(kelas, cols[2].x + 2, y + 5);
+                    pdf.setTextColor(16, 185, 129); pdf.text(String(r.hadir), cols[3].x + cols[3].w / 2, y + 5, { align: 'center' });
+                    pdf.setTextColor(249, 115, 22); pdf.text(String(r.izin), cols[4].x + cols[4].w / 2, y + 5, { align: 'center' });
+                    pdf.setTextColor(59, 130, 246); pdf.text(String(r.sakit), cols[5].x + cols[5].w / 2, y + 5, { align: 'center' });
+                    pdf.setTextColor(239, 68, 68); pdf.text(String(r.alpha), cols[6].x + cols[6].w / 2, y + 5, { align: 'center' });
+                    pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'bold');
+                    pdf.text(r.persen + '%', cols[7].x + cols[7].w / 2, y + 5, { align: 'center' });
+                    pdf.setFont('helvetica', 'normal');
+                    y += rowH;
+                });
+                pdf.setFontSize(7); pdf.setTextColor(148, 163, 184);
+                pdf.text("Halaman " + pageNo, pageW - M, pageH - 6, { align: 'right' });
+                pdf.text("H=Hadir  I=Izin  S=Sakit  A=Alpha", M, pageH - 6);
+                const tag = reportPeriod === 'bulan' ? reportMonth : (reportPeriod === 'tanggal' ? viewDate : `${reportStart}_sd_${reportEnd}`);
+                pdf.save(`Laporan_Semua_Peserta_${tag}.pdf`);
+            };
+
+            const handleExportAllExcel = async () => {
+                if (!window.XLSX) { alert("Library Excel belum dimuat."); return; }
+                const rep = mpData || await buildAllParticipantsReport();
+                if (!rep) return;
+                const sorted = sortMpRows(rep.rows, mpSort);
+                const wb = window.XLSX.utils.book_new();
+                const header = [
+                    ["LAPORAN KEHADIRAN SEMUA PESERTA"],
+                    ["Sermon GSM Resort Tangerang"],
+                    ["Periode", lpPeriodLabel()],
+                    ["Urut", mpSort === 'desc' ? 'Kehadiran Terbanyak' : 'Kehadiran Tersedikit'],
+                    ["Total Sesi", rep.meta.totalSesi],
+                    ["Total Peserta", rep.meta.totalPeserta],
+                    []
+                ];
+                const tableHead = ["No", "Nama", "Kategori", "Kelompok", "Hadir", "Izin", "Sakit", "Alpha", "% Hadir"];
+                const body = sorted.map((r, i) => [i + 1, r.nama, r.kategori, r.kelas, r.hadir, r.izin, r.sakit, r.alpha, r.persen]);
+                const aoa = [...header, tableHead, ...body];
+                const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+                ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 14 }, { wch: 18 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 9 }];
+                window.XLSX.utils.book_append_sheet(wb, ws, "Rekap Semua Peserta");
+                const tag = reportPeriod === 'bulan' ? reportMonth : (reportPeriod === 'tanggal' ? viewDate : `${reportStart}_sd_${reportEnd}`);
+                window.XLSX.writeFile(wb, `Laporan_Semua_Peserta_${tag}.xlsx`);
             };
 
             // Helper: gambar bar-chart sederhana ke canvas (untuk PDF, tema ungu/biru)
@@ -2669,6 +3045,32 @@ const handleExportUsers = () => {
                                 </div>
                              </button>
 
+                             {/* FITUR BARU: LAPORAN PER PESERTA */}
+                             <button onClick={() => setView('laporan_peserta')} className="col-span-2 bg-gradient-to-r from-blue-500 to-cyan-600 p-5 rounded-3xl border border-blue-600 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-40 h-40 bg-white/10 rounded-full -mr-12 -mt-12 blur-2xl"></div>
+                                <div className="flex items-center gap-4 relative z-10">
+                                    <div className="bg-white/20 p-3 rounded-2xl text-white group-hover:scale-110 transition-transform"><Ico name="user-check" size={24} /></div>
+                                    <div className="flex-1">
+                                        <h4 className="font-black text-white text-base font-fredoka">Laporan Per Peserta</h4>
+                                        <p className="text-[10px] text-blue-100 font-bold mt-0.5">Riwayat kehadiran individual (PDF & Excel)</p>
+                                    </div>
+                                    <Ico name="chevron-right" size={20} className="text-white/70" />
+                                </div>
+                             </button>
+
+                             {/* FITUR BARU: LAPORAN SEMUA PESERTA (MASSAL) */}
+                             <button onClick={() => setView('laporan_massal')} className="col-span-2 bg-gradient-to-r from-cyan-600 to-teal-600 p-5 rounded-3xl border border-cyan-700 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-40 h-40 bg-white/10 rounded-full -mr-12 -mt-12 blur-2xl"></div>
+                                <div className="flex items-center gap-4 relative z-10">
+                                    <div className="bg-white/20 p-3 rounded-2xl text-white group-hover:scale-110 transition-transform"><Ico name="users" size={24} /></div>
+                                    <div className="flex-1">
+                                        <h4 className="font-black text-white text-base font-fredoka">Laporan Semua Peserta</h4>
+                                        <p className="text-[10px] text-cyan-100 font-bold mt-0.5">Rekap massal, peringkat & pagination</p>
+                                    </div>
+                                    <Ico name="chevron-right" size={20} className="text-white/70" />
+                                </div>
+                             </button>
+
                              {/* FITUR BARU: SPIN WHEEL DOORPRIZE */}
                              <button onClick={() => setView('spin_wheel')} className="col-span-2 bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 p-5 rounded-3xl border border-orange-500 shadow-lg hover:shadow-xl transition text-left group active:scale-95 relative overflow-hidden">
                                 <div className="absolute right-0 top-0 w-40 h-40 bg-white/10 rounded-full -mr-12 -mt-12 blur-2xl"></div>
@@ -2923,6 +3325,308 @@ const handleExportUsers = () => {
                 );
             }
             
+            if (view === 'laporan_massal') {
+                const normMP = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
+                const PER_PAGE = 15;
+                const sortedRows = mpData ? sortMpRows(mpData.rows, mpSort) : [];
+                const totalPages = Math.max(1, Math.ceil(sortedRows.length / PER_PAGE));
+                const curPage = Math.min(mpPage, totalPages - 1);
+                const pageRows = sortedRows.slice(curPage * PER_PAGE, curPage * PER_PAGE + PER_PAGE);
+                return (
+                    <div className="min-h-screen bg-slate-50 relative">
+                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setView('admin_dashboard')} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
+                                <div>
+                                    <h2 className="font-black text-xl text-slate-800 font-fredoka">Laporan Semua Peserta</h2>
+                                    <p className="text-[10px] font-bold text-slate-400">Rekap massal & peringkat kehadiran</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 pb-24 space-y-4">
+                            {/* Periode */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Periode Laporan</label>
+                                <div className="grid grid-cols-3 gap-2 mt-1.5 mb-3">
+                                    {[
+                                        { key: 'tanggal', label: 'Per Tanggal', icon: 'calendar' },
+                                        { key: 'bulan', label: 'Per Bulan', icon: 'calendar-days' },
+                                        { key: 'berkala', label: 'Berkala', icon: 'calendar-range' }
+                                    ].map(opt => (
+                                        <button key={opt.key} onClick={() => { setReportPeriod(opt.key); setMpData(null); }} className={"flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-black border-2 transition active:scale-95 " + (reportPeriod === opt.key ? 'bg-blue-600 text-white border-blue-700 shadow-md shadow-blue-200' : 'bg-white text-slate-500 border-slate-100 hover:bg-slate-50')}>
+                                            <Ico name={opt.icon} size={16} />
+                                            <span>{opt.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                {reportPeriod === 'tanggal' && (
+                                    <div><label className="text-[10px] font-bold text-slate-400 ml-1">Tanggal</label>
+                                        <input type="date" value={viewDate} onChange={(e) => { setViewDate(e.target.value); setMpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-blue-400" /></div>
+                                )}
+                                {reportPeriod === 'bulan' && (
+                                    <div><label className="text-[10px] font-bold text-slate-400 ml-1">Bulan</label>
+                                        <input type="month" value={reportMonth} onChange={(e) => { setReportMonth(e.target.value); setMpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-blue-400" /></div>
+                                )}
+                                {reportPeriod === 'berkala' && (
+                                    <div className="flex gap-2">
+                                        <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 ml-1">Dari</label>
+                                            <input type="date" value={reportStart} onChange={(e) => { setReportStart(e.target.value); setMpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-blue-400" /></div>
+                                        <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 ml-1">Sampai</label>
+                                            <input type="date" value={reportEnd} onChange={(e) => { setReportEnd(e.target.value); setMpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-blue-400" /></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button onClick={buildAllParticipantsReport} disabled={mpLoading} className={"w-full text-white font-black py-3.5 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2 text-sm " + (mpLoading ? 'bg-slate-300 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-blue-200')}>
+                                {mpLoading ? (<><span className="inline-block animate-spin"><Ico name="loader" size={18} /></span> Memuat data...</>) : (<><Ico name="users" size={18} /> Buat Rekap Semua Peserta</>)}
+                            </button>
+
+                            {mpData && (
+                                <div className="space-y-3 animate-bounce-in">
+                                    {/* Meta + sort toggle */}
+                                    <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="text-[11px] font-bold text-slate-500">{mpData.meta.totalPeserta} peserta • {mpData.meta.totalSesi} sesi</p>
+                                        </div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Urutkan</label>
+                                        <div className="grid grid-cols-2 gap-2 mt-1.5">
+                                            <button onClick={() => { setMpSort('desc'); setMpPage(0); }} className={"flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black border-2 transition active:scale-95 " + (mpSort === 'desc' ? 'bg-blue-600 text-white border-blue-700 shadow-md shadow-blue-200' : 'bg-white text-slate-500 border-slate-100')}>
+                                                <Ico name="arrow-down-wide" size={15} /> Terbanyak
+                                            </button>
+                                            <button onClick={() => { setMpSort('asc'); setMpPage(0); }} className={"flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black border-2 transition active:scale-95 " + (mpSort === 'asc' ? 'bg-blue-600 text-white border-blue-700 shadow-md shadow-blue-200' : 'bg-white text-slate-500 border-slate-100')}>
+                                                <Ico name="arrow-up-wide" size={15} /> Tersedikit
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Diagnostik: rincian tanggal sesi (deteksi anomali) */}
+                                    {mpData.meta.sessionDetail && (
+                                        <div className="bg-amber-50 border-2 border-amber-200 p-3 rounded-2xl">
+                                            <p className="text-[11px] font-black text-amber-700 mb-1.5 flex items-center gap-1.5"><Ico name="calendar" size={14} /> Tanggal sesi terdeteksi: {mpData.meta.totalSesi}</p>
+                                            <div className="space-y-1">
+                                                {mpData.meta.sessionDetail.map(s => (
+                                                    <div key={s.date} className="flex items-center justify-between text-[11px] font-bold text-amber-800 bg-white/60 px-2.5 py-1.5 rounded-lg">
+                                                        <span>{fmtDateId(s.date)}</span>
+                                                        <span className="text-amber-500">{s.hadir} hadir / {s.count} record</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-[9px] font-bold text-amber-500 mt-1.5">Jika ada tanggal yang tidak seharusnya menjadi sesi, itu penyebab jumlah kehadiran berlebih.</p>
+                                        </div>
+                                    )}
+
+                                    {/* Tabel per halaman */}
+                                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                                        <div className="grid grid-cols-12 gap-1 bg-blue-600 text-white px-3 py-2 text-[10px] font-black">
+                                            <span className="col-span-1">#</span>
+                                            <span className="col-span-5">Nama</span>
+                                            <span className="col-span-2 text-center">Hadir</span>
+                                            <span className="col-span-2 text-center">Alpha</span>
+                                            <span className="col-span-2 text-center">%</span>
+                                        </div>
+                                        {pageRows.map((r, i) => {
+                                            const rank = curPage * PER_PAGE + i + 1;
+                                            return (
+                                                <div key={r.id} className={"grid grid-cols-12 gap-1 px-3 py-2 items-center " + (i % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
+                                                    <span className="col-span-1 text-[11px] font-black text-slate-400">{rank}</span>
+                                                    <div className="col-span-5 min-w-0">
+                                                        <p className="text-xs font-bold text-slate-700 truncate">{r.nama}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 truncate">{normMP(r.kelas)}</p>
+                                                    </div>
+                                                    <span className="col-span-2 text-center text-xs font-black text-emerald-600">{r.hadir}</span>
+                                                    <span className="col-span-2 text-center text-xs font-black text-red-500">{r.alpha}</span>
+                                                    <span className="col-span-2 text-center text-[11px] font-black text-blue-700">{r.persen}%</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Pagination */}
+                                    <div className="flex items-center justify-between bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
+                                        <button onClick={() => setMpPage(Math.max(0, curPage - 1))} disabled={curPage === 0} className={"px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1 " + (curPage === 0 ? 'text-slate-300' : 'text-blue-600 hover:bg-blue-50')}>
+                                            <Ico name="chevron-left" size={16} /> Prev
+                                        </button>
+                                        <span className="text-xs font-black text-slate-500">Hal {curPage + 1} / {totalPages}</span>
+                                        <button onClick={() => setMpPage(Math.min(totalPages - 1, curPage + 1))} disabled={curPage >= totalPages - 1} className={"px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1 " + (curPage >= totalPages - 1 ? 'text-slate-300' : 'text-blue-600 hover:bg-blue-50')}>
+                                            Next <Ico name="chevron-right" size={16} />
+                                        </button>
+                                    </div>
+
+                                    {/* Export */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={handleExportAllPDF} className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-black py-3 rounded-2xl shadow-lg shadow-blue-200 hover:from-blue-700 hover:to-cyan-700 transition active:scale-95 flex items-center justify-center gap-2 text-xs">
+                                            <Ico name="file-text" size={16} /> Export PDF
+                                        </button>
+                                        <button onClick={handleExportAllExcel} className="bg-emerald-500 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition active:scale-95 flex items-center justify-center gap-2 text-xs">
+                                            <Ico name="download" size={16} /> Export Excel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'laporan_peserta') {
+                const normLP = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
+                const lpList = participants
+                    .filter(p => collapseSpaces(p.nama).toLowerCase().includes(lpSearch.toLowerCase()))
+                    .sort((a, b) => collapseSpaces(a.nama).localeCompare(collapseSpaces(b.nama)))
+                    .slice(0, 60);
+                const selected = participants.find(p => p.id === lpSelectedId);
+                const statusChip = (s) => {
+                    const map = {
+                        'Hadir': 'bg-emerald-500', 'Izin': 'bg-orange-500',
+                        'Sakit': 'bg-blue-500', 'Alpha': 'bg-red-500', 'Tidak Ada Sesi': 'bg-slate-300 text-slate-500'
+                    };
+                    return map[s] || 'bg-slate-400';
+                };
+                return (
+                    <div className="min-h-screen bg-slate-50 relative">
+                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setView('admin_dashboard')} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><i data-lucide="arrow-left" width="20"></i></button>
+                                <div>
+                                    <h2 className="font-black text-xl text-slate-800 font-fredoka">Laporan Per Peserta</h2>
+                                    <p className="text-[10px] font-bold text-slate-400">Riwayat kehadiran individual</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 pb-24 space-y-4">
+                            {/* Pilih periode (reuse state yang sama dengan Laporan PDF Grafik) */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Periode Laporan</label>
+                                <div className="grid grid-cols-3 gap-2 mt-1.5 mb-3">
+                                    {[
+                                        { key: 'tanggal', label: 'Per Tanggal', icon: 'calendar' },
+                                        { key: 'bulan', label: 'Per Bulan', icon: 'calendar-days' },
+                                        { key: 'berkala', label: 'Berkala', icon: 'calendar-range' }
+                                    ].map(opt => (
+                                        <button key={opt.key} onClick={() => { setReportPeriod(opt.key); setLpData(null); }} className={"flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-black border-2 transition active:scale-95 " + (reportPeriod === opt.key ? 'bg-violet-600 text-white border-violet-700 shadow-md shadow-violet-200' : 'bg-white text-slate-500 border-slate-100 hover:bg-slate-50')}>
+                                            <Ico name={opt.icon} size={16} />
+                                            <span>{opt.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                {reportPeriod === 'tanggal' && (
+                                    <div><label className="text-[10px] font-bold text-slate-400 ml-1">Tanggal</label>
+                                        <input type="date" value={viewDate} onChange={(e) => { setViewDate(e.target.value); setLpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-violet-400" /></div>
+                                )}
+                                {reportPeriod === 'bulan' && (
+                                    <div><label className="text-[10px] font-bold text-slate-400 ml-1">Bulan</label>
+                                        <input type="month" value={reportMonth} onChange={(e) => { setReportMonth(e.target.value); setLpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-violet-400" /></div>
+                                )}
+                                {reportPeriod === 'berkala' && (
+                                    <div className="flex gap-2">
+                                        <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 ml-1">Dari</label>
+                                            <input type="date" value={reportStart} onChange={(e) => { setReportStart(e.target.value); setLpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-violet-400" /></div>
+                                        <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 ml-1">Sampai</label>
+                                            <input type="date" value={reportEnd} onChange={(e) => { setReportEnd(e.target.value); setLpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-violet-400" /></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Pilih peserta */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Peserta</label>
+                                <input className="w-full mt-1.5 p-3 rounded-xl border-2 border-slate-100 focus:outline-none focus:border-violet-400 font-bold text-sm text-slate-700" placeholder="Cari nama peserta..." value={lpSearch} onChange={e => setLpSearch(e.target.value)} />
+                                {selected ? (
+                                    <div className="mt-3 flex items-center justify-between bg-violet-50 border-2 border-violet-200 px-3 py-2.5 rounded-xl">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-black text-violet-800 truncate">{selected.nama}</p>
+                                            <p className="text-[10px] font-bold text-violet-400">{selected.kategori || '-'} • {normLP(selected.kelas)}</p>
+                                        </div>
+                                        <button onClick={() => { setLpSelectedId(null); setLpData(null); }} className="text-violet-400 hover:text-violet-600 flex-shrink-0"><Ico name="x" size={18} /></button>
+                                    </div>
+                                ) : (
+                                    <div className="mt-3 max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                                        {lpList.length === 0 ? (
+                                            <p className="text-xs font-bold text-slate-400 text-center py-4">Tidak ada peserta cocok.</p>
+                                        ) : lpList.map(p => (
+                                            <button key={p.id} onClick={() => { setLpSelectedId(p.id); setLpData(null); }} className="w-full flex items-center justify-between bg-slate-50 hover:bg-violet-50 px-3 py-2 rounded-xl transition text-left active:scale-[0.99]">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-bold text-slate-700 truncate">{p.nama}</p>
+                                                    <p className="text-[10px] font-bold text-slate-400">{normLP(p.kelas)}</p>
+                                                </div>
+                                                <Ico name="chevron-right" size={16} className="text-slate-300 flex-shrink-0" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Tombol proses */}
+                            <button onClick={buildParticipantReport} disabled={!lpSelectedId || lpLoading} className={"w-full text-white font-black py-3.5 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2 text-sm " + ((!lpSelectedId || lpLoading) ? 'bg-slate-300 cursor-not-allowed' : 'bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 shadow-violet-200')}>
+                                {lpLoading ? (<><span className="inline-block animate-spin"><Ico name="loader" size={18} /></span> Memuat data...</>) : (<><Ico name="search" size={18} /> Tampilkan Laporan</>)}
+                            </button>
+
+                            {/* Hasil laporan */}
+                            {lpData && (
+                                <div className="space-y-4 animate-bounce-in">
+                                    {/* Kartu ringkasan */}
+                                    <div className="bg-gradient-to-br from-violet-600 to-blue-600 p-5 rounded-2xl shadow-lg shadow-violet-200 text-white">
+                                        <h3 className="font-black text-lg font-fredoka leading-tight">{lpData.summary.nama}</h3>
+                                        <p className="text-[11px] font-bold text-violet-100 mb-3">{lpData.summary.kategori} • {normLP(lpData.summary.kelas)}</p>
+                                        <div className="bg-white/15 rounded-xl p-3 mb-3">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[11px] font-bold text-violet-100">Persentase Kehadiran</span>
+                                                <span className="text-lg font-black">{lpData.summary.persenHadir}%</span>
+                                            </div>
+                                            <div className="w-full h-2 bg-white/25 rounded-full overflow-hidden">
+                                                <div className="h-full bg-white rounded-full" style={{ width: lpData.summary.persenHadir + '%' }}></div>
+                                            </div>
+                                            <p className="text-[10px] font-bold text-violet-100 mt-1">dari {lpData.summary.totalSesi} sesi absensi</p>
+                                        </div>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {[
+                                                { l: 'Hadir', v: lpData.summary.hadir },
+                                                { l: 'Izin', v: lpData.summary.izin },
+                                                { l: 'Sakit', v: lpData.summary.sakit },
+                                                { l: 'Alpha', v: lpData.summary.alpha }
+                                            ].map(s => (
+                                                <div key={s.l} className="bg-white/15 rounded-lg py-2 text-center">
+                                                    <p className="text-base font-black">{s.v}</p>
+                                                    <p className="text-[9px] font-bold text-violet-100">{s.l}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Riwayat */}
+                                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                        <h4 className="font-black text-slate-700 text-sm mb-2 flex items-center gap-2"><Ico name="list" size={16} className="text-violet-500" /> Riwayat Kehadiran</h4>
+                                        <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                                            {lpData.rows.map((r, i) => (
+                                                <div key={i} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-700">{fmtDateId(r.date)}</p>
+                                                        {r.jam && <p className="text-[10px] font-bold text-slate-400">Absen: {r.jam}</p>}
+                                                    </div>
+                                                    <span className={"text-[10px] font-black px-2.5 py-1 rounded text-white " + statusChip(r.status)}>{r.status}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Export */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={handleExportParticipantPDF} className="bg-gradient-to-r from-violet-600 to-blue-600 text-white font-black py-3 rounded-2xl shadow-lg shadow-violet-200 hover:from-violet-700 hover:to-blue-700 transition active:scale-95 flex items-center justify-center gap-2 text-xs">
+                                            <Ico name="file-text" size={16} /> Export PDF
+                                        </button>
+                                        <button onClick={handleExportParticipantExcel} className="bg-emerald-500 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition active:scale-95 flex items-center justify-center gap-2 text-xs">
+                                            <Ico name="download" size={16} /> Export Excel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
             if (view === 'attendance_manager') {
                 let filteredParticipants = [];
                 if (isPeserta) {
