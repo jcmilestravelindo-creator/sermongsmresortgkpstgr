@@ -3675,14 +3675,50 @@ const handleExportUsers = () => {
             if (view === 'attendance_manager') {
                 let filteredParticipants = [];
                 if (isPeserta) {
-                    const myName = collapseSpaces(safeUser.nama).toLowerCase();
-                    // Cocokkan nama dengan normalisasi spasi (exact), lalu fallback ke pencocokan longgar
-                    let mySelf = participants.find(p => collapseSpaces(p.nama).toLowerCase() === myName);
-                    if (!mySelf && myName) {
-                        mySelf = participants.find(p => {
-                            const pn = collapseSpaces(p.nama).toLowerCase();
-                            return pn.includes(myName) || myName.includes(pn);
-                        });
+                    // Normalisasi nama secara menyeluruh agar pencocokan tahan terhadap
+                    // perbedaan spasi, huruf besar/kecil, tanda baca, dan awalan gender.
+                    // Awalan yang diabaikan: "B", "Bang", "K", "Kak" (dengan/ tanpa titik),
+                    // juga sapaan umum "Pdt", "St", "Sdr", "Sdri", "Bpk", "Ibu".
+                    const stripPrefix = (s) => String(s || '')
+                        .replace(/^\s*(pdt|st|sdri|sdr|bpk|bapak|ibu|bang|bng|kak|b|k)\b[\s.\-]*/i, '')
+                        .trim();
+                    const normFull = (s) => stripPrefix(String(s || '')
+                        .trim()
+                        .toLowerCase()
+                        .replace(/\s+/g, ' '))
+                        .toLowerCase()
+                        .replace(/[.\-_,]/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
+                    // Kandidat identitas peserta yang login: nama & username.
+                    const candidates = [safeUser.nama, safeUser.username]
+                        .map(normFull)
+                        .filter(Boolean);
+
+                    let mySelf = null;
+                    // 1) Cocok persis (setelah normalisasi) pada nama peserta.
+                    for (const c of candidates) {
+                        mySelf = participants.find(p => normFull(p.nama) === c);
+                        if (mySelf) break;
+                    }
+                    // 2) Cocok persis pada field username peserta (jika ada).
+                    if (!mySelf) {
+                        for (const c of candidates) {
+                            mySelf = participants.find(p => p.username && normFull(p.username) === c);
+                            if (mySelf) break;
+                        }
+                    }
+                    // 3) Fallback longgar: salah satu memuat yang lain (min. 3 huruf agar aman).
+                    if (!mySelf) {
+                        for (const c of candidates) {
+                            if (c.length < 3) continue;
+                            mySelf = participants.find(p => {
+                                const pn = normFull(p.nama);
+                                return pn.length >= 3 && (pn.includes(c) || c.includes(pn));
+                            });
+                            if (mySelf) break;
+                        }
                     }
                     if (mySelf) filteredParticipants = [mySelf];
                 } else {
@@ -3729,10 +3765,19 @@ const handleExportUsers = () => {
 
                         <div className="p-4 pb-20 space-y-3">
                             {filteredParticipants.length === 0 && isPeserta ? (
-                                <div className="text-center p-8 opacity-50">
-                                    <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2"></i>
-                                    <p className="font-bold text-sm">Data peserta Anda belum terdaftar di database.</p>
-                                </div>
+                                participants.length === 0 ? (
+                                    <div className="text-center p-8 opacity-60">
+                                        <i data-lucide="loader" className="mx-auto w-10 h-10 mb-2 animate-spin"></i>
+                                        <p className="font-bold text-sm">Memuat data peserta…</p>
+                                    </div>
+                                ) : (
+                                    <div className="text-center p-8">
+                                        <i data-lucide="user-x" className="mx-auto w-12 h-12 mb-2 text-slate-300"></i>
+                                        <p className="font-bold text-sm text-slate-600">Nama Anda belum cocok dengan data peserta.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Login sebagai: <b>{safeUser.nama}</b></p>
+                                        <p className="text-xs text-slate-400 mt-2 max-w-xs mx-auto">Minta admin memastikan nama akun Anda sama dengan nama pada Database Peserta (abaikan awalan B/Bang/K/Kak).</p>
+                                    </div>
+                                )
                             ) : (
                                  filteredParticipants.map(p => {
                                     const statusData = liveAttendance.find(l => l.id === p.id);
