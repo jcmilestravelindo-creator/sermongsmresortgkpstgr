@@ -613,6 +613,8 @@
                     'chevron-left': <path d="m15 18-6-6 6-6"/>,
                     'arrow-down-wide': <><path d="M11 5h10M11 9h7M11 13h4M3 17l3 3 3-3M6 4v16"/></>,
                     'arrow-up-wide': <><path d="M11 5h4M11 9h7M11 13h10M3 7l3-3 3 3M6 20V4"/></>,
+                    'trash-2': <><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></>,
+                    'info': <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></>,
                 };
                 return <svg {...common}>{paths[name] || null}</svg>;
             };
@@ -1516,6 +1518,31 @@
                     setMpLoading(false);
                     alert("Gagal membangun laporan: " + (e.message || e));
                     return null;
+                }
+            };
+
+            // Hapus SEMUA record absensi pada satu tanggal tertentu (dipakai panel diagnostik).
+            // Terpisah dari handleResetDailyData agar tidak bergantung pada viewDate.
+            const [mpDeleting, setMpDeleting] = useState(null); // tanggal yang sedang dihapus
+            const deleteAttendanceByDate = async (targetDate) => {
+                const confirmation = prompt(`KETIK "HAPUS" untuk menghapus SEMUA data absensi pada tanggal ${fmtDateId(targetDate)} (${targetDate}).\nData yang dihapus TIDAK bisa dikembalikan!`);
+                if (confirmation !== "HAPUS") return;
+                setMpDeleting(targetDate);
+                try {
+                    const db = window.db;
+                    const { collection, getDocs, deleteDoc } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const targetCollection = collection(db, `${basePath}/attendance/${targetDate}/records`);
+                    const snapshot = await getDocs(targetCollection);
+                    if (snapshot.empty) { setMpDeleting(null); alert("Data sudah kosong."); return; }
+                    await Promise.all(snapshot.docs.map(d => deleteDoc(d.ref)));
+                    alert(`Berhasil menghapus data absensi tanggal ${targetDate}. Rekap akan diperbarui.`);
+                    setMpDeleting(null);
+                    // rebuild rekap agar angka langsung terkoreksi
+                    await buildAllParticipantsReport();
+                } catch (e) {
+                    setMpDeleting(null);
+                    alert("Gagal menghapus: " + (e.message || e));
                 }
             };
 
@@ -3402,17 +3429,35 @@ const handleExportUsers = () => {
 
                                     {/* Diagnostik: rincian tanggal sesi (deteksi anomali) */}
                                     {mpData.meta.sessionDetail && (
-                                        <div className="bg-amber-50 border-2 border-amber-200 p-3 rounded-2xl">
-                                            <p className="text-[11px] font-black text-amber-700 mb-1.5 flex items-center gap-1.5"><Ico name="calendar" size={14} /> Tanggal sesi terdeteksi: {mpData.meta.totalSesi}</p>
-                                            <div className="space-y-1">
+                                        <div className="bg-amber-50 border-2 border-amber-200 p-4 rounded-2xl">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <div className="bg-amber-400 text-white p-1.5 rounded-lg flex-shrink-0"><Ico name="calendar" size={15} /></div>
+                                                <div className="leading-tight">
+                                                    <p className="text-xs font-black text-amber-800">Tanggal Sesi Terdeteksi</p>
+                                                    <p className="text-[10px] font-bold text-amber-500">{mpData.meta.totalSesi} tanggal punya data absensi</p>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
                                                 {mpData.meta.sessionDetail.map(s => (
-                                                    <div key={s.date} className="flex items-center justify-between text-[11px] font-bold text-amber-800 bg-white/60 px-2.5 py-1.5 rounded-lg">
-                                                        <span>{fmtDateId(s.date)}</span>
-                                                        <span className="text-amber-500">{s.hadir} hadir / {s.count} record</span>
+                                                    <div key={s.date} className="flex items-center gap-3 bg-white px-3 py-2.5 rounded-xl border border-amber-100 shadow-sm">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-xs font-black text-slate-700 truncate">{fmtDateId(s.date)}</p>
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{s.hadir} hadir</span>
+                                                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{s.count} record</span>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => deleteAttendanceByDate(s.date)} disabled={mpDeleting === s.date} className={"flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black transition active:scale-95 " + (mpDeleting === s.date ? 'bg-rose-100 text-rose-300 cursor-wait' : 'bg-rose-500 text-white hover:bg-rose-600 shadow-sm shadow-rose-200')}>
+                                                            {mpDeleting === s.date ? (<span className="inline-block animate-spin"><Ico name="loader" size={13} /></span>) : (<Ico name="trash-2" size={13} />)}
+                                                            <span>Hapus</span>
+                                                        </button>
                                                     </div>
                                                 ))}
                                             </div>
-                                            <p className="text-[9px] font-bold text-amber-500 mt-1.5">Jika ada tanggal yang tidak seharusnya menjadi sesi, itu penyebab jumlah kehadiran berlebih.</p>
+                                            <p className="text-[10px] font-bold text-amber-600 mt-3 flex items-start gap-1.5">
+                                                <span className="flex-shrink-0 mt-0.5"><Ico name="info" size={11} /></span>
+                                                <span>Jika ada tanggal yang tidak seharusnya menjadi sesi, hapus untuk mengoreksi jumlah kehadiran. Rekap akan diperbarui otomatis.</span>
+                                            </p>
                                         </div>
                                     )}
 
