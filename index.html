@@ -978,7 +978,11 @@
                     const g = (p.gender === 'L' || p.gender === 'P') ? p.gender : genderFromName(p.nama);
                     return g === 'L' ? 'Laki-laki' : (g === 'P' ? 'Perempuan' : '-');
                 };
+                // Kolom "ID" adalah KUNCI TEKNIS untuk import yang aman (anti-duplikat & tahan nama kembar).
+                // JANGAN mengubah/menghapus nilai kolom ID secara manual. Untuk peserta BARU yang diketik
+                // sendiri, biarkan kolom ID KOSONG -> aplikasi akan membuatkan ID baru saat diimport.
                 const dataToExport = participants.map((p, index) => ({
+                    "ID": p.id || "",
                     "No": index + 1,
                     "Nama": p.nama || "-",
                     "Kategori": p.kategori || "-",
@@ -986,7 +990,7 @@
                     "Jenis Kelamin": labelGender(p),
                 }));
                 const ws = window.XLSX.utils.json_to_sheet(dataToExport);
-                ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 14 }];
+                ws['!cols'] = [{ wch: 20 }, { wch: 5 }, { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 14 }];
                 const wb = window.XLSX.utils.book_new();
                 window.XLSX.utils.book_append_sheet(wb, ws, "DatabasePeserta");
                 window.XLSX.writeFile(wb, `Database_Peserta_GSM_GKPS_${getSafeDateId()}.xlsx`);
@@ -2552,9 +2556,13 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
-                // Normalisasi untuk pencocokan: nama + kelas (huruf kecil, rapat).
+                // Normalisasi untuk pencocokan cadangan (fallback): nama + kelas (huruf kecil, rapat).
                 const keyOf = (nama, kelas) => (String(nama || '').trim().toLowerCase() + '||' + String(kelas || '-').trim().toLowerCase());
-                // Peta peserta yang sudah ada -> agar bisa diperbarui (anti-dobel), bukan ditambah.
+                // Peta peserta berdasarkan ID -> kunci UTAMA pencocokan (anti-duplikat & tahan nama kembar).
+                const existingById = {};
+                participants.forEach(p => { if (p.id) existingById[String(p.id).trim()] = p; });
+                // Peta cadangan berdasarkan nama+kelas -> dipakai HANYA bila baris tak punya ID
+                // (mis. file lama tanpa kolom ID, atau baris baru yang diketik manual).
                 const existingMap = {};
                 participants.forEach(p => { existingMap[keyOf(p.nama, p.kelas)] = p; });
 
@@ -2566,7 +2574,7 @@
                     return '';
                 };
 
-                // Proses sekumpulan baris objek {nama, kategori, kelas, gender}
+                // Proses sekumpulan baris objek {id, nama, kategori, kelas, gender}
                 const processRows = async (rows) => {
                     let added = 0, updated = 0, skipped = 0;
                     let i = 0;
@@ -2576,20 +2584,39 @@
                         const kategori = String(r.kategori || 'Umum').trim() || 'Umum';
                         const kelas = String(r.kelas || '-').trim() || '-';
                         const gender = normGender(r.gender);
-                        const k = keyOf(nama, kelas);
-                        const found = existingMap[k];
-                        if (found) {
-                            // Perbarui data lama memakai ID yang sudah ada -> tidak menambah duplikat.
-                            const merged = { id: found.id, nama, kategori, kelas, gender: gender || found.gender || '' };
-                            await saveToCloud(`participants/${found.id}`, merged);
-                            existingMap[k] = merged; // cegah dobel dalam file yang sama
+                        const rowId = String(r.id || '').trim();
+
+                        // === PENCOCOKAN UTAMA: berdasarkan ID ===
+                        // Jika baris membawa ID yang cocok dgn peserta di database, PERBARUI peserta itu.
+                        // Nama/kelas boleh berubah tanpa menimbulkan duplikat, dan nama kembar aman
+                        // karena masing-masing punya ID sendiri.
+                        let foundById = rowId ? existingById[rowId] : null;
+
+                        if (foundById) {
+                            const merged = { id: foundById.id, nama, kategori, kelas, gender: gender || foundById.gender || '' };
+                            await saveToCloud(`participants/${foundById.id}`, merged);
+                            existingById[rowId] = merged;
+                            existingMap[keyOf(nama, kelas)] = merged;
                             updated++;
                         } else {
-                            const id = `GSM-${Date.now()}-${i}`;
-                            const obj = { id, nama, kategori, kelas, gender };
-                            await saveToCloud(`participants/${id}`, obj);
-                            existingMap[k] = obj; // baris berikutnya yang sama tidak dobel
-                            added++;
+                            // === CADANGAN: baris tanpa ID (file lama / entri manual baru) ===
+                            // Cocokkan pakai nama+kelas seperti sebelumnya agar file lama tetap bekerja.
+                            const k = keyOf(nama, kelas);
+                            const found = existingMap[k];
+                            if (found) {
+                                const merged = { id: found.id, nama, kategori, kelas, gender: gender || found.gender || '' };
+                                await saveToCloud(`participants/${found.id}`, merged);
+                                existingMap[k] = merged;
+                                if (found.id) existingById[String(found.id).trim()] = merged;
+                                updated++;
+                            } else {
+                                const id = `GSM-${Date.now()}-${i}`;
+                                const obj = { id, nama, kategori, kelas, gender };
+                                await saveToCloud(`participants/${id}`, obj);
+                                existingMap[k] = obj;
+                                existingById[id] = obj;
+                                added++;
+                            }
                         }
                         i++;
                     }
@@ -2605,6 +2632,7 @@
                         const sheet = wb.Sheets[wb.SheetNames[0]];
                         const json = window.XLSX.utils.sheet_to_json(sheet, { defval: '' });
                         const rows = json.map(row => ({
+                            id: row['ID'] ?? row['Id'] ?? row['id'] ?? '',
                             nama: row['Nama'] ?? row['nama'] ?? row['NAMA'] ?? '',
                             kategori: row['Kategori'] ?? row['kategori'] ?? row['KATEGORI'] ?? 'Umum',
                             kelas: row['Kelas'] ?? row['kelas'] ?? row['KELAS'] ?? '-',
@@ -2620,9 +2648,10 @@
                         const firstCols = lines[0].split(',').map(s => (s || '').trim().toLowerCase());
                         const hasHeader = firstCols.some(c => c.includes('nama'));
                         // Tentukan indeks kolom berdasarkan header bila ada
-                        let idxNama = 0, idxKat = 1, idxKelas = 2, idxGender = -1;
+                        let idxId = -1, idxNama = 0, idxKat = 1, idxKelas = 2, idxGender = -1;
                         if (hasHeader) {
                             const find = (names) => firstCols.findIndex(c => names.some(n => c.includes(n)));
+                            idxId = firstCols.findIndex(c => c === 'id' || c === 'id peserta');
                             idxNama = find(['nama']); idxNama = idxNama < 0 ? 0 : idxNama;
                             idxKat = find(['kategori']); idxKat = idxKat < 0 ? 1 : idxKat;
                             idxKelas = find(['kelas']); idxKelas = idxKelas < 0 ? 2 : idxKelas;
@@ -2632,6 +2661,7 @@
                         const rows = dataLines.map(line => {
                             const cols = line.split(',').map(s => (s ?? '').trim());
                             return {
+                                id: idxId >= 0 ? (cols[idxId] || '') : '',
                                 nama: cols[idxNama] || '',
                                 kategori: cols[idxKat] || 'Umum',
                                 kelas: cols[idxKelas] || '-',
@@ -2943,53 +2973,6 @@ const handleExportUsers = () => {
                     .replace(/^(kak|bang|k|b)[\s.\-]+/i, '')  // hapus awalan panggilan + pemisah
                     .replace(/\s+/g, ' ')
                     .trim();
-            };
-            // Tambah 3 GSM baru (Tiga Raksa) ke DATABASE (participants) + USER (login).
-            // Anti-duplikat. USERNAME dibuat TANPA huruf K di depan (pakai usernameFromNama).
-            const handleAddGsmTigaRaksa = async () => {
-                const newcomers = [
-                    { nama: 'K Sintia Purba', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
-                    { nama: 'K Desli Damanik', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
-                    { nama: 'K Vica Aryesi Ambarita', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
-                ];
-                const normName = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-                const existingPartNames = new Set(participants.map(p => normName(p.nama)));
-                const existingUsernames = new Set(users.map(u => normName(u.username)));
-
-                const toAdd = newcomers.filter(n => !existingPartNames.has(normName(n.nama)));
-                const alreadyThere = newcomers.filter(n => existingPartNames.has(normName(n.nama)));
-
-                if (toAdd.length === 0) {
-                    alert("Semua nama sudah ada di database. Tidak ada yang ditambahkan.");
-                    return;
-                }
-
-                const confirmMsg =
-                    `Akan menambahkan ${toAdd.length} GSM baru ke DATABASE + USER (login):\n\n` +
-                    toAdd.map(n => `- ${n.nama}  →  username: "${usernameFromNama(n.nama)}"`).join('\n') +
-                    (alreadyThere.length ? `\n\nSudah ada (dilewati):\n${alreadyThere.map(n => '- ' + n.nama).join('\n')}` : '') +
-                    `\n\nPassword awal user = username (tanpa K). Bisa diubah nanti.\nLanjutkan?`;
-                if (!confirm(confirmMsg)) return;
-
-                try {
-                    const addedUsers = [];
-                    for (const n of toAdd) {
-                        const id = `GSM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-                        await saveToCloud(`participants/${id}`, { id, nama: n.nama, kategori: n.kategori, kelas: n.kelas, gender: n.gender });
-                        const uname = usernameFromNama(n.nama);
-                        if (uname && !existingUsernames.has(normName(uname))) {
-                            await saveToCloud(`users/${uname}`, { username: uname, password: uname, role: 'gsm', nama: n.nama });
-                            addedUsers.push(uname);
-                        }
-                    }
-                    alert(
-                        `Berhasil! ${toAdd.length} GSM ditambahkan ke database.\n` +
-                        `${addedUsers.length} user login dibuat (username tanpa K, password = username).` +
-                        (alreadyThere.length ? `\n\n${alreadyThere.length} nama sudah ada dan dilewati.` : '')
-                    );
-                } catch (e) {
-                    alert("Gagal menambahkan: " + e.message);
-                }
             };
             // Perbaikan sekali-klik: rapikan USERNAME yang masih berawalan "K "/"B " (mis. user lama
             // "K Sintia Purba" -> "Sintia Purba"). Karena ID dokumen user = username, prosesnya:
@@ -5354,9 +5337,6 @@ const handleExportUsers = () => {
                                     </button>
                                     <button onClick={handleMigratePersBSD} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
                                         <i data-lucide="shuffle" width="20"></i> Migrasi Nama ke Kelas GKPS-PersBSD
-                                    </button>
-                                    <button onClick={handleAddGsmTigaRaksa} className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
-                                        <i data-lucide="user-plus" width="20"></i> Tambah GSM Tiga Raksa (Sintia, Desli, Vica)
                                     </button>
                                     <button onClick={handleFixUsernamePrefix} className="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
                                         <i data-lucide="wrench" width="20"></i> Perbaiki Username (Hapus Awalan K/B)
