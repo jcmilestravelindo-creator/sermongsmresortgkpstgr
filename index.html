@@ -2931,6 +2931,56 @@ const handleExportUsers = () => {
                     alert("Gagal melakukan migrasi: " + e.message);
                 }
             };
+            // Tambah 3 GSM baru (Tiga Raksa) ke DATABASE (participants) sekaligus USER (agar bisa login).
+            // Anti-duplikat: nama yang sudah ada di participants tidak dibuat ulang; username yang sudah
+            // ada di users tidak ditimpa. Cocok berdasarkan nama (trim + lowercase + rapikan spasi).
+            const handleAddGsmTigaRaksa = async () => {
+                const newcomers = [
+                    { nama: 'K Sintia Purba', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
+                    { nama: 'K Desli Damanik', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
+                    { nama: 'K Vica Aryesi Ambarita', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
+                ];
+                const normName = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                const existingPartNames = new Set(participants.map(p => normName(p.nama)));
+                const existingUsernames = new Set(users.map(u => normName(u.username)));
+
+                const toAdd = newcomers.filter(n => !existingPartNames.has(normName(n.nama)));
+                const alreadyThere = newcomers.filter(n => existingPartNames.has(normName(n.nama)));
+
+                if (toAdd.length === 0) {
+                    alert("Semua nama sudah ada di database. Tidak ada yang ditambahkan.");
+                    return;
+                }
+
+                const confirmMsg =
+                    `Akan menambahkan ${toAdd.length} GSM baru ke DATABASE + USER (login):\n\n` +
+                    toAdd.map(n => `- ${n.nama}  (${n.kelas}, Perempuan)`).join('\n') +
+                    (alreadyThere.length ? `\n\nSudah ada (dilewati):\n${alreadyThere.map(n => '- ' + n.nama).join('\n')}` : '') +
+                    `\n\nPassword awal user = nama lengkap (bisa diubah nanti).\nLanjutkan?`;
+                if (!confirm(confirmMsg)) return;
+
+                try {
+                    const addedUsers = [];
+                    for (const n of toAdd) {
+                        const id = `GSM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                        // 1) Simpan ke participants (database peserta)
+                        await saveToCloud(`participants/${id}`, { id, nama: n.nama, kategori: n.kategori, kelas: n.kelas, gender: n.gender });
+                        // 2) Buat user agar bisa login (skip jika username sudah dipakai)
+                        const uname = n.nama.trim();
+                        if (!existingUsernames.has(normName(uname))) {
+                            await saveToCloud(`users/${uname}`, { username: uname, password: uname, role: 'gsm', nama: n.nama });
+                            addedUsers.push(uname);
+                        }
+                    }
+                    alert(
+                        `Berhasil! ${toAdd.length} GSM ditambahkan ke database.\n` +
+                        `${addedUsers.length} user login dibuat (username & password = nama lengkap).` +
+                        (alreadyThere.length ? `\n\n${alreadyThere.length} nama sudah ada dan dilewati.` : '')
+                    );
+                } catch (e) {
+                    alert("Gagal menambahkan: " + e.message);
+                }
+            };
             const startEditParticipant = (p) => {
                 setEditingId(p.id);
                 setFormData({ nama: p.nama, kategori: p.kategori, kelas: p.kelas || '', gender: p.gender || '' });
@@ -5241,6 +5291,9 @@ const handleExportUsers = () => {
                                     </button>
                                     <button onClick={handleMigratePersBSD} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
                                         <i data-lucide="shuffle" width="20"></i> Migrasi Nama ke Kelas GKPS-PersBSD
+                                    </button>
+                                    <button onClick={handleAddGsmTigaRaksa} className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
+                                        <i data-lucide="user-plus" width="20"></i> Tambah GSM Tiga Raksa (Sintia, Desli, Vica)
                                     </button>
                                 </div>
                             )}
