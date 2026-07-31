@@ -4143,10 +4143,20 @@ const handleExportUsers = () => {
                         .filter(Boolean);
 
                     let mySelf = null;
+                    // 0) PRIORITAS TERTINGGI (Opsi B): tautan eksplisit user -> peserta lewat ID.
+                    // Jika user punya field participantId/pesertaId yang cocok dengan salah satu
+                    // peserta, pakai itu. Ini 100% akurat & kebal terhadap nama mirip/kembar.
+                    // User lama yang belum punya tautan ID otomatis lanjut ke pencocokan nama.
+                    const linkId = String(safeUser.participantId || safeUser.pesertaId || '').trim();
+                    if (linkId) {
+                        mySelf = participants.find(p => String(p.id || '').trim() === linkId) || null;
+                    }
                     // 1) Cocok persis (setelah normalisasi) pada nama peserta.
-                    for (const c of candidates) {
-                        mySelf = participants.find(p => normFull(p.nama) === c);
-                        if (mySelf) break;
+                    if (!mySelf) {
+                        for (const c of candidates) {
+                            mySelf = participants.find(p => normFull(p.nama) === c);
+                            if (mySelf) break;
+                        }
                     }
                     // 2) Cocok persis pada field username peserta (jika ada).
                     if (!mySelf) {
@@ -4155,15 +4165,18 @@ const handleExportUsers = () => {
                             if (mySelf) break;
                         }
                     }
-                    // 3) Fallback longgar: salah satu memuat yang lain (min. 3 huruf agar aman).
+                    // 3) Fallback longgar (Opsi A): "salah satu memuat yang lain" (min. 3 huruf),
+                    // TAPI hanya dipakai jika hasilnya UNIK (tepat satu peserta cocok). Bila ada
+                    // lebih dari satu kandidat cocok, JANGAN menebak -> biarkan kosong agar peserta
+                    // tidak sampai melihat data absensi milik orang lain yang namanya mirip.
                     if (!mySelf) {
                         for (const c of candidates) {
                             if (c.length < 3) continue;
-                            mySelf = participants.find(p => {
+                            const matches = participants.filter(p => {
                                 const pn = normFull(p.nama);
                                 return pn.length >= 3 && (pn.includes(c) || c.includes(pn));
                             });
-                            if (mySelf) break;
+                            if (matches.length === 1) { mySelf = matches[0]; break; }
                         }
                     }
                     if (mySelf) filteredParticipants = [mySelf];
