@@ -1,7 +1,6 @@
-
 // === Service Worker GSM GKPS — versi network-first ===
 // Versi dinaikkan agar SW lama (gkps-app-v2/v3) otomatis dibuang.
-const CACHE_NAME = 'gkps-app-v5';
+const CACHE_NAME = 'gkps-app-v6';
 // INSTALL: langsung aktif tanpa precache.
 // (Precache CDN lewat cache.add() memicu error CORS pada beberapa CDN seperti
 //  cdn.tailwindcss.com, jadi aset dibiarkan ter-cache secara alami saat fetch.)
