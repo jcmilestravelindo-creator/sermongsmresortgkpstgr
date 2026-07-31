@@ -2931,54 +2931,67 @@ const handleExportUsers = () => {
                     alert("Gagal melakukan migrasi: " + e.message);
                 }
             };
-            // Tambah 3 GSM baru (Tiga Raksa) ke DATABASE (participants) sekaligus USER (agar bisa login).
-            // Anti-duplikat: nama yang sudah ada di participants tidak dibuat ulang; username yang sudah
-            // ada di users tidak ditimpa. Cocok berdasarkan nama (trim + lowercase + rapikan spasi).
-            const handleAddGsmTigaRaksa = async () => {
-                const newcomers = [
-                    { nama: 'K Sintia Purba', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
-                    { nama: 'K Desli Damanik', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
-                    { nama: 'K Vica Aryesi Ambarita', kategori: 'GSM', kelas: 'GKPS-Tiga Raksa', gender: 'P' },
-                ];
+            // Buang awalan gelar/panggilan (K, B, Kak, Bang) dari NAMA untuk dijadikan USERNAME.
+            // Nama peserta tetap utuh (mis. "K Sintia Purba"); hanya username yang dirapikan
+            // menjadi "Sintia Purba" agar login tidak mengandung huruf K/B di depan.
+            const usernameFromNama = (nama) => {
+                return String(nama || '')
+                    .trim()
+                    .replace(/^(kak|bang|k|b)[\s.\-]+/i, '')  // hapus awalan panggilan + pemisah
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            };
+            // Perbaikan sekali-klik: rapikan USERNAME yang masih berawalan "K "/"B " (mis. user lama
+            // "K Sintia Purba" -> "Sintia Purba"). Karena ID dokumen user = username, prosesnya:
+            // buat dokumen baru (username rapi) lalu hapus dokumen lama. Data lain (password/role/nama)
+            // tetap dipertahankan. Anti-bentrok: jika username rapi sudah dipakai, baris itu dilewati.
+            const handleFixUsernamePrefix = async () => {
+                const { doc, setDoc, deleteDoc } = window.fs;
+                const db = window.db;
+                const basePath = `artifacts/${appId}/public/data`;
+
                 const normName = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-                const existingPartNames = new Set(participants.map(p => normName(p.nama)));
+                const hasPrefix = (uname) => /^(kak|bang|k|b)[\s.\-]+/i.test(String(uname || '').trim());
                 const existingUsernames = new Set(users.map(u => normName(u.username)));
 
-                const toAdd = newcomers.filter(n => !existingPartNames.has(normName(n.nama)));
-                const alreadyThere = newcomers.filter(n => existingPartNames.has(normName(n.nama)));
+                const affected = users.filter(u => hasPrefix(u.username));
+                if (affected.length === 0) {
+                    alert("Tidak ada username yang berawalan \"K\"/\"B\". Semua sudah rapi.");
+                    return;
+                }
 
-                if (toAdd.length === 0) {
-                    alert("Semua nama sudah ada di database. Tidak ada yang ditambahkan.");
+                const plan = [];
+                const conflicts = [];
+                for (const u of affected) {
+                    const newUname = usernameFromNama(u.username);
+                    if (!newUname || normName(newUname) === normName(u.username)) continue;
+                    if (existingUsernames.has(normName(newUname))) { conflicts.push(`${u.username} → ${newUname} (sudah ada)`); continue; }
+                    plan.push({ old: u.username, next: newUname, data: u });
+                }
+
+                if (plan.length === 0) {
+                    alert("Tidak ada username yang bisa dirapikan otomatis." + (conflicts.length ? `\n\nBentrok (dilewati):\n${conflicts.join('\n')}` : ''));
                     return;
                 }
 
                 const confirmMsg =
-                    `Akan menambahkan ${toAdd.length} GSM baru ke DATABASE + USER (login):\n\n` +
-                    toAdd.map(n => `- ${n.nama}  (${n.kelas}, Perempuan)`).join('\n') +
-                    (alreadyThere.length ? `\n\nSudah ada (dilewati):\n${alreadyThere.map(n => '- ' + n.nama).join('\n')}` : '') +
-                    `\n\nPassword awal user = nama lengkap (bisa diubah nanti).\nLanjutkan?`;
+                    `Akan merapikan ${plan.length} username (hapus awalan K/B):\n\n` +
+                    plan.map(p => `- "${p.old}"  →  "${p.next}"`).join('\n') +
+                    (conflicts.length ? `\n\nBentrok, dilewati:\n${conflicts.join('\n')}` : '') +
+                    `\n\nPassword & role tetap sama. Password TIDAK diubah.\nLanjutkan?`;
                 if (!confirm(confirmMsg)) return;
 
                 try {
-                    const addedUsers = [];
-                    for (const n of toAdd) {
-                        const id = `GSM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-                        // 1) Simpan ke participants (database peserta)
-                        await saveToCloud(`participants/${id}`, { id, nama: n.nama, kategori: n.kategori, kelas: n.kelas, gender: n.gender });
-                        // 2) Buat user agar bisa login (skip jika username sudah dipakai)
-                        const uname = n.nama.trim();
-                        if (!existingUsernames.has(normName(uname))) {
-                            await saveToCloud(`users/${uname}`, { username: uname, password: uname, role: 'gsm', nama: n.nama });
-                            addedUsers.push(uname);
-                        }
+                    for (const p of plan) {
+                        const newData = { ...p.data, username: p.next };
+                        // 1) buat dokumen user baru dengan username rapi
+                        await setDoc(doc(db, `${basePath}/users`, p.next), newData, { merge: true });
+                        // 2) hapus dokumen user lama (berawalan K/B)
+                        await deleteDoc(doc(db, `${basePath}/users`, p.old));
                     }
-                    alert(
-                        `Berhasil! ${toAdd.length} GSM ditambahkan ke database.\n` +
-                        `${addedUsers.length} user login dibuat (username & password = nama lengkap).` +
-                        (alreadyThere.length ? `\n\n${alreadyThere.length} nama sudah ada dan dilewati.` : '')
-                    );
+                    alert(`Berhasil! ${plan.length} username sudah dirapikan (tanpa K/B di depan).\n\nPassword tetap sama seperti sebelumnya.`);
                 } catch (e) {
-                    alert("Gagal menambahkan: " + e.message);
+                    alert("Gagal merapikan username: " + e.message);
                 }
             };
             const startEditParticipant = (p) => {
@@ -5292,8 +5305,8 @@ const handleExportUsers = () => {
                                     <button onClick={handleMigratePersBSD} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
                                         <i data-lucide="shuffle" width="20"></i> Migrasi Nama ke Kelas GKPS-PersBSD
                                     </button>
-                                    <button onClick={handleAddGsmTigaRaksa} className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
-                                        <i data-lucide="user-plus" width="20"></i> Tambah GSM Tiga Raksa (Sintia, Desli, Vica)
+                                    <button onClick={handleFixUsernamePrefix} className="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
+                                        <i data-lucide="wrench" width="20"></i> Perbaiki Username (Hapus Awalan K/B)
                                     </button>
                                 </div>
                             )}
