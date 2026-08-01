@@ -427,6 +427,9 @@
             const [formData, setFormData] = useState({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
             const [dbSearch, setDbSearch] = useState("");
             const [dbViewMode, setDbViewMode] = useState("grid"); // grid | group
+            // Modal "Ganti Nama Peserta": ubah nama tampilan tanpa mengubah id, sehingga
+            // seluruh absensi lama tetap menginduk ke peserta yang sama.
+            const [renameConfig, setRenameConfig] = useState({ show: false, p: null, newName: '', backfill: true, busy: false });
             const participantFormRef = useRef(null);
             const userFormRef = useRef(null);
             // --- Backup & Restore ---
@@ -2920,6 +2923,104 @@ const handleExportUsers = () => {
                 setEditingId(null);
                 setFormData({ nama: '', kategori: 'Anak Sekolah Minggu', kelas: '', gender: '' });
                 setShowAddForm(false);
+            };
+            // ============================================================
+            // GANTI NAMA PESERTA (tanpa memutus riwayat absensi)
+            // ------------------------------------------------------------
+            // Karena setiap record absensi disimpan di attendance/{tgl}/records/{p.id}
+            // dengan document ID = id peserta, mengganti field "nama" saja SUDAH cukup
+            // agar semua absensi lama tetap menginduk ke peserta yang sama.
+            // Field "nama" di record absensi hanyalah label snapshot; opsional di-backfill
+            // agar laporan lama ikut menampilkan nama baru.
+            // ============================================================
+            const openRenameModal = (p) => {
+                setRenameConfig({ show: true, p, newName: p.nama || '', backfill: true, busy: false });
+            };
+            const handleConfirmRename = async () => {
+                const cfg = renameConfig;
+                const p = cfg.p;
+                if (!p) return;
+                const newName = String(cfg.newName || '').trim().replace(/\s+/g, ' ');
+                if (!newName) { alert("Nama baru wajib diisi!"); return; }
+                if (newName === String(p.nama || '').trim()) { alert("Nama baru sama dengan nama lama."); return; }
+
+                setRenameConfig(c => ({ ...c, busy: true }));
+                try {
+                    // 1) Update field nama di dokumen peserta (id TIDAK diubah).
+                    await saveToCloud(`participants/${p.id}`, { nama: newName });
+
+                    let updatedRecords = 0;
+                    let scannedDays = 0;
+
+                    // 2) (Opsional) Backfill nama di semua record absensi lama milik peserta ini.
+                    if (cfg.backfill) {
+                        const db = window.db;
+                        const { collection, getDocs, doc, getDoc, setDoc } = window.fs;
+                        const basePath = `artifacts/${appId}/public/data`;
+
+                        // Pindai rentang tanggal sejak backupStartDate s/d hari ini
+                        // (dokumen tanggal tidak bisa di-list langsung via SDK client).
+                        const start = new Date((backupStartDate || '2024-01-01') + 'T00:00:00');
+                        const today = new Date();
+                        const dateList = [];
+                        for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+                            dateList.push(
+                                d.getFullYear() + '-' +
+                                String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                                String(d.getDate()).padStart(2, '0')
+                            );
+                        }
+
+                        const batchSize = 8;
+                        for (let i = 0; i < dateList.length; i += batchSize) {
+                            const slice = dateList.slice(i, i + batchSize);
+                            await Promise.all(slice.map(async (dt) => {
+                                try {
+                                    const ref = doc(db, `${basePath}/attendance/${dt}/records`, p.id);
+                                    const snap = await getDoc(ref);
+                                    if (snap && snap.exists && snap.exists()) {
+                                        await setDoc(ref, { nama: newName }, { merge: true });
+                                        updatedRecords++;
+                                    }
+                                } catch (e) { /* lewati tanggal yang gagal/kosong */ }
+                            }));
+                            scannedDays += slice.length;
+                        }
+
+                        // 2b) Backfill juga record absensi kegiatan/event yang memakai id peserta ini.
+                        try {
+                            const evSnap = await getDocs(collection(db, `${basePath}/events`));
+                            for (const evDoc of evSnap.docs) {
+                                try {
+                                    const recRef = doc(db, `${basePath}/events/${evDoc.id}/records`, p.id);
+                                    const recSnap = await getDoc(recRef);
+                                    if (recSnap && recSnap.exists && recSnap.exists()) {
+                                        await setDoc(recRef, { nama: newName }, { merge: true });
+                                        updatedRecords++;
+                                    }
+                                } catch (e) { /* lewati */ }
+                            }
+                        } catch (e) { /* events kosong / gagal, lewati */ }
+                    }
+
+                    setRenameConfig({ show: false, p: null, newName: '', backfill: true, busy: false });
+                    if (cfg.backfill) {
+                        alert(
+                            `Nama berhasil diganti menjadi "${newName}".\n\n` +
+                            `Riwayat absensi tetap menginduk ke peserta yang sama (id: ${p.id}).\n` +
+                            `${updatedRecords} record absensi lama ikut diperbarui namanya.`
+                        );
+                    } else {
+                        alert(
+                            `Nama berhasil diganti menjadi "${newName}".\n\n` +
+                            `Riwayat absensi tetap menginduk ke peserta yang sama (id: ${p.id}).\n` +
+                            `Record absensi lama TIDAK diubah (tetap menampilkan nama lama sebagai snapshot).`
+                        );
+                    }
+                } catch (e) {
+                    setRenameConfig(c => ({ ...c, busy: false }));
+                    alert("Gagal mengganti nama: " + (e.message || e));
+                }
             };
             // Migrasi sekali-klik: pindahkan nama-nama tertentu ke Kelas "GKPS-PersBSD".
             // Pencocokan nama dibuat longgar (trim + lowercase + rapikan spasi ganda)
@@ -5445,6 +5546,7 @@ const handleExportUsers = () => {
                                                                     <div className="flex gap-1 flex-shrink-0">
                                                                         <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1.5 rounded-lg hover:bg-emerald-100"><i data-lucide="qr-code" width="14"></i></button>
                                                                         <button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1.5 rounded-lg hover:bg-blue-100"><i data-lucide="pencil" width="14"></i></button>
+                                                                        <button onClick={() => openRenameModal(p)} title="Ganti Nama (riwayat absensi tetap)" className="text-amber-600 bg-amber-50 p-1.5 rounded-lg hover:bg-amber-100"><i data-lucide="user-pen" width="14"></i></button>
                                                                         <button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1.5 rounded-lg hover:bg-red-100"><i data-lucide="trash-2" width="14"></i></button>
                                                                     </div>
                                                                 </div>
@@ -5469,6 +5571,7 @@ const handleExportUsers = () => {
                                             <div className="absolute top-2 right-2 flex gap-1">
                                                 <button onClick={() => downloadSingleQR(p)} className="text-emerald-500 bg-emerald-50 p-1 rounded hover:bg-emerald-100"><i data-lucide="download" width="12"></i></button>
                                                 <button onClick={() => startEditParticipant(p)} className="text-blue-500 bg-blue-50 p-1 rounded hover:bg-blue-100"><i data-lucide="pencil" width="12"></i></button>
+                                                <button onClick={() => openRenameModal(p)} title="Ganti Nama (riwayat absensi tetap)" className="text-amber-600 bg-amber-50 p-1 rounded hover:bg-amber-100"><i data-lucide="user-pen" width="12"></i></button>
                                                 <button onClick={() => initiateDelete(`participants/${p.id}`)} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100"><i data-lucide="trash-2" width="12"></i></button>
                                             </div>
                                             <img src={generateQRUrl(p.id)} className="w-24 mx-auto mb-2 mix-blend-multiply cursor-pointer hover:scale-110 transition-transform duration-200 border-2 border-transparent hover:border-indigo-200 rounded-lg p-1" loading="lazy" onClick={() => downloadSingleQR(p)} title="Klik untuk download QR" />
@@ -5484,6 +5587,60 @@ const handleExportUsers = () => {
                         </div>
                     </div>
                     {deleteConfig.show && <DeleteConfirmModal />}
+                    {renameConfig.show && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { if (!renameConfig.busy) setRenameConfig({ show: false, p: null, newName: '', backfill: true, busy: false }); }}>
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 animate-bounce-in" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="bg-amber-100 text-amber-600 p-2 rounded-xl"><i data-lucide="user-pen" width="20"></i></div>
+                                    <h3 className="font-black text-lg text-slate-800 font-fredoka">Ganti Nama Peserta</h3>
+                                </div>
+                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                                    Nama lama: <span className="font-bold text-slate-700">{renameConfig.p?.nama}</span><br/>
+                                    Riwayat absensi akan tetap menginduk ke peserta yang sama karena ID tidak diubah
+                                    <span className="text-slate-400"> (id: {renameConfig.p?.id})</span>.
+                                </p>
+                                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Nama Baru</label>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={renameConfig.newName}
+                                    disabled={renameConfig.busy}
+                                    onChange={e => setRenameConfig(c => ({ ...c, newName: e.target.value }))}
+                                    placeholder="Nama lengkap baru"
+                                    className="w-full p-2.5 border-2 border-slate-200 rounded-xl mb-3 font-bold text-sm text-slate-700 focus:outline-none focus:border-amber-400"
+                                />
+                                <label className={"flex items-start gap-2 mb-4 cursor-pointer select-none " + (renameConfig.busy ? 'opacity-50' : '')}>
+                                    <input
+                                        type="checkbox"
+                                        checked={renameConfig.backfill}
+                                        disabled={renameConfig.busy}
+                                        onChange={e => setRenameConfig(c => ({ ...c, backfill: e.target.checked }))}
+                                        className="mt-0.5 w-4 h-4 accent-amber-500"
+                                    />
+                                    <span className="text-xs text-slate-600 leading-snug">
+                                        <span className="font-bold text-slate-700">Perbarui nama di semua absensi lama</span><br/>
+                                        <span className="text-slate-400">Jika dicentang, record absensi lama ikut menampilkan nama baru. Jika tidak, record lama tetap menampilkan nama lama sebagai snapshot (data tetap menginduk ke peserta yang sama).</span>
+                                    </span>
+                                </label>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleConfirmRename}
+                                        disabled={renameConfig.busy}
+                                        className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition"
+                                    >
+                                        {renameConfig.busy ? 'Memproses...' : 'Simpan Nama Baru'}
+                                    </button>
+                                    <button
+                                        onClick={() => setRenameConfig({ show: false, p: null, newName: '', backfill: true, busy: false })}
+                                        disabled={renameConfig.busy}
+                                        className="bg-slate-200 hover:bg-slate-300 disabled:opacity-50 text-slate-600 px-4 rounded-xl font-bold text-sm transition"
+                                    >
+                                        Batal
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
             // ============================================================
