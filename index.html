@@ -443,6 +443,10 @@
             const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
             const [deleteConfig, setDeleteConfig] = useState({ show: false, path: null });
             const [adminResetConfig, setAdminResetConfig] = useState({ show: false, user: null, newPass: '' });
+            // Modal "Ganti Username": memindahkan dokumen user ke username baru (ID dokumen users
+            // adalah username) sekaligus MENYEMATKAN participantId agar data absensi tetap
+            // menginduk ke peserta lama, tanpa bergantung pada kecocokan nama.
+            const [renameUserConfig, setRenameUserConfig] = useState({ show: false, user: null, newUsername: '', participantId: '', pSearch: '', busy: false });
             const [notification, setNotification] = useState(null);
             // Broadcast State Modified
             const [activeBroadcast, setActiveBroadcast] = useState(null);
@@ -2825,6 +2829,96 @@ const handleExportUsers = () => {
                 alert("Data User Tersimpan!");
                 setEditingId(null);
                 setNewUser({ username: '', password: '', role: 'petugas', nama: '' });
+            };
+            // ============================================================
+            // GANTI USERNAME (tanpa memutus data absensi)
+            // ------------------------------------------------------------
+            // Di collection users, document ID = username, jadi mengganti username berarti
+            // membuat dokumen baru lalu menghapus yang lama. Agar data absensi TETAP menginduk
+            // ke peserta yang sama, kita sematkan participantId ke user baru. Absensi tidak
+            // pernah mengacu ke username -> ia mengacu ke participant.id lewat participantId.
+            // ============================================================
+            const openRenameUserModal = (u) => {
+                // Coba tebak peserta yang tepat dari nama user lama (boleh diubah manual di modal).
+                const stripPrefix = (s) => String(s || '')
+                    .replace(/^\s*(pdt|st|sdri|sdr|bpk|bapak|ibu|bang|bng|kak|b|k)\b[\s.\-]*/i, '')
+                    .trim();
+                const normFull = (s) => stripPrefix(String(s || '').trim().toLowerCase().replace(/\s+/g, ' '))
+                    .toLowerCase().replace(/[.\-_,]/g, ' ').replace(/\s+/g, ' ').trim();
+                let guessId = String(u.participantId || u.pesertaId || '').trim();
+                if (!guessId) {
+                    const cands = [u.nama, u.username].map(normFull).filter(Boolean);
+                    for (const c of cands) {
+                        const exact = participants.find(p => normFull(p.nama) === c);
+                        if (exact) { guessId = exact.id; break; }
+                    }
+                    if (!guessId) {
+                        for (const c of cands) {
+                            if (c.length < 3) continue;
+                            const ms = participants.filter(p => {
+                                const pn = normFull(p.nama);
+                                return pn.length >= 3 && (pn.includes(c) || c.includes(pn));
+                            });
+                            if (ms.length === 1) { guessId = ms[0].id; break; }
+                        }
+                    }
+                }
+                setRenameUserConfig({ show: true, user: u, newUsername: u.username || '', participantId: guessId, pSearch: '', busy: false });
+            };
+            const handleConfirmRenameUser = async () => {
+                const cfg = renameUserConfig;
+                const u = cfg.user;
+                if (!u) return;
+                const oldUsername = String(u.username || '').trim();
+                const newUsername = String(cfg.newUsername || '').trim().replace(/\s+/g, ' ');
+                const pid = String(cfg.participantId || '').trim();
+
+                if (!newUsername) { alert("Username baru wajib diisi!"); return; }
+                if (oldUsername === 'admin') { alert("Username 'admin' tidak boleh diganti."); return; }
+                if (newUsername !== oldUsername && users.some(x => String(x.username || '').trim().toLowerCase() === newUsername.toLowerCase())) {
+                    alert(`Username "${newUsername}" sudah dipakai user lain.`); return;
+                }
+                if (!pid) {
+                    if (!confirm("Peserta sumber absensi belum dipilih.\n\nTanpa tautan peserta, data absensi lama bisa TIDAK ikut (bergantung kecocokan nama).\n\nTetap lanjutkan?")) return;
+                }
+
+                setRenameUserConfig(c => ({ ...c, busy: true }));
+                try {
+                    // Bangun objek user baru: bawa semua field lama + username baru + participantId.
+                    const newData = { ...u, username: newUsername };
+                    if (pid) newData.participantId = pid;
+
+                    if (newUsername !== oldUsername) {
+                        // 1) Buat dokumen user baru (ID = username baru).
+                        await saveToCloud(`users/${newUsername}`, newData);
+                        // 2) Hapus dokumen user lama.
+                        await deleteFromCloud(`users/${oldUsername}`);
+                    } else {
+                        // Username tidak berubah, cukup sematkan/segarkan participantId.
+                        await saveToCloud(`users/${oldUsername}`, newData);
+                    }
+
+                    // Jika yang diganti adalah user yang sedang login, segarkan sesi lokal.
+                    if (currentUser && String(currentUser.username || '').trim() === oldUsername) {
+                        const refreshed = { ...currentUser, username: newUsername };
+                        if (pid) refreshed.participantId = pid;
+                        setCurrentUser(refreshed);
+                        try { localStorage.setItem('gkps_user', JSON.stringify(refreshed)); } catch (e) {}
+                    }
+
+                    const linkedP = participants.find(p => String(p.id) === pid);
+                    setRenameUserConfig({ show: false, user: null, newUsername: '', participantId: '', pSearch: '', busy: false });
+                    alert(
+                        `Username berhasil diganti:\n"${oldUsername}" -> "${newUsername}"\n\n` +
+                        (pid
+                            ? `Data absensi tetap menginduk ke peserta:\n"${linkedP ? linkedP.nama : pid}" (id: ${pid}).\nRiwayat absensi lama tetap dipakai.`
+                            : `Peringatan: tidak ada tautan peserta. Pastikan nama user cocok dengan nama peserta agar absensi lama terbaca.`) +
+                        `\n\nPassword & role tidak berubah.`
+                    );
+                } catch (e) {
+                    setRenameUserConfig(c => ({ ...c, busy: false }));
+                    alert("Gagal mengganti username: " + (e.message || e));
+                }
             };
             const startEditUser = (u) => {
                 setEditingId(u.username);
@@ -5388,6 +5482,7 @@ const handleExportUsers = () => {
                                     <div><p className="font-bold text-slate-700">{u.username || 'Tanpa Username'}</p><p className="text-xs font-bold text-slate-400 bg-slate-100 inline-block px-2 rounded">{u.nama || '-'} • {u.role || 'peserta'}</p></div>
                                     <div className="flex gap-2">
                                         <button onClick={() => startEditUser(u)} className="text-blue-500 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition" title="Edit Data"><i data-lucide="pencil" width="16"></i></button>
+                                        {u.username !== 'admin' && (<button onClick={() => openRenameUserModal(u)} className="text-violet-500 bg-violet-50 p-2 rounded-lg hover:bg-violet-100 transition" title="Ganti Username (absensi tetap)"><i data-lucide="at-sign" width="16"></i></button>)}
                                         <button onClick={() => initiateAdminReset(u)} className="text-amber-500 bg-amber-50 p-2 rounded-lg hover:bg-amber-100 transition" title="Reset Password"><i data-lucide="key-round" width="16"></i></button>
                                         {u.username !== 'admin' && (<button onClick={() => initiateDelete(`users/${u.username}`)} className="text-rose-500 bg-rose-50 p-2 rounded-lg hover:bg-rose-100 transition" title="Hapus User"><i data-lucide="trash-2" width="16"></i></button>)}
                                     </div>
@@ -5400,6 +5495,80 @@ const handleExportUsers = () => {
                     </div>
                     {deleteConfig.show && <DeleteConfirmModal />}
                     {adminResetConfig.show && <AdminResetModal config={adminResetConfig} setConfig={setAdminResetConfig} onConfirm={performAdminReset} />}
+                    {renameUserConfig.show && (() => {
+                        const cfg = renameUserConfig;
+                        const q = cfg.pSearch.trim().toLowerCase();
+                        const pList = (q === '' ? participants : participants.filter(p =>
+                            (p.nama || '').toLowerCase().includes(q) || String(p.id).toLowerCase().includes(q)
+                        )).slice(0, 40);
+                        const selectedP = participants.find(p => String(p.id) === String(cfg.participantId));
+                        return (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { if (!cfg.busy) setRenameUserConfig({ show: false, user: null, newUsername: '', participantId: '', pSearch: '', busy: false }); }}>
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 animate-bounce-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="bg-violet-100 text-violet-600 p-2 rounded-xl"><i data-lucide="at-sign" width="20"></i></div>
+                                        <h3 className="font-black text-lg text-slate-800 font-fredoka">Ganti Username</h3>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                                        Username lama: <span className="font-bold text-slate-700">{cfg.user?.username}</span><br/>
+                                        Data absensi akan tetap menginduk ke peserta yang Anda pilih di bawah, karena user baru ditautkan lewat ID peserta (bukan nama).
+                                    </p>
+                                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Username Baru</label>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={cfg.newUsername}
+                                        disabled={cfg.busy}
+                                        onChange={e => setRenameUserConfig(c => ({ ...c, newUsername: e.target.value }))}
+                                        placeholder="Username baru"
+                                        className="w-full p-2.5 border-2 border-slate-200 rounded-xl mb-3 font-bold text-sm text-slate-700 focus:outline-none focus:border-violet-400"
+                                    />
+                                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Peserta Sumber Absensi</label>
+                                    <div className={"mb-2 p-2.5 rounded-xl border-2 text-sm font-bold " + (selectedP ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-amber-200 bg-amber-50 text-amber-700')}>
+                                        {selectedP ? <>Terpilih: {selectedP.nama} <span className="text-violet-400 font-normal">(id: {selectedP.id})</span></> : 'Belum ada peserta terpilih'}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={cfg.pSearch}
+                                        disabled={cfg.busy}
+                                        onChange={e => setRenameUserConfig(c => ({ ...c, pSearch: e.target.value }))}
+                                        placeholder="Cari nama peserta..."
+                                        className="w-full p-2.5 border-2 border-slate-200 rounded-xl mb-2 font-bold text-sm text-slate-700 focus:outline-none focus:border-violet-400"
+                                    />
+                                    <div className="max-h-40 overflow-y-auto border-2 border-slate-100 rounded-xl mb-4 divide-y divide-slate-100">
+                                        {pList.length === 0 && <p className="text-center text-slate-400 text-xs font-bold py-3">Tidak ada peserta cocok.</p>}
+                                        {pList.map(p => (
+                                            <button
+                                                key={p.id}
+                                                disabled={cfg.busy}
+                                                onClick={() => setRenameUserConfig(c => ({ ...c, participantId: p.id }))}
+                                                className={"w-full text-left px-3 py-2 text-sm font-bold transition flex items-center justify-between " + (String(cfg.participantId) === String(p.id) ? 'bg-violet-100 text-violet-700' : 'hover:bg-slate-50 text-slate-600')}
+                                            >
+                                                <span>{p.nama}</span>
+                                                {String(cfg.participantId) === String(p.id) && <i data-lucide="check" width="16"></i>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleConfirmRenameUser}
+                                            disabled={cfg.busy}
+                                            className="flex-1 bg-violet-500 hover:bg-violet-600 disabled:bg-violet-300 text-white py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition"
+                                        >
+                                            {cfg.busy ? 'Memproses...' : 'Simpan Username Baru'}
+                                        </button>
+                                        <button
+                                            onClick={() => setRenameUserConfig({ show: false, user: null, newUsername: '', participantId: '', pSearch: '', busy: false })}
+                                            disabled={cfg.busy}
+                                            className="bg-slate-200 hover:bg-slate-300 disabled:opacity-50 text-slate-600 px-4 rounded-xl font-bold text-sm transition"
+                                        >
+                                            Batal
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             );
             if (view === 'generate') return (
