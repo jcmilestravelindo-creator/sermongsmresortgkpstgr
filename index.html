@@ -31,7 +31,6 @@
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-database-compat.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
@@ -116,14 +115,13 @@
                     firebaseConfig = JSON.parse(__firebase_config);
                 } else {
                     firebaseConfig = {
-                        apiKey: "AIzaSyDrCRqotIf-eqwFmMx9kpDUCOUcTzJ8WGs",
-                        authDomain: "sermongsmgkpstangerang-77b63.firebaseapp.com",
-                        databaseURL: "https://sermongsmgkpstangerang-77b63-default-rtdb.asia-southeast1.firebasedatabase.app",
-                        projectId: "sermongsmgkpstangerang-77b63",
-                        storageBucket: "sermongsmgkpstangerang-77b63.firebasestorage.app",
-                        messagingSenderId: "987409950584",
-                        appId: "1:987409950584:web:b6792a69050f673c6eca8d",
-                        measurementId: "G-GE3FRB9D54"
+                        apiKey: "AIzaSyDmdLpNJHx6ZnfJyQBZJIw2CuxEjgpDcUY",
+                        authDomain: "asggkpstgr.firebaseapp.com",
+                        projectId: "asggkpstgr",
+                        storageBucket: "asggkpstgr.firebasestorage.app",
+                        messagingSenderId: "681951652798",
+                        appId: "1:681951652798:web:aa7344c5e2c376f753a7ef",
+                        measurementId: "G-5P5JQ7KHLE"
                     };
                 }
             } catch (e) { console.error("Firebase config parse error", e); }
@@ -138,68 +136,6 @@
 
                 window.db = db;
                 window.auth = auth;
-
-                // --- Firebase Realtime Database (untuk upload dokumen/lampiran) ---
-                // Menyimpan file sebagai base64 di RTDB (gratis di Spark plan), sebagai
-                // ganti Firebase Storage yang memerlukan upgrade Blaze. File dibaca via
-                // FileReader.readAsDataURL lalu di-push ke node RTDB; metadata (nama,
-                // ukuran, tipe, uploader) tetap disimpan di Firestore.
-                try {
-                    if (firebase.database) {
-                        window.rtdb = firebase.database();
-                        try {
-                            var _dburl = (firebaseConfig && firebaseConfig.databaseURL) || '(tidak diketahui)';
-                            console.log('[RTDB] Aktif. URL:', _dburl);
-                            window.__rtdbURL = _dburl;
-                        } catch (e) {}
-
-                        // Baca File -> base64 (data URL). Resolusi: string data URL penuh.
-                        window.readFileAsBase64 = function (file, onProgress) {
-                            return new Promise(function (resolve, reject) {
-                                try {
-                                    var reader = new FileReader();
-                                    reader.onprogress = function (e) {
-                                        if (onProgress && e.lengthComputable) {
-                                            onProgress(Math.round((e.loaded / e.total) * 100));
-                                        }
-                                    };
-                                    reader.onload = function (e) { resolve(e.target.result); };
-                                    reader.onerror = function () { reject(new Error('Gagal membaca file lokal.')); };
-                                    reader.readAsDataURL(file);
-                                } catch (e) { reject(e); }
-                            });
-                        };
-
-                        // Simpan base64 ke RTDB pada path tertentu. Mengembalikan key node.
-                        window.uploadBase64ToRTDB = function (nodePath, payload) {
-                            return new Promise(function (resolve, reject) {
-                                try {
-                                    var ref = window.rtdb.ref(nodePath).push();
-                                    ref.set(payload)
-                                        .then(function () { resolve(ref.key); })
-                                        .catch(reject);
-                                } catch (e) { reject(e); }
-                            });
-                        };
-
-                        // Ambil base64 (data URL) dari RTDB berdasarkan path+key.
-                        window.fetchBase64FromRTDB = function (nodePath, key) {
-                            return window.rtdb.ref(nodePath + '/' + key).once('value')
-                                .then(function (snap) {
-                                    var val = snap.val();
-                                    return (val && val.data) ? val.data : null;
-                                });
-                        };
-
-                        // Hapus node file dari RTDB.
-                        window.deleteFileFromRTDB = function (nodePath, key) {
-                            try { return window.rtdb.ref(nodePath + '/' + key).remove(); }
-                            catch (e) { return Promise.reject(e); }
-                        };
-                    } else {
-                        window.rtdb = null;
-                    }
-                } catch (e) { console.error("Firebase RTDB init error", e); window.rtdb = null; }
 
                 // --- Adapter: bungkus API compat agar dipanggil dengan gaya modular ---
                 // Aplikasi memakai bentuk fungsi modular seperti collection(db, 'x'),
@@ -576,13 +512,6 @@
             const selectedEventIdRef = useRef(null);
             const eventAttendanceRef = useRef([]);
 
-            // --- Lampiran/Dokumen Kegiatan ---
-            const [eventFiles, setEventFiles] = useState([]);          // metadata file event terpilih
-            const [eventFileUploading, setEventFileUploading] = useState(false);
-            const [eventFileProgress, setEventFileProgress] = useState(0);
-            const [eventFileThumbs, setEventFileThumbs] = useState({}); // cache base64 thumbnail gambar: {fileId: dataURL}
-            const [eventFileBusy, setEventFileBusy] = useState({});     // penanda file yang sedang diunduh: {fileId: true}
-
             // --- Spin Wheel Doorprize ---
             const [spinCategory, setSpinCategory] = useState('early'); // 'early' (<19:00) | 'second' (19:00-20:00)
             const [spinAngle, setSpinAngle] = useState(0);
@@ -714,11 +643,6 @@
                     'trash-2': <><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></>,
                     'info': <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></>,
                     'refresh-cw': <><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></>,
-                    'paperclip': <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>,
-                    'upload': <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></>,
-                    'file': <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></>,
-                    'file-spreadsheet': <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M8 13h2M8 17h2M14 13h2M14 17h2"/></>,
-                    'image': <><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></>,
                 };
                 return <svg {...common}>{paths[name] || null}</svg>;
             };
@@ -908,9 +832,7 @@
 
                 // Records absensi untuk event yang sedang dibuka (jika ada).
                 let unsubscribeEventRecords = () => {};
-                let unsubscribeEventFiles = () => {};
                 setEventAttendance([]);
-                setEventFiles([]);
                 if (selectedEventId) {
                     const evPath = `artifacts/${appId}/public/data/events/${selectedEventId}/records`;
                     try {
@@ -920,15 +842,6 @@
                             setEventAttendance(data);
                         }, (err) => { console.error("Event Att Error:", err); setEventAttendance([]); });
                     } catch(e) { console.error("Event Att Setup Error:", e); }
-                    // Lampiran/dokumen event.
-                    const filePath = `artifacts/${appId}/public/data/events/${selectedEventId}/files`;
-                    try {
-                        unsubscribeEventFiles = onSnapshot(collection(db, filePath), (snap) => {
-                            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                            data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                            setEventFiles(data);
-                        }, (err) => { console.error("Event Files Error:", err); setEventFiles([]); });
-                    } catch(e) { console.error("Event Files Setup Error:", e); }
                 }
 
                 return () => {
@@ -942,7 +855,6 @@
                     unsubscribeAttendance();
                     unsubscribeConfig();
                     unsubscribeEventRecords();
-                    unsubscribeEventFiles();
                     unsubscribeSystem();
                 };
             }, [dbReady, userAuth, viewDate, refreshKey, selectedEventId]);
@@ -1299,17 +1211,6 @@
                     const basePath = `artifacts/${appId}/public/data`;
                     const recSnap = await getDocs(collection(db, `${basePath}/events/${ev.id}/records`));
                     await Promise.all(recSnap.docs.map(d => deleteDoc(d.ref)));
-                    // Hapus juga lampiran/dokumen: node RTDB + metadata Firestore.
-                    try {
-                        const fileSnap = await getDocs(collection(db, `${basePath}/events/${ev.id}/files`));
-                        await Promise.all(fileSnap.docs.map(async (d) => {
-                            const data = d.data();
-                            if (data && data.rtdbPath && data.rtdbKey && window.deleteFileFromRTDB) {
-                                try { await window.deleteFileFromRTDB(data.rtdbPath, data.rtdbKey); } catch (e) {}
-                            }
-                            await deleteDoc(d.ref);
-                        }));
-                    } catch (e) { console.warn("Cleanup files warning:", e && e.message); }
                     await deleteDoc(doc(db, `${basePath}/events`, ev.id));
                     if (selectedEventId === ev.id) { setSelectedEventId(null); setView('events_manager'); }
                     alert("Kegiatan dihapus.");
@@ -1427,156 +1328,6 @@
                 setGuestForm({ nama: '', keterangan: '' });
                 setView('event_detail');
             };
-
-            // --- Lampiran Kegiatan: helper format ukuran & ikon jenis file ---
-            const fmtFileSize = (bytes) => {
-                const b = Number(bytes) || 0;
-                if (b < 1024) return b + ' B';
-                if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
-                return (b / (1024 * 1024)).toFixed(2) + ' MB';
-            };
-            const fileKind = (name, type) => {
-                const ext = String(name || '').split('.').pop().toLowerCase();
-                const t = String(type || '').toLowerCase();
-                if (t.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'].includes(ext)) return 'image';
-                if (ext === 'pdf' || t === 'application/pdf') return 'pdf';
-                if (['xls', 'xlsx', 'csv'].includes(ext) || t.includes('sheet') || t.includes('excel')) return 'excel';
-                if (['doc', 'docx'].includes(ext) || t.includes('word')) return 'word';
-                if (['ppt', 'pptx'].includes(ext) || t.includes('presentation')) return 'ppt';
-                if (['zip', 'rar', '7z'].includes(ext)) return 'zip';
-                return 'file';
-            };
-
-            // --- Upload lampiran ke sebuah kegiatan (admin & panitia) ---
-            // Menyimpan file sebagai base64 di Realtime Database (gratis), metadata di
-            // Firestore. Batas ~5MB karena base64 menggembungkan ukuran ~33% dan RTDB
-            // membatasi payload per node.
-            const MAX_EVENT_FILE_MB = 5;
-            const handleUploadEventFile = async (ev, file) => {
-                if (!file) return;
-                if (!window.rtdb || !window.readFileAsBase64 || !window.uploadBase64ToRTDB) {
-                    alert("Fitur upload belum aktif. Realtime Database gagal dimuat — periksa koneksi internet lalu muat ulang halaman.\n\nJika ini pertama kali, pastikan Realtime Database sudah diaktifkan di Firebase Console (Build → Realtime Database → Create Database).");
-                    return;
-                }
-                if (file.size > MAX_EVENT_FILE_MB * 1024 * 1024) {
-                    alert(`Ukuran file terlalu besar. Maksimal ${MAX_EVENT_FILE_MB} MB untuk penyimpanan database.\n\nUntuk file besar, unggah ke Google Drive lalu bagikan tautannya.`);
-                    return;
-                }
-                setEventFileUploading(true);
-                setEventFileProgress(0);
-                try {
-                    const db = window.db;
-                    const { doc, setDoc } = window.fs;
-                    const basePath = `artifacts/${appId}/public/data`;
-                    const fileId = `FILE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-                    // 1) Baca file jadi base64 (progres 0-70%).
-                    const base64 = await window.readFileAsBase64(file, (pct) => setEventFileProgress(Math.round(pct * 0.7)));
-                    setEventFileProgress(75);
-                    // 2) Simpan base64 ke RTDB (node terpisah dari metadata).
-                    const rtdbPath = `artifacts/${appId}/event_files/${ev.id}`;
-                    const rtdbKey = await window.uploadBase64ToRTDB(rtdbPath, {
-                        name: file.name,
-                        data: base64,
-                        type: file.type || '',
-                        size: file.size,
-                        uploadedAt: Date.now(),
-                    });
-                    setEventFileProgress(90);
-                    // 3) Simpan metadata ke Firestore (tanpa base64 -> ringan & realtime).
-                    const meta = {
-                        id: fileId,
-                        nama: file.name,
-                        rtdbPath,
-                        rtdbKey,
-                        storage: 'rtdb',
-                        size: file.size,
-                        type: file.type || '',
-                        kind: fileKind(file.name, file.type),
-                        uploadedBy: safeUser.nama,
-                        timestamp: Date.now(),
-                    };
-                    await setDoc(doc(db, `${basePath}/events/${ev.id}/files/${fileId}`), meta);
-                    setEventFileProgress(100);
-                } catch (e) {
-                    console.error("Upload error:", e);
-                    const msg = (e && e.message) ? e.message : String(e);
-                    let human = msg;
-                    if (msg.includes('PERMISSION_DENIED') || msg.includes('permission_denied') || msg.includes('Permission denied')) {
-                        human = "Ditolak (permission denied). Aturan Realtime Database belum mengizinkan tulis. Buka Realtime Database → Rules dan izinkan write untuk yang sudah login.";
-                    } else if (msg.includes('database') && msg.includes('URL')) {
-                        human = "URL Realtime Database salah/kosong. Pastikan Realtime Database sudah dibuat dan databaseURL benar.";
-                    }
-                    alert("Gagal mengupload file:\n\n" + human);
-                } finally {
-                    setEventFileUploading(false);
-                    setTimeout(() => setEventFileProgress(0), 800);
-                }
-            };
-
-            // --- Hapus lampiran kegiatan (admin & panitia): hapus Storage + metadata ---
-            const handleDeleteEventFile = async (ev, f) => {
-                if (!confirm(`Hapus file "${f.nama}"? Tindakan ini tidak bisa dibatalkan.`)) return;
-                try {
-                    const db = window.db;
-                    const { doc, deleteDoc } = window.fs;
-                    const basePath = `artifacts/${appId}/public/data`;
-                    // Hapus data file di RTDB lebih dulu (abaikan bila sudah tidak ada).
-                    if (f.rtdbPath && f.rtdbKey && window.deleteFileFromRTDB) {
-                        try { await window.deleteFileFromRTDB(f.rtdbPath, f.rtdbKey); }
-                        catch (e) { console.warn("RTDB delete warning:", e && e.message); }
-                    }
-                    await deleteDoc(doc(db, `${basePath}/events/${ev.id}/files/${f.id}`));
-                } catch (e) {
-                    alert("Gagal menghapus file: " + (e && e.message ? e.message : e));
-                }
-            };
-
-            // --- Unduh / buka lampiran (ambil base64 dari RTDB lalu picu unduhan) ---
-            const handleDownloadEventFile = async (f) => {
-                if (!f.rtdbPath || !f.rtdbKey || !window.fetchBase64FromRTDB) {
-                    alert("Data file tidak lengkap atau Realtime Database belum aktif.");
-                    return;
-                }
-                setEventFileBusy(prev => ({ ...prev, [f.id]: true }));
-                try {
-                    const dataUrl = await window.fetchBase64FromRTDB(f.rtdbPath, f.rtdbKey);
-                    if (!dataUrl) {
-                        alert("File tidak ditemukan di database (mungkin sudah dihapus).");
-                        return;
-                    }
-                    // Picu unduhan via anchor sementara.
-                    const a = document.createElement('a');
-                    a.href = dataUrl;
-                    a.download = f.nama || 'file';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                } catch (e) {
-                    console.error("Download error:", e);
-                    alert("Gagal mengunduh file: " + (e && e.message ? e.message : e));
-                } finally {
-                    setEventFileBusy(prev => { const n = { ...prev }; delete n[f.id]; return n; });
-                }
-            };
-
-            // Muat thumbnail gambar (base64) dari RTDB secara lazy saat daftar file berubah.
-            useEffect(() => {
-                if (!window.fetchBase64FromRTDB) return;
-                const imgs = eventFiles.filter(f => f.kind === 'image' && f.rtdbPath && f.rtdbKey && !eventFileThumbs[f.id]);
-                if (imgs.length === 0) return;
-                let cancelled = false;
-                (async () => {
-                    for (const f of imgs) {
-                        try {
-                            const dataUrl = await window.fetchBase64FromRTDB(f.rtdbPath, f.rtdbKey);
-                            if (!cancelled && dataUrl) {
-                                setEventFileThumbs(prev => ({ ...prev, [f.id]: dataUrl }));
-                            }
-                        } catch (e) { /* abaikan thumbnail gagal */ }
-                    }
-                })();
-                return () => { cancelled = true; };
-            }, [eventFiles]);
 
             // --- Export Event: Excel ---
             const handleExportEventExcel = (ev) => {
@@ -6784,97 +6535,6 @@ const handleExportUsers = () => {
                                     </div>
                                 </div>
                             )}
-
-                            {/* ===== Dokumen & Lampiran Kegiatan ===== */}
-                            {(() => {
-                                const canManageFiles = isAdmin || isPanitia;
-                                const kindStyle = (k) => ({
-                                    image: { ic: 'image', c: 'bg-pink-100 text-pink-600' },
-                                    pdf: { ic: 'file-text', c: 'bg-red-100 text-red-600' },
-                                    excel: { ic: 'file-spreadsheet', c: 'bg-emerald-100 text-emerald-600' },
-                                    word: { ic: 'file-text', c: 'bg-blue-100 text-blue-600' },
-                                    ppt: { ic: 'file-text', c: 'bg-orange-100 text-orange-600' },
-                                    zip: { ic: 'file', c: 'bg-amber-100 text-amber-600' },
-                                    file: { ic: 'file', c: 'bg-slate-100 text-slate-500' },
-                                }[k] || { ic: 'file', c: 'bg-slate-100 text-slate-500' });
-                                return (
-                                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                                            <div className="flex items-center gap-2 text-slate-500">
-                                                <Ico name="paperclip" size={15} />
-                                                <h3 className="font-black text-xs uppercase tracking-wide">Dokumen & Lampiran</h3>
-                                            </div>
-                                            <span className="text-[10px] font-black text-slate-400">{eventFiles.length} file</span>
-                                        </div>
-
-                                        <div className="p-3 space-y-3">
-                                            {/* Kontrol upload (admin & panitia) */}
-                                            {canManageFiles && (
-                                                <div>
-                                                    <label className={"flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-xl py-4 cursor-pointer transition " + (eventFileUploading ? 'border-slate-200 bg-slate-50 opacity-70 pointer-events-none' : 'border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/40')}>
-                                                        {eventFileUploading ? (
-                                                            <>
-                                                                <Ico name="loader" size={20} className="animate-spin text-indigo-400" />
-                                                                <span className="text-[11px] font-bold text-slate-500">Mengupload… {eventFileProgress}%</span>
-                                                                <div className="w-3/4 h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1"><div className="h-full bg-indigo-500 transition-all" style={{ width: eventFileProgress + '%' }}></div></div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Ico name="upload" size={18} /></div>
-                                                                <span className="text-[11px] font-black text-indigo-600">Pilih file untuk diupload</span>
-                                                                <span className="text-[9px] font-bold text-slate-400">PDF, Excel, Word, JPG, PNG, dll. • Maks {MAX_EVENT_FILE_MB}MB</span>
-                                                            </>
-                                                        )}
-                                                        <input type="file" className="hidden" disabled={eventFileUploading}
-                                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.zip,.rar,image/*,application/pdf"
-                                                            onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) handleUploadEventFile(ev, f); e.target.value = ''; }} />
-                                                    </label>
-                                                </div>
-                                            )}
-
-                                            {/* Daftar file */}
-                                            {eventFiles.length === 0 ? (
-                                                <div className="text-center py-5 opacity-60">
-                                                    <Ico name="paperclip" size={24} className="mx-auto text-slate-300 mb-1.5" />
-                                                    <p className="text-xs font-bold text-slate-400">Belum ada dokumen.</p>
-                                                    {!canManageFiles && <p className="text-[10px] text-slate-400 mt-0.5">Dokumen akan muncul di sini jika sudah diunggah.</p>}
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-2">
-                                                    {eventFiles.map(f => {
-                                                        const ks = kindStyle(f.kind);
-                                                        const thumb = eventFileThumbs[f.id];
-                                                        const busy = !!eventFileBusy[f.id];
-                                                        return (
-                                                            <div key={f.id} className="flex items-center gap-3 bg-slate-50 rounded-xl p-2.5">
-                                                                {f.kind === 'image' && thumb ? (
-                                                                    <button onClick={() => handleDownloadEventFile(f)} className="shrink-0" title="Unduh gambar">
-                                                                        <img src={thumb} alt={f.nama} className="w-11 h-11 rounded-lg object-cover border border-slate-200" />
-                                                                    </button>
-                                                                ) : (
-                                                                    <div className={"shrink-0 w-11 h-11 rounded-lg flex items-center justify-center " + (f.kind === 'image' ? 'bg-pink-100 text-pink-600' : ks.c)}>
-                                                                        {f.kind === 'image' ? <Ico name="loader" size={16} className="animate-spin opacity-60" /> : <Ico name={ks.ic} size={20} />}
-                                                                    </div>
-                                                                )}
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="font-bold text-sm text-slate-700 truncate">{f.nama}</p>
-                                                                    <p className="text-[10px] text-slate-400 font-bold truncate">{fmtFileSize(f.size)}{f.uploadedBy ? ' • ' + f.uploadedBy : ''}</p>
-                                                                </div>
-                                                                <button onClick={() => handleDownloadEventFile(f)} disabled={busy} className="shrink-0 bg-indigo-100 text-indigo-600 hover:bg-indigo-200 p-2 rounded-lg disabled:opacity-50" title="Unduh">
-                                                                    {busy ? <Ico name="loader" size={16} className="animate-spin" /> : <Ico name="download" size={16} />}
-                                                                </button>
-                                                                {canManageFiles && (
-                                                                    <button onClick={() => handleDeleteEventFile(ev, f)} className="shrink-0 bg-red-50 text-red-500 hover:bg-red-100 p-2 rounded-lg" title="Hapus"><Ico name="trash-2" size={16} /></button>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
 
                             {/* Pencarian (khusus admin/petugas) atau judul absensi diri (peserta) */}
                             {isPeserta ? (
