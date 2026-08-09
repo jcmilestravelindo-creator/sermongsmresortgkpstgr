@@ -520,6 +520,11 @@
             const [spinWinnerHistory, setSpinWinnerHistory] = useState([]); // pemenang yg sudah keluar (id), agar tidak double
             const [spinExcludeWinners, setSpinExcludeWinners] = useState(true);
 
+            // --- Laporan Kehadiran Kegiatan (rekap lintas semua event) ---
+            const [eventReport, setEventReport] = useState(null); // { events:[], records:{eventId:[recs]}, builtAt }
+            const [eventReportLoading, setEventReportLoading] = useState(false);
+            const [eventReportFilter, setEventReportFilter] = useState({ jenis: 'Semua', from: '', to: '' });
+
             // --- Refs & Helpers ---
             const attendanceModeRef = useRef(attendanceMode);
             const liveAttendanceRef = useRef(liveAttendance);
@@ -637,6 +642,7 @@
                     'arrow-up-wide': <><path d="M11 5h4M11 9h7M11 13h10M3 7l3-3 3 3M6 20V4"/></>,
                     'trash-2': <><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></>,
                     'info': <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></>,
+                    'refresh-cw': <><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></>,
                 };
                 return <svg {...common}>{paths[name] || null}</svg>;
             };
@@ -1057,6 +1063,20 @@
                         playErrorSound();
                         return;
                     }
+                    // GSM (peserta) hanya boleh scan QR miliknya sendiri.
+                    if (isPeserta) {
+                        const me = resolveMyParticipant();
+                        if (!me) {
+                            setScanResult({ success: false, msg: "Belum Tertaut", subMsg: "Akun belum tertaut ke peserta" });
+                            playErrorSound();
+                            return;
+                        }
+                        if (String(me.id) !== String(pe.id)) {
+                            setScanResult({ success: false, msg: "Bukan QR Anda", subMsg: "Hanya bisa absen diri sendiri" });
+                            playErrorSound();
+                            return;
+                        }
+                    }
                     const already = eventAttendanceRef.current.find(item => item.id === pe.id);
                     if (already) {
                         setScanResult({ success: false, msg: "Sudah Hadir", subMsg: `Jam: ${already.jam}` });
@@ -1197,12 +1217,60 @@
                 } catch(e) { alert("Gagal menghapus: " + e.message); }
             };
 
+            // Menentukan peserta (participant) yang identik dengan user yang sedang login.
+            // Memakai cascade tiga tingkat yang sama seperti di Kelola Absensi:
+            //   0) participantId/pesertaId eksplisit (paling akurat, kebal nama kembar)
+            //   1) cocok persis nama (setelah normalisasi)
+            //   2) cocok persis username peserta
+            //   3) fallback longgar TAPI hanya jika hasilnya unik (tepat satu)
+            // Mengembalikan objek peserta atau null bila tidak dapat dipastikan.
+            const resolveMyParticipant = () => {
+                const stripPrefix = (s) => String(s || '')
+                    .replace(/^\s*(pdt|st|sdri|sdr|bpk|bapak|ibu|bang|bng|kak|b|k)\b[\s.\-]*/i, '')
+                    .trim();
+                const normFull = (s) => stripPrefix(String(s || '')
+                    .trim().toLowerCase().replace(/\s+/g, ' '))
+                    .toLowerCase().replace(/[.\-_,]/g, ' ').replace(/\s+/g, ' ').trim();
+                const candidates = [safeUser.nama, safeUser.username].map(normFull).filter(Boolean);
+                let mySelf = null;
+                const linkId = String(safeUser.participantId || safeUser.pesertaId || '').trim();
+                if (linkId) mySelf = participants.find(p => String(p.id || '').trim() === linkId) || null;
+                if (!mySelf) {
+                    for (const c of candidates) { mySelf = participants.find(p => normFull(p.nama) === c); if (mySelf) break; }
+                }
+                if (!mySelf) {
+                    for (const c of candidates) { mySelf = participants.find(p => p.username && normFull(p.username) === c); if (mySelf) break; }
+                }
+                if (!mySelf) {
+                    for (const c of candidates) {
+                        if (c.length < 3) continue;
+                        const matches = participants.filter(p => { const pn = normFull(p.nama); return pn.length >= 3 && (pn.includes(c) || c.includes(pn)); });
+                        if (matches.length === 1) { mySelf = matches[0]; break; }
+                    }
+                }
+                return mySelf || null;
+            };
+
             // Catat kehadiran peserta GSM pada sebuah event (manual).
             const handleEventAttendance = (ev, p, status) => {
                 if (isPeserta && ev.isOpen === false) {
                     alert("⛔ Absensi kegiatan ini sedang DITUTUP.");
                     playErrorSound();
                     return;
+                }
+                // GSM (peserta) hanya boleh melakukan check-in untuk DIRINYA SENDIRI.
+                if (isPeserta) {
+                    const me = resolveMyParticipant();
+                    if (!me) {
+                        alert("⛔ Akun Anda belum tertaut ke data peserta. Hubungi admin untuk menautkan.");
+                        playErrorSound();
+                        return;
+                    }
+                    if (String(me.id) !== String(p.id)) {
+                        alert("⛔ Anda hanya dapat melakukan absensi untuk diri sendiri.");
+                        playErrorSound();
+                        return;
+                    }
                 }
                 const now = new Date();
                 const jam = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -1384,6 +1452,294 @@
                 pdf.text("Dokumen dibuat otomatis oleh aplikasi Sermon GSM Resort Tangerang", M, pageH - 6);
                 const safeName = String(ev.nama).replace(/[^a-z0-9]+/gi, '_').slice(0, 30);
                 pdf.save(`Kegiatan_${safeName}_${ev.tanggal}.pdf`);
+            };
+
+            // ============================================================
+            // LAPORAN KEHADIRAN KEGIATAN (rekap lengkap lintas event)
+            // ============================================================
+            // Ambil seluruh record absensi dari SEMUA kegiatan untuk membangun
+            // rekap: matriks peserta x kegiatan, total per peserta, dan ringkasan
+            // per kegiatan. Data disimpan di state agar bisa diexport ke PDF/Excel.
+            const buildEventReport = async () => {
+                if (!events || events.length === 0) { alert("Belum ada kegiatan untuk direkap."); return; }
+                setEventReportLoading(true);
+                try {
+                    const db = window.db;
+                    const { collection, getDocs } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const recordsByEvent = {};
+                    // Ambil records tiap event secara paralel.
+                    await Promise.all(events.map(async (ev) => {
+                        try {
+                            const snap = await getDocs(collection(db, `${basePath}/events/${ev.id}/records`));
+                            recordsByEvent[ev.id] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        } catch (e) {
+                            recordsByEvent[ev.id] = [];
+                        }
+                    }));
+                    // Urutkan events terbaru -> terlama (berdasar tanggal).
+                    const sortedEvents = [...events].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+                    setEventReport({ events: sortedEvents, records: recordsByEvent, builtAt: Date.now() });
+                } catch (e) {
+                    alert("Gagal membangun laporan: " + e.message);
+                } finally {
+                    setEventReportLoading(false);
+                }
+            };
+
+            // Terapkan filter (jenis + rentang tanggal) pada daftar event laporan.
+            const getReportEvents = () => {
+                if (!eventReport) return [];
+                const { jenis, from, to } = eventReportFilter;
+                return eventReport.events.filter(ev => {
+                    if (jenis && jenis !== 'Semua' && ev.jenis !== jenis) return false;
+                    const t = String(ev.tanggal || '');
+                    if (from && t < from) return false;
+                    if (to && t > to) return false;
+                    return true;
+                });
+            };
+
+            // Bangun matriks rekap: baris = peserta GSM (dari database peserta),
+            // kolom = event; nilai = status (Hadir/Izin/Sakit/Alpha/'-').
+            // Juga menghitung total per peserta & kehadiran per event.
+            const computeReportMatrix = () => {
+                const repEvents = getReportEvents();
+                const recs = eventReport ? eventReport.records : {};
+                // Map cepat: eventId -> (participantId -> record)
+                const evMap = {};
+                repEvents.forEach(ev => {
+                    const m = {};
+                    (recs[ev.id] || []).forEach(r => { if (!r.isGuest) m[String(r.id)] = r; });
+                    evMap[ev.id] = m;
+                });
+                // Baris peserta: gabungkan peserta database + peserta yang muncul di records
+                // (untuk berjaga jika ada peserta yang sudah tidak ada di database).
+                const rowMap = {};
+                participants.forEach(p => { rowMap[String(p.id)] = { id: String(p.id), nama: p.nama, kategori: p.kategori || '-', kelas: p.kelas || '-' }; });
+                repEvents.forEach(ev => {
+                    (recs[ev.id] || []).forEach(r => {
+                        if (r.isGuest) return;
+                        const key = String(r.id);
+                        if (!rowMap[key]) rowMap[key] = { id: key, nama: r.nama || '(?)', kategori: r.kategori || '-', kelas: r.kelas || '-' };
+                    });
+                });
+                const rows = Object.values(rowMap).map(row => {
+                    const cells = {};
+                    let hadir = 0, izin = 0, sakit = 0, alpha = 0;
+                    repEvents.forEach(ev => {
+                        const rec = evMap[ev.id][row.id];
+                        const st = rec ? rec.status : '';
+                        cells[ev.id] = st || '-';
+                        if (st === 'Hadir') hadir++;
+                        else if (st === 'Izin') izin++;
+                        else if (st === 'Sakit') sakit++;
+                        else if (st === 'Alpha') alpha++;
+                    });
+                    const totalTercatat = hadir + izin + sakit + alpha;
+                    const persen = repEvents.length > 0 ? Math.round((hadir / repEvents.length) * 100) : 0;
+                    return { ...row, cells, hadir, izin, sakit, alpha, totalTercatat, persen };
+                });
+                // Urutkan: kehadiran terbanyak dulu, lalu nama.
+                rows.sort((a, b) => b.hadir - a.hadir || String(a.nama).localeCompare(String(b.nama)));
+                // Ringkasan per event.
+                const perEvent = repEvents.map(ev => {
+                    const list = (recs[ev.id] || []);
+                    const s = { Hadir: 0, Izin: 0, Sakit: 0, Alpha: 0, Tamu: 0 };
+                    list.forEach(r => { if (r.isGuest) s.Tamu++; else if (s[r.status] !== undefined) s[r.status]++; });
+                    return { ev, ...s, totalGSM: s.Hadir + s.Izin + s.Sakit + s.Alpha };
+                });
+                return { repEvents, rows, perEvent };
+            };
+
+            // --- Export Laporan Lengkap: Excel (multi-sheet) ---
+            const handleExportReportExcel = () => {
+                if (!window.XLSX) return alert("Library Excel belum dimuat.");
+                const { repEvents, rows, perEvent } = computeReportMatrix();
+                if (repEvents.length === 0) return alert("Tidak ada kegiatan pada filter ini.");
+                const wb = window.XLSX.utils.book_new();
+
+                // Sheet 1: Matriks Kehadiran (peserta x kegiatan)
+                const matrixRows = rows.map((r, i) => {
+                    const base = { "No": i + 1, "Nama": r.nama, "Kategori": r.kategori, "Kelompok": r.kelas };
+                    repEvents.forEach(ev => {
+                        const label = `${ev.nama} (${ev.tanggal})`;
+                        base[label] = r.cells[ev.id] === '-' ? '' : r.cells[ev.id];
+                    });
+                    base["Total Hadir"] = r.hadir;
+                    base["Izin"] = r.izin;
+                    base["Sakit"] = r.sakit;
+                    base["Alpha"] = r.alpha;
+                    base["% Hadir"] = r.persen + '%';
+                    return base;
+                });
+                const ws1 = window.XLSX.utils.json_to_sheet(matrixRows);
+                const cols1 = [{ wch: 5 }, { wch: 26 }, { wch: 16 }, { wch: 14 }];
+                repEvents.forEach(() => cols1.push({ wch: 18 }));
+                cols1.push({ wch: 11 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 9 });
+                ws1['!cols'] = cols1;
+                window.XLSX.utils.book_append_sheet(wb, ws1, "Matriks Kehadiran");
+
+                // Sheet 2: Ringkasan per Kegiatan
+                const evRows = perEvent.map((pe, i) => ({
+                    "No": i + 1,
+                    "Kegiatan": pe.ev.nama,
+                    "Jenis": pe.ev.jenis,
+                    "Tanggal": pe.ev.tanggal,
+                    "Lokasi": pe.ev.lokasi || '-',
+                    "Hadir": pe.Hadir,
+                    "Izin": pe.Izin,
+                    "Sakit": pe.Sakit,
+                    "Alpha": pe.Alpha,
+                    "Tamu": pe.Tamu,
+                    "Total GSM": pe.totalGSM,
+                }));
+                const ws2 = window.XLSX.utils.json_to_sheet(evRows);
+                ws2['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 10 }];
+                window.XLSX.utils.book_append_sheet(wb, ws2, "Ringkasan Kegiatan");
+
+                // Sheet 3: Rekap Total per Peserta
+                const totalRows = rows.map((r, i) => ({
+                    "No": i + 1, "Nama": r.nama, "Kategori": r.kategori, "Kelompok": r.kelas,
+                    "Total Kegiatan": repEvents.length, "Hadir": r.hadir, "Izin": r.izin,
+                    "Sakit": r.sakit, "Alpha": r.alpha, "Tidak Tercatat": repEvents.length - r.totalTercatat, "% Kehadiran": r.persen + '%',
+                }));
+                const ws3 = window.XLSX.utils.json_to_sheet(totalRows);
+                ws3['!cols'] = [{ wch: 5 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 13 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 13 }, { wch: 12 }];
+                window.XLSX.utils.book_append_sheet(wb, ws3, "Rekap Peserta");
+
+                const stamp = new Date().toISOString().slice(0, 10);
+                window.XLSX.writeFile(wb, `Laporan_Kehadiran_Kegiatan_${stamp}.xlsx`);
+            };
+
+            // --- Export Laporan Lengkap: PDF (ringkasan + rekap peserta) ---
+            const handleExportReportPDF = () => {
+                const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+                if (!jsPDFCtor) return alert("Library PDF belum dimuat. Periksa koneksi internet.");
+                const { repEvents, rows, perEvent } = computeReportMatrix();
+                if (repEvents.length === 0) return alert("Tidak ada kegiatan pada filter ini.");
+                const pdf = new jsPDFCtor({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                const pageW = pdf.internal.pageSize.getWidth();
+                const pageH = pdf.internal.pageSize.getHeight();
+                const M = 12;
+                let pageNo = 1;
+
+                const drawHeader = (subtitle) => {
+                    pdf.setFillColor(79, 70, 229); pdf.rect(0, 0, pageW, 26, 'F');
+                    pdf.setFillColor(37, 99, 235); pdf.rect(0, 24, pageW, 3, 'F');
+                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15);
+                    pdf.text("Laporan Kehadiran Kegiatan", M, 12);
+                    pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
+                    pdf.text(subtitle, M, 19);
+                    pdf.setFontSize(8);
+                    pdf.text(`Total Kegiatan: ${repEvents.length}  •  Total Peserta: ${rows.length}`, pageW - M, 12, { align: 'right' });
+                    const fr = eventReportFilter.from ? fmtDateId(eventReportFilter.from) : 'awal';
+                    const to = eventReportFilter.to ? fmtDateId(eventReportFilter.to) : 'kini';
+                    pdf.text(`Periode: ${fr} — ${to}  •  Jenis: ${eventReportFilter.jenis}`, pageW - M, 19, { align: 'right' });
+                };
+                const footer = () => {
+                    pdf.setFontSize(7); pdf.setTextColor(148, 163, 184);
+                    pdf.text("Halaman " + pageNo, pageW - M, pageH - 5, { align: 'right' });
+                    pdf.text("Dokumen dibuat otomatis oleh aplikasi Sermon GSM Resort Tangerang", M, pageH - 5);
+                };
+
+                // ---- Bagian 1: Ringkasan per Kegiatan ----
+                drawHeader("Bagian 1 — Ringkasan per Kegiatan");
+                let y = 33;
+                const c1 = [
+                    { label: 'No', x: M, w: 10 },
+                    { label: 'Kegiatan', x: M + 10, w: 78 },
+                    { label: 'Jenis', x: M + 88, w: 34 },
+                    { label: 'Tanggal', x: M + 122, w: 30 },
+                    { label: 'Hadir', x: M + 152, w: 18 },
+                    { label: 'Izin', x: M + 170, w: 16 },
+                    { label: 'Sakit', x: M + 186, w: 16 },
+                    { label: 'Alpha', x: M + 202, w: 16 },
+                    { label: 'Tamu', x: M + 218, w: 16 },
+                    { label: 'Tot GSM', x: M + 234, w: 20 },
+                ];
+                const drawHead1 = () => {
+                    pdf.setFillColor(37, 99, 235); pdf.rect(M, y, pageW - M * 2, 7, 'F');
+                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+                    c1.forEach(c => pdf.text(c.label, c.x + 1.5, y + 5));
+                    y += 7;
+                };
+                drawHead1();
+                pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+                perEvent.forEach((pe, i) => {
+                    if (y > pageH - 14) { footer(); pageNo++; pdf.addPage(); drawHeader("Bagian 1 — Ringkasan per Kegiatan (lanjutan)"); y = 33; drawHead1(); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); }
+                    if (i % 2 === 0) { pdf.setFillColor(241, 245, 249); pdf.rect(M, y, pageW - M * 2, 7, 'F'); }
+                    let nm = String(pe.ev.nama); if (nm.length > 44) nm = nm.slice(0, 43) + '…';
+                    pdf.setTextColor(51, 65, 85);
+                    pdf.text(String(i + 1), c1[0].x + 1.5, y + 5);
+                    pdf.text(nm, c1[1].x + 1.5, y + 5);
+                    pdf.setTextColor(100, 116, 139);
+                    pdf.text(String(pe.ev.jenis || '-'), c1[2].x + 1.5, y + 5);
+                    pdf.text(fmtDateId(pe.ev.tanggal), c1[3].x + 1.5, y + 5);
+                    pdf.setTextColor(16, 185, 129); pdf.setFont('helvetica', 'bold');
+                    pdf.text(String(pe.Hadir), c1[4].x + 1.5, y + 5);
+                    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(100, 116, 139);
+                    pdf.text(String(pe.Izin), c1[5].x + 1.5, y + 5);
+                    pdf.text(String(pe.Sakit), c1[6].x + 1.5, y + 5);
+                    pdf.text(String(pe.Alpha), c1[7].x + 1.5, y + 5);
+                    pdf.text(String(pe.Tamu), c1[8].x + 1.5, y + 5);
+                    pdf.setTextColor(51, 65, 85); pdf.setFont('helvetica', 'bold');
+                    pdf.text(String(pe.totalGSM), c1[9].x + 1.5, y + 5);
+                    pdf.setFont('helvetica', 'normal');
+                    y += 7;
+                });
+                footer();
+
+                // ---- Bagian 2: Rekap Total per Peserta ----
+                pageNo++; pdf.addPage(); drawHeader("Bagian 2 — Rekap Total per Peserta");
+                y = 33;
+                const c2 = [
+                    { label: 'No', x: M, w: 10 },
+                    { label: 'Nama', x: M + 10, w: 86 },
+                    { label: 'Kategori', x: M + 96, w: 40 },
+                    { label: 'Kelompok', x: M + 136, w: 40 },
+                    { label: 'Hadir', x: M + 176, w: 20 },
+                    { label: 'Izin', x: M + 196, w: 16 },
+                    { label: 'Sakit', x: M + 212, w: 16 },
+                    { label: 'Alpha', x: M + 228, w: 16 },
+                    { label: '% Hadir', x: M + 244, w: 20 },
+                ];
+                const drawHead2 = () => {
+                    pdf.setFillColor(37, 99, 235); pdf.rect(M, y, pageW - M * 2, 7, 'F');
+                    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8);
+                    c2.forEach(c => pdf.text(c.label, c.x + 1.5, y + 5));
+                    y += 7;
+                };
+                drawHead2();
+                pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+                rows.forEach((r, i) => {
+                    if (y > pageH - 14) { footer(); pageNo++; pdf.addPage(); drawHeader("Bagian 2 — Rekap Total per Peserta (lanjutan)"); y = 33; drawHead2(); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); }
+                    if (i % 2 === 0) { pdf.setFillColor(241, 245, 249); pdf.rect(M, y, pageW - M * 2, 7, 'F'); }
+                    let nm = String(r.nama); if (nm.length > 48) nm = nm.slice(0, 47) + '…';
+                    let kt = String(r.kategori || '-'); if (kt.length > 22) kt = kt.slice(0, 21) + '…';
+                    let kl = String(r.kelas || '-'); if (kl.length > 22) kl = kl.slice(0, 21) + '…';
+                    pdf.setTextColor(51, 65, 85);
+                    pdf.text(String(i + 1), c2[0].x + 1.5, y + 5);
+                    pdf.text(nm, c2[1].x + 1.5, y + 5);
+                    pdf.setTextColor(100, 116, 139);
+                    pdf.text(kt, c2[2].x + 1.5, y + 5);
+                    pdf.text(kl, c2[3].x + 1.5, y + 5);
+                    pdf.setTextColor(16, 185, 129); pdf.setFont('helvetica', 'bold');
+                    pdf.text(String(r.hadir), c2[4].x + 1.5, y + 5);
+                    pdf.setFont('helvetica', 'normal'); pdf.setTextColor(100, 116, 139);
+                    pdf.text(String(r.izin), c2[5].x + 1.5, y + 5);
+                    pdf.text(String(r.sakit), c2[6].x + 1.5, y + 5);
+                    pdf.text(String(r.alpha), c2[7].x + 1.5, y + 5);
+                    const pc = r.persen >= 75 ? [16, 185, 129] : r.persen >= 50 ? [249, 115, 22] : [239, 68, 68];
+                    pdf.setTextColor(pc[0], pc[1], pc[2]); pdf.setFont('helvetica', 'bold');
+                    pdf.text(r.persen + '%', c2[8].x + 1.5, y + 5);
+                    pdf.setFont('helvetica', 'normal');
+                    y += 7;
+                });
+                footer();
+
+                const stamp = new Date().toISOString().slice(0, 10);
+                pdf.save(`Laporan_Kehadiran_Kegiatan_${stamp}.pdf`);
             };
 
             // --- Spin Wheel: eksekusi putaran ---
@@ -5813,6 +6169,160 @@ const handleExportUsers = () => {
                 </div>
             );
             // ============================================================
+            // VIEW: Laporan Kehadiran Kegiatan (rekap lengkap lintas event)
+            // ============================================================
+            if (view === 'event_report') {
+                if (!isAdmin) {
+                    return (
+                        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+                            <Ico name="user-x" size={44} className="text-slate-300 mb-3" />
+                            <p className="font-black text-slate-600 mb-1">Akses Terbatas</p>
+                            <p className="text-xs text-slate-400 font-bold mb-4">Laporan PDF & Excel hanya untuk admin.</p>
+                            <button onClick={() => setView('events_manager')} className="bg-indigo-600 text-white font-bold px-5 py-2.5 rounded-xl">Kembali ke Kegiatan</button>
+                        </div>
+                    );
+                }
+                const built = !!eventReport;
+                const matrix = built ? computeReportMatrix() : { repEvents: [], rows: [], perEvent: [] };
+                const { repEvents, rows, perEvent } = matrix;
+                const totHadir = perEvent.reduce((a, p) => a + p.Hadir, 0);
+                const totTamu = perEvent.reduce((a, p) => a + p.Tamu, 0);
+                const stColor = (s) => s === 'Hadir' ? 'bg-emerald-100 text-emerald-700' : s === 'Izin' ? 'bg-orange-100 text-orange-700' : s === 'Sakit' ? 'bg-blue-100 text-blue-700' : s === 'Alpha' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-300';
+                const stShort = (s) => s === 'Hadir' ? 'H' : s === 'Izin' ? 'I' : s === 'Sakit' ? 'S' : s === 'Alpha' ? 'A' : '·';
+                return (
+                    <div className="min-h-screen bg-slate-50 pb-24">
+                        <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm p-4 space-y-3">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setView('events_manager')} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><Ico name="arrow-left" size={20} /></button>
+                                <div className="flex-1 min-w-0">
+                                    <h2 className="font-black text-lg text-slate-800">Laporan Kehadiran</h2>
+                                    <p className="text-[11px] text-slate-400 font-bold">Rekap lengkap seluruh kegiatan</p>
+                                </div>
+                            </div>
+                            {/* Filter */}
+                            <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Jenis</label>
+                                    <select className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-600 bg-white text-xs focus:outline-none focus:border-indigo-400" value={eventReportFilter.jenis} onChange={e => setEventReportFilter({ ...eventReportFilter, jenis: e.target.value })}>
+                                        <option>Semua</option><option>Rapat</option><option>Sermon Offline</option><option>Latihan</option><option>Lainnya</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Dari</label>
+                                    <input type="date" className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-600 text-xs focus:outline-none focus:border-indigo-400" value={eventReportFilter.from} onChange={e => setEventReportFilter({ ...eventReportFilter, from: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Sampai</label>
+                                    <input type="date" className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-600 text-xs focus:outline-none focus:border-indigo-400" value={eventReportFilter.to} onChange={e => setEventReportFilter({ ...eventReportFilter, to: e.target.value })} />
+                                </div>
+                            </div>
+                            {built && (
+                                <div className="flex gap-2">
+                                    <button onClick={handleExportReportPDF} className="flex-1 bg-gradient-to-r from-violet-600 to-blue-600 text-white text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Ico name="file-text" size={15} /> PDF</button>
+                                    <button onClick={handleExportReportExcel} className="flex-1 bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Ico name="download" size={15} /> Excel</button>
+                                    <button onClick={buildEventReport} className="px-3 bg-slate-100 text-slate-500 text-xs font-black py-2.5 rounded-xl hover:bg-slate-200 flex items-center justify-center gap-1"><Ico name="refresh-cw" size={14} /></button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 max-w-3xl mx-auto space-y-4">
+                            {!built ? (
+                                <div className="text-center p-8">
+                                    <div className="bg-white rounded-2xl border-2 border-indigo-100 shadow-sm p-6">
+                                        <Ico name="file-text" size={40} className="mx-auto text-indigo-300 mb-3" />
+                                        <p className="font-black text-slate-700 mb-1">Bangun Laporan Kehadiran</p>
+                                        <p className="text-xs text-slate-400 font-bold mb-4">Menarik seluruh data absensi dari {events.length} kegiatan untuk direkap.</p>
+                                        <button onClick={buildEventReport} disabled={eventReportLoading} className="bg-indigo-600 text-white text-sm font-black px-6 py-3 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 inline-flex items-center gap-2 disabled:opacity-60">
+                                            {eventReportLoading ? (<><Ico name="loader" size={16} className="animate-spin" /> Memproses…</>) : (<><Ico name="bar-chart-2" size={16} /> Bangun Laporan</>)}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : repEvents.length === 0 ? (
+                                <div className="text-center p-8 opacity-60">
+                                    <Ico name="calendar" size={40} className="mx-auto text-slate-300 mb-2" />
+                                    <p className="font-bold text-sm text-slate-500">Tidak ada kegiatan pada filter ini.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Kartu ringkasan */}
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 text-center"><div className="text-2xl font-black text-indigo-600 leading-none">{repEvents.length}</div><div className="text-[9px] font-bold text-slate-400 uppercase mt-1">Kegiatan</div></div>
+                                        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 text-center"><div className="text-2xl font-black text-slate-700 leading-none">{rows.length}</div><div className="text-[9px] font-bold text-slate-400 uppercase mt-1">Peserta</div></div>
+                                        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 text-center"><div className="text-2xl font-black text-emerald-600 leading-none">{totHadir}</div><div className="text-[9px] font-bold text-slate-400 uppercase mt-1">Tot Hadir</div></div>
+                                        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 text-center"><div className="text-2xl font-black text-amber-600 leading-none">{totTamu}</div><div className="text-[9px] font-bold text-slate-400 uppercase mt-1">Tamu</div></div>
+                                    </div>
+
+                                    {/* Ringkasan per kegiatan */}
+                                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100"><h3 className="font-black text-xs text-slate-500 uppercase tracking-wide">Ringkasan per Kegiatan</h3></div>
+                                        <div className="divide-y divide-slate-50">
+                                            {perEvent.map((pe, i) => (
+                                                <div key={pe.ev.id} className="px-4 py-2.5 flex items-center gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-bold text-sm text-slate-700 truncate">{pe.ev.nama}</p>
+                                                        <p className="text-[10px] text-slate-400 font-bold">{pe.ev.jenis} • {fmtDateId(pe.ev.tanggal)}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 text-[10px] font-black shrink-0">
+                                                        <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">H{pe.Hadir}</span>
+                                                        <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">I{pe.Izin}</span>
+                                                        <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">S{pe.Sakit}</span>
+                                                        <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded">A{pe.Alpha}</span>
+                                                        {pe.Tamu > 0 && <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">T{pe.Tamu}</span>}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Matriks kehadiran peserta x kegiatan */}
+                                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                                            <h3 className="font-black text-xs text-slate-500 uppercase tracking-wide">Matriks Kehadiran</h3>
+                                            <span className="text-[9px] font-bold text-slate-400">H=Hadir I=Izin S=Sakit A=Alpha ·=Kosong</span>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                                                <thead>
+                                                    <tr className="bg-slate-100/60">
+                                                        <th className="sticky left-0 bg-slate-100/60 text-left font-black text-slate-500 px-3 py-2 whitespace-nowrap">Peserta</th>
+                                                        {repEvents.map(ev => (
+                                                            <th key={ev.id} className="font-black text-slate-500 px-1.5 py-2 whitespace-nowrap text-center" title={ev.nama}>
+                                                                <div className="text-[9px] max-w-[70px] truncate mx-auto">{ev.nama}</div>
+                                                                <div className="text-[8px] text-slate-400 font-bold">{String(ev.tanggal || '').slice(5)}</div>
+                                                            </th>
+                                                        ))}
+                                                        <th className="font-black text-emerald-600 px-2 py-2 text-center">Σ Hadir</th>
+                                                        <th className="font-black text-slate-500 px-2 py-2 text-center">%</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {rows.map((r, ri) => (
+                                                        <tr key={r.id} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                                            <td className={"sticky left-0 px-3 py-1.5 whitespace-nowrap " + (ri % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
+                                                                <div className="font-bold text-slate-700 max-w-[130px] truncate">{r.nama}</div>
+                                                                <div className="text-[9px] text-slate-400 font-bold max-w-[130px] truncate">{r.kelas}</div>
+                                                            </td>
+                                                            {repEvents.map(ev => (
+                                                                <td key={ev.id} className="px-1.5 py-1.5 text-center">
+                                                                    <span className={"inline-flex items-center justify-center w-5 h-5 rounded font-black text-[10px] " + stColor(r.cells[ev.id])}>{stShort(r.cells[ev.id])}</span>
+                                                                </td>
+                                                            ))}
+                                                            <td className="px-2 py-1.5 text-center font-black text-emerald-600">{r.hadir}</td>
+                                                            <td className={"px-2 py-1.5 text-center font-black " + (r.persen >= 75 ? 'text-emerald-600' : r.persen >= 50 ? 'text-orange-500' : 'text-red-500')}>{r.persen}%</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <p className="text-center text-[10px] text-slate-400 font-bold">Geser tabel ke samping untuk melihat semua kegiatan. Gunakan tombol PDF/Excel untuk laporan lengkap.</p>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
             // VIEW: Daftar Kegiatan (Events Manager)
             // ============================================================
             if (view === 'events_manager') {
@@ -5825,10 +6335,13 @@ const handleExportUsers = () => {
                         <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm p-4">
                             <div className="flex items-center gap-3">
                                 <button onClick={() => isPeserta ? handleBackToMenu() : setView('admin_dashboard')} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><Ico name="arrow-left" size={20} /></button>
-                                <div>
+                                <div className="flex-1">
                                     <h2 className="font-black text-xl text-slate-800">Kegiatan</h2>
                                     <p className="text-[11px] text-slate-400 font-bold">Rapat, Sermon Offline, dll.</p>
                                 </div>
+                                {isAdmin && (
+                                    <button onClick={() => { setEventReport(null); setView('event_report'); }} className="bg-gradient-to-r from-violet-600 to-blue-600 text-white text-xs font-black px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-100"><Ico name="file-text" size={15} /> Laporan</button>
+                                )}
                             </div>
                         </div>
 
@@ -5944,7 +6457,14 @@ const handleExportUsers = () => {
                 eventAttendance.forEach(r => { recById[r.id] = r; });
                 const guests = eventAttendance.filter(r => r.isGuest);
                 const q = eventSearch.trim().toLowerCase();
-                const listP = q ? participants.filter(p => String(p.nama).toLowerCase().includes(q)) : participants;
+                // GSM (peserta) hanya melihat & mengabsen kartu miliknya sendiri.
+                const myP = isPeserta ? resolveMyParticipant() : null;
+                let listP;
+                if (isPeserta) {
+                    listP = myP ? [myP] : [];
+                } else {
+                    listP = q ? participants.filter(p => String(p.nama).toLowerCase().includes(q)) : participants;
+                }
                 const statusColor = (s) => s === 'Hadir' ? 'bg-emerald-500' : s === 'Izin' ? 'bg-orange-500' : s === 'Sakit' ? 'bg-blue-500' : 'bg-red-500';
                 const isOpen = ev.isOpen !== false;
 
@@ -5966,9 +6486,15 @@ const handleExportUsers = () => {
                                 <div className="bg-red-50 rounded-xl py-1.5"><div className="text-lg font-black text-red-600 leading-none">{sum.Alpha}</div><div className="text-[9px] font-bold text-red-500 uppercase">Alpha</div></div>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={() => { eventAttendanceModeRef.current = true; setAttendanceMode(false); setScanResult(null); setView('scan'); }} className="flex-1 bg-slate-800 text-white text-xs font-black py-2.5 rounded-xl hover:bg-slate-900 flex items-center justify-center gap-1.5"><i data-lucide="qr-code" width="15"></i> Scan QR</button>
-                                <button onClick={() => handleExportEventPDF(ev)} className="flex-1 bg-gradient-to-r from-violet-600 to-blue-600 text-white text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Ico name="file-text" size={15} /> PDF</button>
-                                <button onClick={() => handleExportEventExcel(ev)} className="flex-1 bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Ico name="download" size={15} /> Excel</button>
+                                {!isPeserta && (
+                                    <button onClick={() => { eventAttendanceModeRef.current = true; setAttendanceMode(false); setScanResult(null); setView('scan'); }} className="flex-1 bg-slate-800 text-white text-xs font-black py-2.5 rounded-xl hover:bg-slate-900 flex items-center justify-center gap-1.5"><i data-lucide="qr-code" width="15"></i> Scan QR</button>
+                                )}
+                                {isAdmin && (
+                                    <>
+                                        <button onClick={() => handleExportEventPDF(ev)} className="flex-1 bg-gradient-to-r from-violet-600 to-blue-600 text-white text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Ico name="file-text" size={15} /> PDF</button>
+                                        <button onClick={() => handleExportEventExcel(ev)} className="flex-1 bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Ico name="download" size={15} /> Excel</button>
+                                    </>
+                                )}
                             </div>
                         </div>
 
@@ -6010,15 +6536,28 @@ const handleExportUsers = () => {
                                 </div>
                             )}
 
-                            {/* Pencarian & daftar peserta GSM untuk absen */}
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-300"><Ico name="search" size={16} /></div>
-                                <input className="w-full border-2 border-slate-200 p-2.5 pl-9 rounded-xl font-bold text-slate-700 text-sm focus:outline-none focus:border-indigo-400" placeholder="Cari nama peserta GSM..." value={eventSearch} onChange={e => setEventSearch(e.target.value)} />
-                            </div>
+                            {/* Pencarian (khusus admin/petugas) atau judul absensi diri (peserta) */}
+                            {isPeserta ? (
+                                <div className="flex items-center gap-2 text-indigo-600 px-1">
+                                    <div className="bg-indigo-100 p-1.5 rounded-lg"><Ico name="user" size={15} /></div>
+                                    <h3 className="font-black text-xs uppercase tracking-wide">Absensi Kehadiran Saya</h3>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-300"><Ico name="search" size={16} /></div>
+                                    <input className="w-full border-2 border-slate-200 p-2.5 pl-9 rounded-xl font-bold text-slate-700 text-sm focus:outline-none focus:border-indigo-400" placeholder="Cari nama peserta GSM..." value={eventSearch} onChange={e => setEventSearch(e.target.value)} />
+                                </div>
+                            )}
 
                             <div className="space-y-2">
                                 {participants.length === 0 ? (
                                     <div className="text-center p-6 opacity-60"><Ico name="loader" size={28} className="mx-auto animate-spin mb-2" /><p className="text-xs font-bold text-slate-500">Memuat peserta…</p></div>
+                                ) : (isPeserta && !myP) ? (
+                                    <div className="bg-amber-50 border-2 border-amber-100 text-amber-700 text-xs font-bold p-4 rounded-2xl text-center leading-relaxed">
+                                        <Ico name="info" size={22} className="mx-auto mb-2 text-amber-500" />
+                                        Akun Anda belum tertaut ke data peserta, sehingga tombol absensi tidak dapat ditampilkan.<br/>
+                                        <span className="font-medium text-amber-600">Silakan hubungi admin untuk menautkan akun Anda.</span>
+                                    </div>
                                 ) : listP.length === 0 ? (
                                     <div className="text-center p-6 opacity-60"><p className="text-xs font-bold text-slate-500">Tidak ada peserta cocok.</p></div>
                                 ) : listP.slice(0, 100).map(p => {
@@ -6040,6 +6579,48 @@ const handleExportUsers = () => {
                                 })}
                                 {listP.length > 100 && <p className="text-center text-[10px] text-slate-400 font-bold py-2">Menampilkan 100 pertama. Gunakan pencarian untuk mempersempit.</p>}
                             </div>
+
+                            {/* Daftar kehadiran GSM lain (khusus peserta): melihat siapa saja yang sudah absen */}
+                            {isPeserta && (() => {
+                                const order = { 'Hadir': 0, 'Izin': 1, 'Sakit': 2, 'Alpha': 3 };
+                                const gsmRecs = eventAttendance
+                                    .filter(r => !r.isGuest)
+                                    .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || String(a.jam || '').localeCompare(String(b.jam || '')));
+                                const badge = (s) => s === 'Hadir' ? 'bg-emerald-100 text-emerald-700' : s === 'Izin' ? 'bg-orange-100 text-orange-700' : s === 'Sakit' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600';
+                                return (
+                                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                                        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-slate-500">
+                                                <Ico name="users" size={15} />
+                                                <h3 className="font-black text-xs uppercase tracking-wide">Kehadiran GSM</h3>
+                                            </div>
+                                            <span className="text-[10px] font-black text-slate-400">{gsmRecs.length} tercatat</span>
+                                        </div>
+                                        {gsmRecs.length === 0 ? (
+                                            <div className="text-center py-6 opacity-60">
+                                                <Ico name="user-check" size={26} className="mx-auto text-slate-300 mb-1.5" />
+                                                <p className="text-xs font-bold text-slate-400">Belum ada GSM yang absen.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
+                                                {gsmRecs.map(r => {
+                                                    const isMe = myP && String(r.id) === String(myP.id);
+                                                    return (
+                                                        <div key={r.id} className={"px-4 py-2 flex items-center gap-3 " + (isMe ? 'bg-indigo-50/60' : '')}>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-bold text-sm text-slate-700 truncate">{r.nama}{isMe && <span className="text-[9px] font-black text-indigo-500 ml-1.5 align-middle">(Saya)</span>}</p>
+                                                                <p className="text-[10px] text-slate-400 font-bold truncate">{r.kelas && r.kelas !== '-' ? r.kelas : (r.kategori || '-')}</p>
+                                                            </div>
+                                                            <span className={"text-[10px] font-black px-2 py-0.5 rounded shrink-0 " + badge(r.status)}>{r.status}</span>
+                                                            <span className="text-[10px] font-bold text-slate-400 shrink-0 w-10 text-right">{r.jam || '-'}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 );
