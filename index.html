@@ -491,6 +491,27 @@
             const [lpSelectedId, setLpSelectedId] = useState(null);  // id peserta terpilih
             const [lpData, setLpData] = useState(null);              // {rows:[{date,status,jam}], summary:{...}}
             const [lpLoading, setLpLoading] = useState(false);
+            // === Personal Report Profesional (Sermon + Kegiatan) ===
+            const [prData, setPrData] = useState(null);              // hasil gabungan; valid hanya bila prData.lpRef === lpData
+            const [prLoading, setPrLoading] = useState(false);
+            // === Dashboard Saya (Personal Report per user yang login) ===
+            // Peserta hanya melihat datanya sendiri: id peserta diambil dari
+            // resolveMyParticipant(), bukan dari pilihan bebas.
+            const dsAutoRef = useRef(false);
+            useEffect(() => {
+                if (view !== 'dashboard_saya') return;
+                const me = resolveMyParticipant();
+                if (!me) return;
+                if (lpSelectedId !== me.id) {
+                    setLpSelectedId(me.id); setLpData(null); setPrData(null);
+                    dsAutoRef.current = true;
+                    return;
+                }
+                if (dsAutoRef.current && !lpLoading && !prLoading) {
+                    dsAutoRef.current = false;
+                    buildPersonalReport();
+                }
+            }, [view, lpSelectedId, participants.length]);
             // === Laporan Massal (semua peserta) ===
             const [mpData, setMpData] = useState(null);              // {rows:[{...perPeserta}], meta:{...}}
             const [mpLoading, setMpLoading] = useState(false);
@@ -2172,6 +2193,467 @@
                 const safe = collapseSpaces(summary.nama).replace(/[^\w]+/g, '_');
                 const tag = reportPeriod === 'bulan' ? reportMonth : (reportPeriod === 'tanggal' ? viewDate : `${reportStart}_sd_${reportEnd}`);
                 window.XLSX.writeFile(wb, `Laporan_${safe}_${tag}.xlsx`);
+            };
+
+            // ============================================================
+            // === PERSONAL REPORT PROFESIONAL (SERMON + KEGIATAN) ========
+            // Additive: memakai buildParticipantReport() & buildDateList() yang
+            // sudah ada, lalu menambahkan data kehadiran Kegiatan pada periode
+            // yang sama. Kegiatan bertanggal setelah hari ini tidak dihitung.
+            // ============================================================
+            const prPredikat = (p) => {
+                if (p >= 90) return { label: 'Sangat Aktif', col: [16, 185, 129] };
+                if (p >= 75) return { label: 'Aktif', col: [37, 99, 235] };
+                if (p >= 50) return { label: 'Cukup Aktif', col: [249, 115, 22] };
+                return { label: 'Perlu Perhatian', col: [239, 68, 68] };
+            };
+            const prDayName = (d) => {
+                try { return new Date(d + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long' }); }
+                catch (e) { return ''; }
+            };
+            const prJamToMin = (j) => {
+                const m = String(j || '').match(/(\d{1,2})[.:](\d{2})/);
+                return m ? (Number(m[1]) * 60 + Number(m[2])) : null;
+            };
+            const prMinToJam = (n) => {
+                if (n === null || n === undefined || isNaN(n)) return '-';
+                const t = Math.round(n);
+                return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+            };
+
+            const buildPersonalReport = async (force) => {
+                if (!lpSelectedId) { alert("Pilih peserta terlebih dahulu."); return null; }
+                const target = participants.find(p => p.id === lpSelectedId);
+                if (!target) { alert("Data peserta tidak ditemukan."); return null; }
+                setPrLoading(true);
+                try {
+                    const rep = (force === true ? null : lpData) || await buildParticipantReport();
+                    if (!rep) { setPrLoading(false); return null; }
+                    const dates = buildDateList();
+                    const dFrom = dates[0] || '';
+                    const dTo = dates[dates.length - 1] || '';
+                    const today = __todayId();
+                    const evs = (events || [])
+                        .filter(ev => { const t = String(ev.tanggal || ''); return t && t >= dFrom && t <= dTo && t <= today; })
+                        .sort((a, b) => String(a.tanggal || '').localeCompare(String(b.tanggal || '')));
+                    const db = window.db; const { collection, getDocs } = window.fs;
+                    const basePath = `artifacts/${appId}/public/data`;
+                    const tId = String(target.id);
+                    const tNama = collapseSpaces(target.nama).toLowerCase();
+                    const evRows = await Promise.all(evs.map(async (ev) => {
+                        let rec = null;
+                        try {
+                            const snap = await getDocs(collection(db, `${basePath}/events/${ev.id}/records`));
+                            const recs = snap.docs.map(d => ({ _docId: d.id, ...d.data() })).filter(r => !r.isGuest);
+                            rec = recs.find(r => String(r.id) === tId || String(r._docId) === tId)
+                                || recs.find(r => collapseSpaces(r.nama || '').toLowerCase() === tNama)
+                                || null;
+                        } catch (e) { rec = null; }
+                        return {
+                            id: ev.id,
+                            tanggal: ev.tanggal || '',
+                            nama: ev.nama || '(Tanpa Nama)',
+                            jenis: ev.jenis || '-',
+                            lokasi: ev.lokasi || '',
+                            status: rec ? (rec.status || 'Hadir') : 'Tidak Tercatat',
+                            jam: rec ? (rec.jam || '') : ''
+                        };
+                    }));
+                    const evCnt = { Hadir: 0, Izin: 0, Sakit: 0, Alpha: 0, 'Tidak Tercatat': 0 };
+                    evRows.forEach(r => { if (evCnt[r.status] !== undefined) evCnt[r.status]++; else evCnt.Alpha++; });
+                    const evTotal = evRows.length;
+                    const evPersen = evTotal > 0 ? Math.round((evCnt.Hadir / evTotal) * 100) : 0;
+                    const byJenis = {};
+                    evRows.forEach(r => {
+                        const k = r.jenis || '-';
+                        if (!byJenis[k]) byJenis[k] = { total: 0, hadir: 0 };
+                        byJenis[k].total++;
+                        if (r.status === 'Hadir') byJenis[k].hadir++;
+                    });
+                    const s = rep.summary;
+                    const sermonRows = rep.rows.filter(r => r.hasSession);
+                    const totalAll = s.totalSesi + evTotal;
+                    const hadirAll = s.hadir + evCnt.Hadir;
+                    const indeks = totalAll > 0 ? Math.round((hadirAll / totalAll) * 100) : 0;
+                    const mins = sermonRows.filter(r => r.status === 'Hadir').map(r => prJamToMin(r.jam)).filter(v => v !== null);
+                    const jamStat = mins.length ? {
+                        avg: prMinToJam(mins.reduce((a, b) => a + b, 0) / mins.length),
+                        min: prMinToJam(Math.min(...mins)),
+                        max: prMinToJam(Math.max(...mins))
+                    } : null;
+                    let best = 0, cur = 0;
+                    sermonRows.forEach(r => { if (r.status === 'Hadir') { cur++; if (cur > best) best = cur; } else cur = 0; });
+                    // Catatan evaluasi otomatis (faktual, berdasarkan data)
+                    const notes = [];
+                    if (s.totalSesi === 0) notes.push('Belum ada sesi absensi sermon pada periode ini.');
+                    else notes.push(`Kehadiran sermon ${s.persenHadir}% (${s.hadir} dari ${s.totalSesi} sesi) - predikat ${prPredikat(s.persenHadir).label}.`);
+                    if (evTotal > 0) notes.push(`Mengikuti ${evCnt.Hadir} dari ${evTotal} kegiatan pada periode ini (${evPersen}%).`);
+                    else notes.push('Tidak ada kegiatan yang terlaksana pada periode ini.');
+                    if (jamStat) notes.push(`Rata-rata waktu absen sermon pukul ${jamStat.avg} (paling awal ${jamStat.min}, paling akhir ${jamStat.max}).`);
+                    if (best >= 2) notes.push(`Kehadiran sermon beruntun terpanjang: ${best} sesi berturut-turut.`);
+                    if (s.izin + s.sakit > 0) notes.push(`Tercatat ${s.izin} kali Izin dan ${s.sakit} kali Sakit pada sermon.`);
+                    if (s.alpha > 0) notes.push(`Tercatat ${s.alpha} kali Alpha (tanpa keterangan) pada sermon - disarankan untuk ditindaklanjuti/didampingi.`);
+                    if (totalAll > 0 && indeks >= 90) notes.push('Konsistensi kehadiran sangat baik. Terima kasih atas kesetiaan dalam pelayanan.');
+                    const result = { lpRef: rep, target, summary: s, sermonRows, evRows, evCnt, evTotal, evPersen, byJenis, indeks, totalAll, hadirAll, jamStat, streak: best, notes };
+                    setPrData(result);
+                    setPrLoading(false);
+                    return result;
+                } catch (e) {
+                    setPrLoading(false);
+                    alert("Gagal membangun Personal Report: " + (e.message || e));
+                    return null;
+                }
+            };
+
+            const handleExportPersonalReportPDF = async () => {
+                const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : (window.jsPDF || null);
+                if (!jsPDFCtor) { alert("Library PDF belum dimuat. Periksa koneksi internet."); return; }
+                const pr = (prData && lpData && prData.lpRef === lpData) ? prData : await buildPersonalReport();
+                if (!pr) return;
+                const { target, summary: s, sermonRows, evRows, evCnt, evTotal, evPersen, byJenis, indeks, totalAll, hadirAll, jamStat, streak, notes } = pr;
+                const pdf = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const W = pdf.internal.pageSize.getWidth();
+                const H = pdf.internal.pageSize.getHeight();
+                const M = 16, CW = W - M * 2;
+                const NAVY = [15, 23, 42], INK = [30, 41, 59], MUTED = [100, 116, 139], LINE = [226, 232, 240], SOFT = [248, 250, 252], ACC = [124, 58, 237], ACC2 = [37, 99, 235], WHITE = [255, 255, 255];
+                const fill = (c) => pdf.setFillColor(c[0], c[1], c[2]);
+                const ink = (c) => pdf.setTextColor(c[0], c[1], c[2]);
+                const stroke = (c) => pdf.setDrawColor(c[0], c[1], c[2]);
+                const font = (style, size) => { pdf.setFont('helvetica', style); pdf.setFontSize(size); };
+                const tag = reportPeriod === 'bulan' ? reportMonth : (reportPeriod === 'tanggal' ? viewDate : `${reportStart}_sd_${reportEnd}`);
+                const docNo = `PR/${String(target.id).slice(-6).toUpperCase()}/${String(tag).replace(/[-_]/g, '')}`;
+                const periodLabel = lpPeriodLabel();
+                const pred = prPredikat(indeks);
+                let y = 0;
+
+                const pageHeader = (first) => {
+                    if (first) {
+                        fill(NAVY); pdf.rect(0, 0, W, 42, 'F');
+                        fill(ACC); pdf.rect(0, 42, W * 0.62, 1.6, 'F');
+                        fill(ACC2); pdf.rect(W * 0.62, 42, W * 0.38, 1.6, 'F');
+                        ink([167, 139, 250]); font('bold', 7.5);
+                        pdf.text('PERSONAL REPORT', M, 13, { charSpace: 1.2 });
+                        ink(WHITE); font('bold', 19);
+                        pdf.text('Laporan Kehadiran Individu', M, 23);
+                        font('normal', 9); ink([203, 213, 225]);
+                        pdf.text('Sermon Guru Sekolah Minggu  •  GKPS Resort Tangerang', M, 30.5);
+                        // blok meta kanan
+                        font('normal', 7); ink([148, 163, 184]);
+                        pdf.text('No. Dokumen', W - M, 13, { align: 'right' });
+                        pdf.text('Diterbitkan', W - M, 25, { align: 'right' });
+                        font('bold', 8.5); ink(WHITE);
+                        pdf.text(docNo, W - M, 18, { align: 'right' });
+                        pdf.text(fmtDateId(__todayId()), W - M, 30, { align: 'right' });
+                        y = 52;
+                    } else {
+                        fill(NAVY); pdf.rect(0, 0, W, 13, 'F');
+                        fill(ACC); pdf.rect(0, 13, W * 0.62, 0.9, 'F');
+                        fill(ACC2); pdf.rect(W * 0.62, 13, W * 0.38, 0.9, 'F');
+                        ink(WHITE); font('bold', 8.5);
+                        pdf.text('Personal Report  —  ' + collapseSpaces(target.nama), M, 8.5);
+                        font('normal', 7.5); ink([203, 213, 225]);
+                        pdf.text('Periode: ' + periodLabel, W - M, 8.5, { align: 'right' });
+                        y = 22;
+                    }
+                };
+                const ensure = (h) => { if (y + h > H - 20) { pdf.addPage(); pageHeader(false); } };
+                const secTitle = (no, label) => {
+                    ensure(16);
+                    fill(ACC); pdf.roundedRect(M, y - 3.6, 5.2, 5.2, 1, 1, 'F');
+                    ink(WHITE); font('bold', 7); pdf.text(String(no), M + 2.6, y + 0.2, { align: 'center' });
+                    ink(INK); font('bold', 10.5); pdf.text(label, M + 8, y + 0.4);
+                    stroke(LINE); pdf.setLineWidth(0.3);
+                    pdf.line(M + 8 + pdf.getTextWidth(label) + 3, y - 0.8, M + CW, y - 0.8);
+                    y += 6;
+                };
+                const pill = (x, yy, status, size) => {
+                    const sz = size || 6.5;
+                    const c = statusColorPDF(status);
+                    font('bold', sz);
+                    const w = pdf.getTextWidth(status) + 4;
+                    fill(c); pdf.roundedRect(x, yy, w, sz * 0.62, 1.4, 1.4, 'F');
+                    ink(WHITE); pdf.text(status, x + 2, yy + sz * 0.45);
+                    return w;
+                };
+                const ring = (cx, cy, r, pct, col) => {
+                    pdf.setLineWidth(3.4); stroke(LINE); pdf.circle(cx, cy, r, 'S');
+                    if (pct > 0) {
+                        stroke(col);
+                        try { pdf.setLineCap('round'); } catch (e) { }
+                        const steps = Math.max(4, Math.round(pct * 1.4));
+                        const span = 360 * Math.min(100, pct) / 100;
+                        for (let i = 0; i < steps; i++) {
+                            const a1 = (-90 + span * i / steps) * Math.PI / 180;
+                            const a2 = (-90 + span * (i + 1) / steps) * Math.PI / 180;
+                            pdf.line(cx + r * Math.cos(a1), cy + r * Math.sin(a1), cx + r * Math.cos(a2), cy + r * Math.sin(a2));
+                        }
+                        try { pdf.setLineCap('butt'); } catch (e) { }
+                    }
+                    pdf.setLineWidth(0.2);
+                };
+                const stackBar = (x, yy, w, h, parts) => {
+                    const tot = parts.reduce((a, p) => a + p.v, 0);
+                    fill(LINE); pdf.roundedRect(x, yy, w, h, h / 2, h / 2, 'F');
+                    if (tot <= 0) return;
+                    let cx = x;
+                    parts.forEach(p => {
+                        if (p.v <= 0) return;
+                        const sw = w * p.v / tot;
+                        fill(p.col); pdf.rect(cx, yy, sw, h, 'F');
+                        cx += sw;
+                    });
+                };
+
+                // ---------- HALAMAN 1 ----------
+                pageHeader(true);
+
+                // Profil peserta
+                fill(SOFT); stroke(LINE); pdf.setLineWidth(0.3);
+                pdf.roundedRect(M, y, CW, 28, 3, 3, 'FD');
+                const initials = collapseSpaces(target.nama).replace(/^(bang|kak|b|k)[\s.]+/i, '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+                fill(ACC); pdf.circle(M + 14, y + 14, 9, 'F');
+                ink(WHITE); font('bold', 12); pdf.text(initials, M + 14, y + 18.2, { align: 'center' });
+                ink(INK); font('bold', 14); pdf.text(collapseSpaces(target.nama), M + 28, y + 10.5);
+                font('normal', 8.5); ink(MUTED);
+                pdf.text(`Kategori: ${s.kategori || '-'}     Kelompok/Gereja: ${s.kelas || '-'}`, M + 28, y + 17);
+                pdf.text(`Periode Laporan: ${periodLabel}`, M + 28, y + 22.5);
+                // badge predikat (kanan)
+                font('bold', 8);
+                const bw = pdf.getTextWidth(pred.label) + 8;
+                fill(pred.col); pdf.roundedRect(M + CW - bw - 5, y + 6, bw, 7, 3.5, 3.5, 'F');
+                ink(WHITE); pdf.text(pred.label, M + CW - bw / 2 - 5, y + 10.8, { align: 'center' });
+                font('normal', 6.5); ink(MUTED);
+                pdf.text('Predikat Keaktifan', M + CW - 5, y + 18, { align: 'right' });
+                y += 38;
+
+                // 1. Ringkasan Eksekutif
+                secTitle(1, 'Ringkasan Eksekutif');
+                const ry = y;
+                ring(M + 20, ry + 17, 14, indeks, pred.col);
+                ink(INK); font('bold', 16); pdf.text(`${indeks}%`, M + 20, ry + 18.5, { align: 'center' });
+                font('normal', 6); ink(MUTED); pdf.text('INDEKS', M + 20, ry + 23, { align: 'center' });
+                font('bold', 7.5); ink(INK); pdf.text('Indeks Keaktifan', M + 20, ry + 37.5, { align: 'center' });
+                // KPI kanan
+                const kx = M + 46, kw = CW - 46;
+                const kpis = [
+                    { l: 'Kehadiran Sermon', v: `${s.persenHadir}%`, d: `${s.hadir} dari ${s.totalSesi} sesi`, p: s.persenHadir, c: ACC },
+                    { l: 'Kehadiran Kegiatan', v: `${evPersen}%`, d: `${evCnt.Hadir} dari ${evTotal} kegiatan`, p: evPersen, c: ACC2 },
+                    { l: 'Total Kehadiran', v: `${hadirAll}/${totalAll}`, d: 'sermon + kegiatan', p: indeks, c: pred.col }
+                ];
+                kpis.forEach((k, i) => {
+                    const yy = ry + i * 12.5;
+                    ink(INK); font('bold', 8.5); pdf.text(k.l, kx, yy + 3.5);
+                    font('normal', 7); ink(MUTED); pdf.text(k.d, kx + 40, yy + 3.5);
+                    ink(INK); font('bold', 11); pdf.text(k.v, kx + kw, yy + 4, { align: 'right' });
+                    fill(LINE); pdf.roundedRect(kx, yy + 6, kw, 2.4, 1.2, 1.2, 'F');
+                    if (k.p > 0) { fill(k.c); pdf.roundedRect(kx, yy + 6, Math.max(2.4, kw * Math.min(100, k.p) / 100), 2.4, 1.2, 1.2, 'F'); }
+                });
+                y = ry + 41;
+                font('italic', 6.5); ink([148, 163, 184]);
+                pdf.text('Indeks Keaktifan = total kehadiran (sermon + kegiatan) dibagi total sesi sermon dan kegiatan pada periode laporan.', M, y);
+                y += 9;
+
+                // 2. Rincian Kehadiran (dua kartu)
+                secTitle(2, 'Rincian Kehadiran');
+                const cw2 = (CW - 6) / 2, ch2 = 50;
+                ensure(ch2 + 4);
+                const cardBlock = (x, title, pct, sub, parts) => {
+                    fill(WHITE); stroke(LINE); pdf.setLineWidth(0.3);
+                    pdf.roundedRect(x, y, cw2, ch2, 3, 3, 'FD');
+                    ink(MUTED); font('bold', 7); pdf.text(title.toUpperCase(), x + 5, y + 7, { charSpace: 0.6 });
+                    ink(INK); font('bold', 18); pdf.text(`${pct}%`, x + 5, y + 16.5);
+                    font('normal', 7); ink(MUTED); pdf.text(sub, x + cw2 - 5, y + 16.5, { align: 'right' });
+                    stackBar(x + 5, y + 20, cw2 - 10, 3.4, parts);
+                    parts.forEach((p, i) => {
+                        const col = i % 2, row = Math.floor(i / 2);
+                        const lx = x + 5 + col * ((cw2 - 10) / 2), ly = y + 30 + row * 6.5;
+                        fill(p.col); pdf.roundedRect(lx, ly - 2.4, 2.8, 2.8, 0.6, 0.6, 'F');
+                        ink(INK); font('normal', 7.5); pdf.text(p.l, lx + 4.5, ly);
+                        font('bold', 7.5); pdf.text(String(p.v), lx + (cw2 - 10) / 2 - 3, ly, { align: 'right' });
+                    });
+                };
+                cardBlock(M, 'Sermon Rutin', s.persenHadir, `${s.totalSesi} sesi`, [
+                    { l: 'Hadir', v: s.hadir, col: statusColorPDF('Hadir') },
+                    { l: 'Izin', v: s.izin, col: statusColorPDF('Izin') },
+                    { l: 'Sakit', v: s.sakit, col: statusColorPDF('Sakit') },
+                    { l: 'Alpha', v: s.alpha, col: statusColorPDF('Alpha') }
+                ]);
+                cardBlock(M + cw2 + 6, 'Kegiatan', evPersen, `${evTotal} kegiatan`, [
+                    { l: 'Hadir', v: evCnt.Hadir, col: statusColorPDF('Hadir') },
+                    { l: 'Izin', v: evCnt.Izin, col: statusColorPDF('Izin') },
+                    { l: 'Sakit', v: evCnt.Sakit, col: statusColorPDF('Sakit') },
+                    { l: 'Alpha', v: evCnt.Alpha, col: statusColorPDF('Alpha') },
+                    { l: 'Tidak Tercatat', v: evCnt['Tidak Tercatat'], col: statusColorPDF('Tidak Tercatat') }
+                ]);
+                y += ch2 + 9;
+
+                // 3. Pola Kehadiran Sermon
+                secTitle(3, 'Pola Kehadiran Sermon');
+                if (sermonRows.length === 0) {
+                    ink(MUTED); font('italic', 8); pdf.text('Tidak ada sesi absensi sermon pada periode ini.', M, y + 2); y += 9;
+                } else {
+                    const n = sermonRows.length;
+                    const gap = 1.2;
+                    const perRow = Math.min(n, 31);
+                    const sq = Math.min(9, (CW - gap * (perRow - 1)) / perRow);
+                    const rowsNeeded = Math.ceil(n / perRow);
+                    ensure(rowsNeeded * (sq + 6) + 14);
+                    sermonRows.forEach((r, i) => {
+                        const cx = M + (i % perRow) * (sq + gap);
+                        const cy = y + Math.floor(i / perRow) * (sq + 6);
+                        fill(statusColorPDF(r.status)); pdf.roundedRect(cx, cy, sq, sq, 1, 1, 'F');
+                        if (sq >= 6) {
+                            ink(WHITE); font('bold', 5.5);
+                            pdf.text(r.status.charAt(0), cx + sq / 2, cy + sq / 2 + 1.9, { align: 'center' });
+                        }
+                        ink(MUTED); font('normal', 4.8);
+                        const dd = r.date.slice(8, 10) + '/' + r.date.slice(5, 7);
+                        if (sq >= 5.5) pdf.text(dd, cx + sq / 2, cy + sq + 3, { align: 'center' });
+                    });
+                    y += rowsNeeded * (sq + 6) + 2;
+                    // legenda + statistik waktu
+                    let lx = M;
+                    ['Hadir', 'Izin', 'Sakit', 'Alpha'].forEach(st => {
+                        fill(statusColorPDF(st)); pdf.roundedRect(lx, y - 2.4, 2.8, 2.8, 0.6, 0.6, 'F');
+                        ink(MUTED); font('normal', 7); pdf.text(st, lx + 4, y); lx += 18;
+                    });
+                    ink(INK); font('normal', 7);
+                    const jamTxt = jamStat
+                        ? `Rata-rata absen ${jamStat.avg}   •   Paling awal ${jamStat.min}   •   Paling akhir ${jamStat.max}   •   Beruntun terpanjang ${streak} sesi`
+                        : `Beruntun terpanjang ${streak} sesi`;
+                    pdf.text(jamTxt, M + CW, y, { align: 'right' });
+                    y += 10;
+                }
+
+                // 4. Partisipasi per Jenis Kegiatan
+                secTitle(4, 'Partisipasi per Jenis Kegiatan');
+                const jenisList = Object.keys(byJenis).sort((a, b) => byJenis[b].total - byJenis[a].total);
+                if (jenisList.length === 0) {
+                    ink(MUTED); font('italic', 8); pdf.text('Tidak ada kegiatan yang terlaksana pada periode ini.', M, y + 2); y += 9;
+                } else {
+                    jenisList.forEach(j => {
+                        ensure(8);
+                        const v = byJenis[j];
+                        const pct = v.total > 0 ? Math.round(v.hadir / v.total * 100) : 0;
+                        ink(INK); font('bold', 8); pdf.text(pdf.splitTextToSize(j, 40)[0], M, y + 2.6);
+                        const bx = M + 44, bwid = CW - 44 - 30;
+                        fill(LINE); pdf.roundedRect(bx, y, bwid, 3.4, 1.7, 1.7, 'F');
+                        if (pct > 0) { fill(ACC2); pdf.roundedRect(bx, y, Math.max(3.4, bwid * pct / 100), 3.4, 1.7, 1.7, 'F'); }
+                        font('normal', 7.5); ink(MUTED);
+                        pdf.text(`${v.hadir}/${v.total}  (${pct}%)`, M + CW, y + 2.8, { align: 'right' });
+                        y += 7;
+                    });
+                    y += 4;
+                }
+
+                // 5. Catatan & Evaluasi
+                secTitle(5, 'Catatan & Evaluasi');
+                font('normal', 8);
+                const noteLines = notes.map(t => pdf.splitTextToSize(t, CW - 12));
+                const noteH = noteLines.reduce((a, l) => a + l.length * 4 + 1.5, 0) + 6;
+                ensure(noteH);
+                fill([245, 243, 255]); pdf.roundedRect(M, y - 1, CW, noteH, 2.5, 2.5, 'F');
+                fill(ACC); pdf.rect(M, y - 1, 1.4, noteH, 'F');
+                let ny = y + 4;
+                noteLines.forEach(lines => {
+                    fill(ACC); pdf.circle(M + 6, ny - 1.1, 0.8, 'F');
+                    ink(INK); font('normal', 8);
+                    lines.forEach((ln, k) => { pdf.text(ln, M + 9, ny + k * 4); });
+                    ny += lines.length * 4 + 1.5;
+                });
+                y += noteH + 8;
+
+                // 6. Riwayat Sermon (tabel)
+                const drawTable = (cols, rows, cellFn) => {
+                    const rh = 6.6;
+                    const head = () => {
+                        fill(INK); pdf.rect(M, y, CW, 7, 'F');
+                        ink(WHITE); font('bold', 7.2);
+                        let x = M;
+                        cols.forEach(c => { pdf.text(c.label, c.align === 'center' ? x + c.w / 2 : x + 2, y + 4.8, c.align === 'center' ? { align: 'center' } : undefined); x += c.w; });
+                        y += 7;
+                    };
+                    ensure(7 + rh * 2); head();
+                    rows.forEach((r, i) => {
+                        if (y + rh > H - 20) { pdf.addPage(); pageHeader(false); head(); }
+                        if (i % 2 === 0) { fill(SOFT); pdf.rect(M, y, CW, rh, 'F'); }
+                        let x = M;
+                        cols.forEach((c, ci) => { cellFn(r, i, ci, x, y, c.w); x += c.w; });
+                        y += rh;
+                    });
+                    stroke(LINE); pdf.setLineWidth(0.3); pdf.line(M, y, M + CW, y);
+                    y += 9;
+                };
+                secTitle(6, 'Riwayat Kehadiran Sermon');
+                if (sermonRows.length === 0) {
+                    ink(MUTED); font('italic', 8); pdf.text('Tidak ada data.', M, y + 2); y += 9;
+                } else {
+                    drawTable(
+                        [{ label: 'No', w: 12, align: 'center' }, { label: 'Tanggal', w: 52 }, { label: 'Hari', w: 34 }, { label: 'Status', w: 44 }, { label: 'Jam Absen', w: CW - 142 }],
+                        sermonRows,
+                        (r, i, ci, x, yy, w) => {
+                            font('normal', 7.5); ink(INK);
+                            if (ci === 0) pdf.text(String(i + 1), x + w / 2, yy + 4.5, { align: 'center' });
+                            else if (ci === 1) pdf.text(fmtDateId(r.date), x + 2, yy + 4.5);
+                            else if (ci === 2) { ink(MUTED); pdf.text(prDayName(r.date), x + 2, yy + 4.5); }
+                            else if (ci === 3) pill(x + 2, yy + 1.4, r.status);
+                            else { ink(MUTED); pdf.text(r.jam || '-', x + 2, yy + 4.5); }
+                        }
+                    );
+                }
+
+                // 7. Riwayat Kegiatan (tabel)
+                secTitle(7, 'Riwayat Kehadiran Kegiatan');
+                if (evRows.length === 0) {
+                    ink(MUTED); font('italic', 8); pdf.text('Tidak ada kegiatan pada periode ini.', M, y + 2); y += 9;
+                } else {
+                    drawTable(
+                        [{ label: 'No', w: 10, align: 'center' }, { label: 'Tanggal', w: 32 }, { label: 'Kegiatan', w: 60 }, { label: 'Jenis', w: 26 }, { label: 'Status', w: 32 }, { label: 'Jam', w: CW - 160 }],
+                        evRows,
+                        (r, i, ci, x, yy, w) => {
+                            font('normal', 7.2); ink(INK);
+                            if (ci === 0) pdf.text(String(i + 1), x + w / 2, yy + 4.5, { align: 'center' });
+                            else if (ci === 1) pdf.text(r.tanggal ? fmtDateId(r.tanggal) : '-', x + 2, yy + 4.5);
+                            else if (ci === 2) {
+                                const parts = pdf.splitTextToSize(r.nama, w - 3);
+                                pdf.text(parts.length > 1 ? parts[0].replace(/\s+\S*$/, '') + '...' : parts[0], x + 2, yy + 4.5);
+                            }
+                            else if (ci === 3) { ink(MUTED); pdf.text(pdf.splitTextToSize(r.jenis, w - 3)[0], x + 2, yy + 4.5); }
+                            else if (ci === 4) pill(x + 2, yy + 1.4, r.status, 6);
+                            else { ink(MUTED); pdf.text(r.jam || '-', x + 2, yy + 4.5); }
+                        }
+                    );
+                }
+
+                // Pengesahan / tanda tangan
+                ensure(46);
+                y += 2;
+                const sx1 = M + 4, sx2 = M + CW - 64;
+                font('normal', 8); ink(INK);
+                pdf.text(`Tangerang, ${fmtDateId(__todayId())}`, sx2, y);
+                pdf.text('Peserta,', sx1, y + 6);
+                pdf.text('Mengetahui,', sx2, y + 6);
+                font('bold', 8); pdf.text('Koordinator Sermon GSM', sx2, y + 11);
+                stroke(INK); pdf.setLineWidth(0.3);
+                pdf.line(sx1, y + 32, sx1 + 60, y + 32);
+                pdf.line(sx2, y + 32, sx2 + 60, y + 32);
+                font('bold', 8); ink(INK);
+                pdf.text(pdf.splitTextToSize(collapseSpaces(target.nama), 60)[0], sx1, y + 36.5);
+                font('normal', 7.5); ink(MUTED);
+                pdf.text('Nama & tanda tangan', sx2, y + 36.5);
+                y += 42;
+
+                // Footer semua halaman
+                const total = pdf.internal.getNumberOfPages();
+                for (let i = 1; i <= total; i++) {
+                    pdf.setPage(i);
+                    stroke(LINE); pdf.setLineWidth(0.3); pdf.line(M, H - 13, W - M, H - 13);
+                    font('normal', 6.5); ink([148, 163, 184]);
+                    pdf.text('Sermon GSM Resort Tangerang  •  Dokumen dihasilkan otomatis oleh sistem  •  ' + docNo, M, H - 8.5);
+                    pdf.text(`Halaman ${i} dari ${total}`, W - M, H - 8.5, { align: 'right' });
+                }
+                const safe = collapseSpaces(target.nama).replace(/[^\w]+/g, '_');
+                pdf.save(`Personal_Report_${safe}_${tag}.pdf`);
             };
 
             // ============================================================
@@ -3922,6 +4404,11 @@ const handleExportUsers = () => {
                                 <div className="text-left"><h3 className="font-bold text-xl font-fredoka">QR Saya</h3><p className="text-xs text-blue-100 font-bold opacity-90">Tunjukkan Identitas</p></div>
                              </button>
 
+                            <button onClick={() => { dsAutoRef.current = true; setLpData(null); setPrData(null); setView('dashboard_saya'); }} className="w-full btn-playful bg-gradient-to-r from-slate-800 to-violet-800 border-b-4 border-slate-950 text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4 transform hover:scale-[1.01]">
+                                <div className="bg-white/20 p-3 rounded-xl border-2 border-white/30"><i data-lucide="chart-pie" width="24" height="24"></i></div>
+                                <div className="text-left"><h3 className="font-bold text-lg font-fredoka">Dashboard Saya</h3><p className="text-xs text-violet-200 font-bold opacity-90">Laporan Kehadiran Pribadi</p></div>
+                            </button>
+
                             {isPeserta && (
                                 <button onClick={() => setView('attendance_manager')} className="w-full btn-playful bg-white border-b-4 border-slate-200 text-slate-700 p-4 rounded-2xl flex items-center gap-4 shadow-lg mt-4">
                                     <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl"><i data-lucide="clipboard-check" width="24" height="24"></i></div>
@@ -4511,6 +4998,233 @@ const handleExportUsers = () => {
                 );
             }
 
+            if (view === 'dashboard_saya') {
+                const me = resolveMyParticipant();
+                const ready = me && lpSelectedId === me.id;
+                const pr = (ready && prData && lpData && prData.lpRef === lpData) ? prData : null;
+                const pd = pr ? prPredikat(pr.indeks) : null;
+                const busy = lpLoading || prLoading;
+                const dsColor = (st) => ({ 'Hadir': '#10b981', 'Izin': '#f97316', 'Sakit': '#3b82f6', 'Alpha': '#ef4444' }[st] || '#94a3b8');
+                const dsChip = (st) => ({ 'Hadir': 'bg-emerald-500', 'Izin': 'bg-orange-500', 'Sakit': 'bg-blue-500', 'Alpha': 'bg-red-500' }[st] || 'bg-slate-400');
+                const R = 42, C = 2 * Math.PI * R;
+                const refresh = () => { dsAutoRef.current = false; buildPersonalReport(true); };
+                return (
+                    <div className="min-h-screen bg-slate-50 relative">
+                        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm p-4">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setView('menu')} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200"><Ico name="arrow-left" size={20} /></button>
+                                <div>
+                                    <h2 className="font-black text-xl text-slate-800 font-fredoka">Dashboard Saya</h2>
+                                    <p className="text-[10px] font-bold text-slate-400">Laporan kehadiran pribadi • Sermon + Kegiatan</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 pb-24 space-y-4 max-w-2xl mx-auto">
+                            {!me ? (
+                                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                    <div className="inline-flex bg-amber-100 text-amber-600 p-3 rounded-2xl mb-3"><Ico name="user-x" size={28} /></div>
+                                    <h3 className="font-black text-slate-800">Akun belum tertaut ke data peserta</h3>
+                                    <p className="text-xs font-bold text-slate-400 mt-1">Hubungi admin untuk menautkan akun Anda agar dashboard pribadi dapat ditampilkan.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Profil */}
+                                    <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+                                        <div className="absolute -top-10 -right-10 w-40 h-40 bg-violet-600/30 rounded-full blur-2xl"></div>
+                                        <p className="text-[10px] font-black tracking-[0.25em] text-violet-300 uppercase relative">Personal Report</p>
+                                        <h3 className="font-black text-xl font-fredoka leading-tight mt-1 relative">{collapseSpaces(me.nama)}</h3>
+                                        <p className="text-[11px] font-bold text-slate-400 relative">{me.kategori || '-'} • {me.kelas || '-'}</p>
+                                        {pd && <span className="inline-block mt-3 text-[10px] font-black px-3 py-1 rounded-full text-white relative" style={{ background: `rgb(${pd.col.join(',')})` }}>{pd.label}</span>}
+                                    </div>
+
+                                    {/* Periode */}
+                                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Periode</label>
+                                        <div className="grid grid-cols-3 gap-2 mt-1.5 mb-3">
+                                            {[
+                                                { key: 'tanggal', label: 'Per Tanggal', icon: 'calendar' },
+                                                { key: 'bulan', label: 'Per Bulan', icon: 'calendar-days' },
+                                                { key: 'berkala', label: 'Berkala', icon: 'calendar-range' }
+                                            ].map(opt => (
+                                                <button key={opt.key} onClick={() => { setReportPeriod(opt.key); setLpData(null); }} className={"flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-black border-2 transition active:scale-95 " + (reportPeriod === opt.key ? 'bg-violet-600 text-white border-violet-700 shadow-md shadow-violet-200' : 'bg-white text-slate-500 border-slate-100 hover:bg-slate-50')}>
+                                                    <Ico name={opt.icon} size={16} />
+                                                    <span>{opt.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {reportPeriod === 'tanggal' && (
+                                            <input type="date" value={viewDate} onChange={(e) => { setViewDate(e.target.value); setLpData(null); }} className="w-full bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-violet-400" />
+                                        )}
+                                        {reportPeriod === 'bulan' && (
+                                            <input type="month" value={reportMonth} onChange={(e) => { setReportMonth(e.target.value); setLpData(null); }} className="w-full bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl focus:outline-none focus:border-violet-400" />
+                                        )}
+                                        {reportPeriod === 'berkala' && (
+                                            <div className="flex gap-2">
+                                                <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 ml-1">Dari</label>
+                                                    <input type="date" value={reportStart} onChange={(e) => { setReportStart(e.target.value); setLpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-violet-400" /></div>
+                                                <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 ml-1">Sampai</label>
+                                                    <input type="date" value={reportEnd} onChange={(e) => { setReportEnd(e.target.value); setLpData(null); }} className="w-full mt-1 bg-white border-2 border-slate-100 text-slate-700 text-xs font-bold py-2.5 px-2 rounded-xl focus:outline-none focus:border-violet-400" /></div>
+                                            </div>
+                                        )}
+                                        <button onClick={refresh} disabled={!ready || busy} className={"w-full mt-3 text-white font-black py-3 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2 text-sm " + ((!ready || busy) ? 'bg-slate-300 cursor-not-allowed' : 'bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 shadow-violet-200')}>
+                                            {busy ? (<><span className="inline-block animate-spin"><Ico name="loader" size={18} /></span> Memuat data...</>) : (<><Ico name="refresh-cw" size={18} /> {pr ? 'Perbarui Dashboard' : 'Tampilkan Dashboard'}</>)}
+                                        </button>
+                                    </div>
+
+                                    {pr && (
+                                        <div className="space-y-4 animate-bounce-in">
+                                            <p className="text-[10px] font-bold text-slate-400 text-center">Periode: {lpPeriodLabel()}</p>
+
+                                            {/* Indeks + KPI */}
+                                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="relative flex-shrink-0" style={{ width: 104, height: 104 }}>
+                                                        <svg width="104" height="104" viewBox="0 0 104 104">
+                                                            <circle cx="52" cy="52" r={R} fill="none" stroke="#e2e8f0" strokeWidth="10" />
+                                                            <circle cx="52" cy="52" r={R} fill="none" stroke={`rgb(${pd.col.join(',')})`} strokeWidth="10" strokeLinecap="round" strokeDasharray={`${C * Math.min(100, pr.indeks) / 100} ${C}`} transform="rotate(-90 52 52)" />
+                                                        </svg>
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                            <span className="text-xl font-black text-slate-800 leading-none">{pr.indeks}%</span>
+                                                            <span className="text-[8px] font-black text-slate-400 tracking-widest mt-0.5">INDEKS</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0 space-y-2.5">
+                                                        {[
+                                                            { l: 'Sermon', v: pr.summary.persenHadir, d: `${pr.summary.hadir}/${pr.summary.totalSesi} sesi`, c: 'bg-violet-600' },
+                                                            { l: 'Kegiatan', v: pr.evPersen, d: `${pr.evCnt.Hadir}/${pr.evTotal} kegiatan`, c: 'bg-blue-600' }
+                                                        ].map(k => (
+                                                            <div key={k.l}>
+                                                                <div className="flex justify-between items-baseline">
+                                                                    <span className="text-xs font-black text-slate-700">{k.l} <span className="text-[10px] font-bold text-slate-400">{k.d}</span></span>
+                                                                    <span className="text-sm font-black text-slate-800">{k.v}%</span>
+                                                                </div>
+                                                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div className={"h-full rounded-full " + k.c} style={{ width: Math.min(100, k.v) + '%' }}></div></div>
+                                                            </div>
+                                                        ))}
+                                                        <p className="text-[10px] font-bold text-slate-400">Total hadir {pr.hadirAll} dari {pr.totalAll} (sermon + kegiatan)</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Rincian status */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {[
+                                                    { t: 'Sermon', parts: [['Hadir', pr.summary.hadir], ['Izin', pr.summary.izin], ['Sakit', pr.summary.sakit], ['Alpha', pr.summary.alpha]] },
+                                                    { t: 'Kegiatan', parts: [['Hadir', pr.evCnt.Hadir], ['Izin', pr.evCnt.Izin], ['Sakit', pr.evCnt.Sakit], ['Alpha', pr.evCnt.Alpha], ['Tidak Tercatat', pr.evCnt['Tidak Tercatat']]] }
+                                                ].map(card => {
+                                                    const tot = card.parts.reduce((a, p) => a + p[1], 0);
+                                                    return (
+                                                        <div key={card.t} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{card.t}</p>
+                                                            <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 mt-2 mb-2.5">
+                                                                {tot > 0 && card.parts.map(p => p[1] > 0 && <div key={p[0]} style={{ width: (p[1] / tot * 100) + '%', background: dsColor(p[0]) }}></div>)}
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                {card.parts.map(p => (
+                                                                    <div key={p[0]} className="flex items-center justify-between text-[11px]">
+                                                                        <span className="flex items-center gap-1.5 font-bold text-slate-500"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: dsColor(p[0]) }}></span>{p[0]}</span>
+                                                                        <span className="font-black text-slate-700">{p[1]}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Pola kehadiran sermon */}
+                                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                                <h4 className="font-black text-slate-700 text-sm mb-3 flex items-center gap-2"><Ico name="calendar-days" size={16} className="text-violet-500" /> Pola Kehadiran Sermon</h4>
+                                                {pr.sermonRows.length === 0 ? (
+                                                    <p className="text-xs font-bold text-slate-400 text-center py-3">Belum ada sesi sermon pada periode ini.</p>
+                                                ) : (
+                                                    <>
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {pr.sermonRows.map((r, i) => (
+                                                                <div key={i} className="flex flex-col items-center" title={`${fmtDateId(r.date)} • ${r.status}${r.jam ? ' • ' + r.jam : ''}`}>
+                                                                    <div className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-black text-white" style={{ background: dsColor(r.status) }}>{r.status.charAt(0)}</div>
+                                                                    <span className="text-[8px] font-bold text-slate-400 mt-0.5">{r.date.slice(8, 10)}/{r.date.slice(5, 7)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-2 mt-3">
+                                                            {[
+                                                                { l: 'Rata-rata absen', v: pr.jamStat ? pr.jamStat.avg : '-' },
+                                                                { l: 'Paling awal', v: pr.jamStat ? pr.jamStat.min : '-' },
+                                                                { l: 'Beruntun', v: `${pr.streak} sesi` }
+                                                            ].map(s => (
+                                                                <div key={s.l} className="bg-slate-50 rounded-xl py-2 text-center">
+                                                                    <p className="text-sm font-black text-slate-700">{s.v}</p>
+                                                                    <p className="text-[9px] font-bold text-slate-400">{s.l}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+
+                                            {/* Catatan */}
+                                            <div className="bg-violet-50 border-l-4 border-violet-500 p-4 rounded-2xl">
+                                                <h4 className="font-black text-violet-800 text-sm mb-2 flex items-center gap-2"><Ico name="info" size={16} /> Catatan</h4>
+                                                <ul className="space-y-1.5">
+                                                    {pr.notes.map((n, i) => <li key={i} className="text-xs font-bold text-slate-600 flex gap-2"><span className="text-violet-500">•</span><span>{n}</span></li>)}
+                                                </ul>
+                                            </div>
+
+                                            {/* Riwayat kegiatan */}
+                                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                                <h4 className="font-black text-slate-700 text-sm mb-2 flex items-center gap-2"><Ico name="list-checks" size={16} className="text-blue-500" /> Riwayat Kegiatan</h4>
+                                                {pr.evRows.length === 0 ? (
+                                                    <p className="text-xs font-bold text-slate-400 text-center py-3">Tidak ada kegiatan pada periode ini.</p>
+                                                ) : (
+                                                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                                                        {pr.evRows.map((r, i) => (
+                                                            <div key={r.id || i} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs font-bold text-slate-700 truncate">{r.nama}</p>
+                                                                    <p className="text-[10px] font-bold text-slate-400">{r.tanggal ? fmtDateId(r.tanggal) : '-'} • {r.jenis}{r.jam ? ' • ' + r.jam : ''}</p>
+                                                                </div>
+                                                                <span className={"text-[10px] font-black px-2.5 py-1 rounded text-white flex-shrink-0 " + dsChip(r.status)}>{r.status}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Riwayat sermon */}
+                                            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                                <h4 className="font-black text-slate-700 text-sm mb-2 flex items-center gap-2"><Ico name="list" size={16} className="text-violet-500" /> Riwayat Sermon</h4>
+                                                {pr.sermonRows.length === 0 ? (
+                                                    <p className="text-xs font-bold text-slate-400 text-center py-3">Tidak ada data.</p>
+                                                ) : (
+                                                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                                                        {pr.sermonRows.map((r, i) => (
+                                                            <div key={i} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-slate-700">{fmtDateId(r.date)}</p>
+                                                                    <p className="text-[10px] font-bold text-slate-400">{prDayName(r.date)}{r.jam ? ' • Absen ' + r.jam : ''}</p>
+                                                                </div>
+                                                                <span className={"text-[10px] font-black px-2.5 py-1 rounded text-white " + dsChip(r.status)}>{r.status}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Unduh PDF */}
+                                            <button onClick={handleExportPersonalReportPDF} disabled={busy} className="w-full bg-gradient-to-r from-slate-800 to-violet-800 text-white font-black py-3.5 rounded-2xl shadow-lg hover:from-slate-900 hover:to-violet-900 transition active:scale-95 flex items-center justify-center gap-2 text-sm">
+                                                <Ico name="download" size={18} /> Unduh Personal Report (PDF)
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
             if (view === 'laporan_peserta') {
                 const normLP = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
                 const lpList = participants
@@ -4652,6 +5366,60 @@ const handleExportUsers = () => {
                                             ))}
                                         </div>
                                     </div>
+
+                                    {/* Personal Report Profesional (Sermon + Kegiatan) */}
+                                    {(() => {
+                                        const pr = (prData && prData.lpRef === lpData) ? prData : null;
+                                        const pd = pr ? prPredikat(pr.indeks) : null;
+                                        return (
+                                            <div className="bg-slate-900 p-4 rounded-2xl shadow-lg text-white">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Ico name="file-text" size={18} className="text-violet-300" />
+                                                    <h4 className="font-black text-sm">Personal Report Profesional</h4>
+                                                </div>
+                                                <p className="text-[10px] font-bold text-slate-400 mb-3">Gabungan Sermon + Kegiatan • siap cetak A4 dengan kolom tanda tangan</p>
+                                                {pr ? (
+                                                    <div className="space-y-3 mb-3">
+                                                        <div className="grid grid-cols-3 gap-2">
+                                                            <div className="bg-white/10 rounded-xl py-2.5 text-center">
+                                                                <p className="text-lg font-black">{pr.indeks}%</p>
+                                                                <p className="text-[9px] font-bold text-slate-300">Indeks Keaktifan</p>
+                                                            </div>
+                                                            <div className="bg-white/10 rounded-xl py-2.5 text-center">
+                                                                <p className="text-lg font-black">{pr.evCnt.Hadir}/{pr.evTotal}</p>
+                                                                <p className="text-[9px] font-bold text-slate-300">Kegiatan Hadir</p>
+                                                            </div>
+                                                            <div className="bg-white/10 rounded-xl py-2.5 text-center flex flex-col items-center justify-center">
+                                                                <span className="text-[10px] font-black px-2 py-1 rounded-full text-white" style={{ background: `rgb(${pd.col.join(',')})` }}>{pd.label}</span>
+                                                                <p className="text-[9px] font-bold text-slate-300 mt-1">Predikat</p>
+                                                            </div>
+                                                        </div>
+                                                        {pr.evRows.length > 0 && (
+                                                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                                                {pr.evRows.map((r, i) => (
+                                                                    <div key={r.id || i} className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg gap-2">
+                                                                        <div className="min-w-0">
+                                                                            <p className="text-xs font-bold truncate">{r.nama}</p>
+                                                                            <p className="text-[10px] font-bold text-slate-400">{r.tanggal ? fmtDateId(r.tanggal) : '-'} • {r.jenis}</p>
+                                                                        </div>
+                                                                        <span className={"text-[10px] font-black px-2.5 py-1 rounded text-white flex-shrink-0 " + (r.status === 'Tidak Tercatat' ? 'bg-slate-500' : statusChip(r.status))}>{r.status}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : null}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button onClick={buildPersonalReport} disabled={prLoading} className={"font-black py-3 rounded-2xl transition active:scale-95 flex items-center justify-center gap-2 text-xs " + (prLoading ? 'bg-white/10 text-slate-400 cursor-not-allowed' : 'bg-white/10 hover:bg-white/20 text-white')}>
+                                                        {prLoading ? (<><span className="inline-block animate-spin"><Ico name="loader" size={16} /></span> Memuat...</>) : (<><Ico name="search" size={16} /> Pratinjau</>)}
+                                                    </button>
+                                                    <button onClick={handleExportPersonalReportPDF} disabled={prLoading} className={"font-black py-3 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2 text-xs " + (prLoading ? 'bg-slate-600 text-slate-300 cursor-not-allowed' : 'bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white')}>
+                                                        <Ico name="download" size={16} /> Unduh PDF
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Export */}
                                     <div className="grid grid-cols-2 gap-2">
