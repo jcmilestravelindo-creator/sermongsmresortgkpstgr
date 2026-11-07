@@ -1896,10 +1896,15 @@
 
                 // Sheet tambahan: Rasio Kehadiran per Kelompok (hadir dibanding total GSM terdaftar)
                 const normK = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
-                const totalPerKelompokXls = {};
-                participants.forEach(p => { const k = normK(p.kelas); totalPerKelompokXls[k] = (totalPerKelompokXls[k] || 0) + 1; });
+                // CGSM ditampilkan sebagai kelompok tersendiri: peserta berkategori/berkelas CGSM
+                // dihitung di baris "CGSM" (tidak ikut dihitung di kelompok kelasnya).
+                const isCgsmXls = (o) => !!o && (String(o.kategori || '').trim().toLowerCase() === 'cgsm' || String(o.kelas || '').trim().toLowerCase() === 'cgsm');
+                const pByIdXls = {};
+                participants.forEach(p => { pByIdXls[String(p.id)] = p; });
+                const totalPerKelompokXls = { 'CGSM': 0 };
+                participants.forEach(p => { const k = isCgsmXls(p) ? 'CGSM' : normK(p.kelas); totalPerKelompokXls[k] = (totalPerKelompokXls[k] || 0) + 1; });
                 const hadirPerKelompokXls = {};
-                liveAttendance.filter(r => r.status === 'Hadir').forEach(r => { const k = normK(r.kelas); hadirPerKelompokXls[k] = (hadirPerKelompokXls[k] || 0) + 1; });
+                liveAttendance.filter(r => r.status === 'Hadir').forEach(r => { const k = (isCgsmXls(pByIdXls[String(r.id)]) || isCgsmXls(r)) ? 'CGSM' : normK(r.kelas); hadirPerKelompokXls[k] = (hadirPerKelompokXls[k] || 0) + 1; });
                 const ratioRowsXls = Array.from(new Set([...Object.keys(totalPerKelompokXls), ...Object.keys(hadirPerKelompokXls)]))
                     .map(k => {
                         const hadir = hadirPerKelompokXls[k] || 0;
