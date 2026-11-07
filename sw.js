@@ -5,7 +5,7 @@
 // jadi versi terbaru selalu dipakai saat online. Cache hanya
 // dipakai sebagai cadangan saat offline.
 // =============================================================
-const CACHE_NAME = 'gkps-sermon-v7';
+const CACHE_NAME = 'gkps-sermon-v8';
 const PRECACHE = ['./', './index.html', './manifest.json', './logotema.png'];
 
 self.addEventListener('install', (event) => {
