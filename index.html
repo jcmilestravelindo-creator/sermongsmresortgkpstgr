@@ -460,7 +460,32 @@
             const [selfPassword, setSelfPassword] = useState('');
             const [resetForm, setResetForm] = useState({ username: '', newPassword: '', token: '' });
             const [connectionError, setConnectionError] = useState(null);
-            const [liveAttendance, setLiveAttendance] = useState([]);
+            const [liveAttendanceRaw, setLiveAttendance] = useState([]);
+            // ------------------------------------------------------------
+            // SINKRON LAPORAN DENGAN DATABASE PESERTA
+            // Record absensi menyimpan "snapshot" nama/kategori/kelas saat absen.
+            // Agar semua laporan ikut ter-update bila status peserta berubah
+            // (mis. jadi CGSM, Pembimbing, GSM, pindah kelompok, ganti nama),
+            // setiap record dicocokkan ke peserta (berdasarkan id) lalu memakai
+            // data peserta TERKINI. Status/jam/timestamp absensi tidak diubah.
+            // Data di database tidak diubah; ini hanya untuk tampilan & laporan.
+            // Tamu (isGuest) dan record yang pesertanya sudah tidak ada tetap apa adanya.
+            // ------------------------------------------------------------
+            const __pIndex = {};
+            participants.forEach(p => { if (p && p.id !== undefined && p.id !== null) __pIndex[String(p.id)] = p; });
+            const __enrichRec = (r) => {
+                if (!r || r.isGuest) return r;
+                const p = __pIndex[String(r.id)];
+                if (!p) return r;
+                return {
+                    ...r,
+                    nama: p.nama || r.nama,
+                    kategori: p.kategori || r.kategori,
+                    kelas: p.kelas || '-',
+                    gender: p.gender || r.gender || ''
+                };
+            };
+            const liveAttendance = liveAttendanceRaw.map(__enrichRec);
             const [attendanceMode, setAttendanceMode] = useState(false);
             const [sessionConfig, setSessionConfig] = useState({ isOpen: true, autoMode: false, openTime: '07:00', closeTime: '12:00' });
             const [filterManual, setFilterManual] = useState("");
@@ -524,7 +549,8 @@
             // Koleksi terpisah dari absensi reguler agar tidak bertabrakan.
             const [events, setEvents] = useState([]);                 // daftar agenda kegiatan
             const [selectedEventId, setSelectedEventId] = useState(null); // event yang sedang dibuka
-            const [eventAttendance, setEventAttendance] = useState([]);   // records absensi event terpilih
+            const [eventAttendanceRaw, setEventAttendance] = useState([]);   // records absensi event terpilih
+            const eventAttendance = eventAttendanceRaw.map(__enrichRec);    // disinkronkan ke data peserta terkini
             const [eventForm, setEventForm] = useState({ nama: '', jenis: 'Rapat', tanggal: __todayId(), waktu: '', lokasi: '' });
             const [eventEditingId, setEventEditingId] = useState(null);
             const [eventSearch, setEventSearch] = useState('');       // cari nama peserta saat absen event
@@ -1896,21 +1922,43 @@
 
                 // Sheet tambahan: Rasio Kehadiran per Kelompok (hadir dibanding total GSM terdaftar)
                 const normK = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
-                // CGSM ditampilkan sebagai kelompok tersendiri: peserta berkategori/berkelas CGSM
-                // dihitung di baris "CGSM" (tidak ikut dihitung di kelompok kelasnya).
+                // Rasio per kelompok (kelas):
+                //  - Hadir & Total GSM  : hanya peserta NON-CGSM (Persentase = Hadir / Total GSM).
+                //  - Total CGSM         : jumlah peserta CGSM (kategori/kelas CGSM) di kelompok tsb.
+                //  - Total Pembimbing   : jumlah peserta berkategori Pembimbing di kelompok tsb
+                //                         (informasi; sudah termasuk dalam Total GSM).
                 const isCgsmXls = (o) => !!o && (String(o.kategori || '').trim().toLowerCase() === 'cgsm' || String(o.kelas || '').trim().toLowerCase() === 'cgsm');
+                const isPembimbingXls = (o) => !!o && String(o.kategori || '').trim().toLowerCase() === 'pembimbing';
                 const pByIdXls = {};
                 participants.forEach(p => { pByIdXls[String(p.id)] = p; });
-                const totalPerKelompokXls = { 'CGSM': 0 };
-                participants.forEach(p => { const k = isCgsmXls(p) ? 'CGSM' : normK(p.kelas); totalPerKelompokXls[k] = (totalPerKelompokXls[k] || 0) + 1; });
+                const totalPerKelompokXls = {};
+                const cgsmPerKelompokXls = {};
+                const pembimbingPerKelompokXls = {};
+                participants.forEach(p => {
+                    const k = normK(p.kelas);
+                    if (isCgsmXls(p)) { cgsmPerKelompokXls[k] = (cgsmPerKelompokXls[k] || 0) + 1; return; }
+                    totalPerKelompokXls[k] = (totalPerKelompokXls[k] || 0) + 1;
+                    if (isPembimbingXls(p)) pembimbingPerKelompokXls[k] = (pembimbingPerKelompokXls[k] || 0) + 1;
+                });
                 const hadirPerKelompokXls = {};
-                liveAttendance.filter(r => r.status === 'Hadir').forEach(r => { const k = (isCgsmXls(pByIdXls[String(r.id)]) || isCgsmXls(r)) ? 'CGSM' : normK(r.kelas); hadirPerKelompokXls[k] = (hadirPerKelompokXls[k] || 0) + 1; });
-                const ratioRowsXls = Array.from(new Set([...Object.keys(totalPerKelompokXls), ...Object.keys(hadirPerKelompokXls)]))
+                liveAttendance.filter(r => r.status === 'Hadir').forEach(r => {
+                    if (isCgsmXls(pByIdXls[String(r.id)]) || isCgsmXls(r)) return;
+                    const k = normK(r.kelas);
+                    hadirPerKelompokXls[k] = (hadirPerKelompokXls[k] || 0) + 1;
+                });
+                const ratioRowsXls = Array.from(new Set([...Object.keys(totalPerKelompokXls), ...Object.keys(hadirPerKelompokXls), ...Object.keys(cgsmPerKelompokXls)]))
                     .map(k => {
                         const hadir = hadirPerKelompokXls[k] || 0;
                         const total = totalPerKelompokXls[k] || 0;
                         const pct = total > 0 ? Math.round((hadir / total) * 100) : 0;
-                        return { 'Kelompok': k, 'Hadir': hadir, 'Total GSM': total, 'Persentase (%)': pct };
+                        return {
+                            'Kelompok': k,
+                            'Hadir': hadir,
+                            'Total GSM': total,
+                            'Total CGSM': cgsmPerKelompokXls[k] || '',
+                            'Total Pembimbing': pembimbingPerKelompokXls[k] || '',
+                            'Persentase (%)': pct
+                        };
                     })
                     .sort((a, b) => b['Persentase (%)'] - a['Persentase (%)']);
                 const ratioSheetXls = window.XLSX.utils.json_to_sheet(ratioRowsXls);
@@ -1968,7 +2016,7 @@
                         const results = await Promise.all(slice.map(async (dt) => {
                             try {
                                 const snap = await getDocs(collection(db, `${basePath}/attendance/${dt}/records`));
-                                const recs = snap.docs.map(d => ({ ...d.data(), _date: dt }));
+                                const recs = snap.docs.map(d => __enrichRec({ ...d.data(), _date: dt }));
                                 return { dt, recs };
                             } catch (e) { return { dt, recs: [] }; }
                         }));
@@ -3088,14 +3136,34 @@
                     // Tabel: Rasio Kehadiran per Kelompok (hadir dibanding total GSM terdaftar di kelompok tsb)
                     {
                         const normK = (v) => (v && String(v).trim() && v !== '-') ? String(v).trim() : 'Tanpa Kelompok';
+                        // Hadir & Total GSM hanya peserta NON-CGSM (Rasio = Hadir / Total GSM).
+                        // Total CGSM & Total Pembimbing per kelompok ditampilkan sebagai kolom tersendiri
+                        // (Pembimbing sudah termasuk dalam Total GSM).
+                        const isCgsmPdf = (o) => !!o && (String(o.kategori || '').trim().toLowerCase() === 'cgsm' || String(o.kelas || '').trim().toLowerCase() === 'cgsm');
+                        const isPembimbingPdf = (o) => !!o && String(o.kategori || '').trim().toLowerCase() === 'pembimbing';
+                        const pByIdPdf = {};
+                        participants.forEach(p => { pByIdPdf[String(p.id)] = p; });
                         const totalPerKelompokPdf = {};
-                        participants.forEach(p => { const k = normK(p.kelas); totalPerKelompokPdf[k] = (totalPerKelompokPdf[k] || 0) + 1; });
-                        const ratioRows = Array.from(new Set([...Object.keys(totalPerKelompokPdf), ...Object.keys(rep.byChurch)]))
+                        const cgsmPerKelompokPdf = {};
+                        const pembimbingPerKelompokPdf = {};
+                        participants.forEach(p => {
+                            const k = normK(p.kelas);
+                            if (isCgsmPdf(p)) { cgsmPerKelompokPdf[k] = (cgsmPerKelompokPdf[k] || 0) + 1; return; }
+                            totalPerKelompokPdf[k] = (totalPerKelompokPdf[k] || 0) + 1;
+                            if (isPembimbingPdf(p)) pembimbingPerKelompokPdf[k] = (pembimbingPerKelompokPdf[k] || 0) + 1;
+                        });
+                        const hadirPerKelompokPdf = {};
+                        data.all.filter(r => r.status === 'Hadir').forEach(r => {
+                            if (isCgsmPdf(pByIdPdf[String(r.id)]) || isCgsmPdf(r)) return;
+                            const k = normK(r.kelas);
+                            hadirPerKelompokPdf[k] = (hadirPerKelompokPdf[k] || 0) + 1;
+                        });
+                        const ratioRows = Array.from(new Set([...Object.keys(totalPerKelompokPdf), ...Object.keys(hadirPerKelompokPdf), ...Object.keys(cgsmPerKelompokPdf)]))
                             .map(k => {
-                                const hadir = rep.byChurch[k] || 0;
+                                const hadir = hadirPerKelompokPdf[k] || 0;
                                 const total = totalPerKelompokPdf[k] || 0;
                                 const pct = total > 0 ? Math.round((hadir / total) * 100) : 0;
-                                return { kelompok: k, hadir, total, pct };
+                                return { kelompok: k, hadir, total, cgsm: cgsmPerKelompokPdf[k] || 0, pembimbing: pembimbingPerKelompokPdf[k] || 0, pct };
                             })
                             .sort((a, b) => b.pct - a.pct || b.hadir - a.hadir);
 
@@ -3104,8 +3172,9 @@
                             pdf.setTextColor(30, 41, 59); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
                             pdf.text("Rasio Kehadiran per Kelompok", M, y); y += 6;
                             const cols2 = [
-                                { h: 'Kelompok', w: (pageW - M * 2) - 25 - 22 - 28 },
-                                { h: 'Hadir', w: 25 }, { h: 'Total GSM', w: 28 }, { h: 'Rasio', w: 22 }
+                                { h: 'Kelompok', w: (pageW - M * 2) - 18 - 24 - 26 - 34 - 18 },
+                                { h: 'Hadir', w: 18 }, { h: 'Total GSM', w: 24 }, { h: 'Total CGSM', w: 26 },
+                                { h: 'Total Pembimbing', w: 34 }, { h: 'Rasio', w: 18 }
                             ];
                             let tx2 = M;
                             pdf.setFillColor(124, 58, 237); pdf.rect(M, y, pageW - M * 2, 8, 'F');
@@ -3126,7 +3195,7 @@
                                 if (idx % 2 === 0) { pdf.setFillColor(248, 250, 252); pdf.rect(M, y, pageW - M * 2, 7, 'F'); }
                                 pdf.setTextColor(30, 41, 59); pdf.setFontSize(9);
                                 let cx3 = M;
-                                const row2 = [r.kelompok, String(r.hadir), String(r.total), `${r.pct}%`];
+                                const row2 = [r.kelompok, String(r.hadir), String(r.total), r.cgsm ? String(r.cgsm) : '', r.pembimbing ? String(r.pembimbing) : '', `${r.pct}%`];
                                 row2.forEach((val, ci) => { pdf.text(val, cx3 + 2, y + 5); cx3 += cols2[ci].w; });
                                 y += 7;
                             });
@@ -5968,16 +6037,34 @@ const handleExportUsers = () => {
                 // === Rasio Kehadiran per Kelompok ===
                 // Membandingkan jumlah GSM yang HADIR pada tanggal ini dengan jumlah TOTAL
                 // GSM yang terdaftar di kelompok tersebut. Contoh: 5 hadir dari 32 total GKPS-Tangerang -> 5/32 (16%).
+                // Hadir & Total GSM hanya peserta NON-CGSM (Rasio = Hadir / Total GSM).
+                // Total CGSM & Total Pembimbing per kelompok ditampilkan sebagai keterangan
+                // (Pembimbing sudah termasuk dalam Total GSM).
+                const isCgsmStat = (o) => !!o && (String(o.kategori || '').trim().toLowerCase() === 'cgsm' || String(o.kelas || '').trim().toLowerCase() === 'cgsm');
+                const isPembimbingStat = (o) => !!o && String(o.kategori || '').trim().toLowerCase() === 'pembimbing';
+                const pByIdStat = {};
+                participants.forEach(p => { pByIdStat[String(p.id)] = p; });
                 const totalPerKelompokMap = {};
-                participants.forEach(p => { const k = norm(p.kelas); totalPerKelompokMap[k] = (totalPerKelompokMap[k] || 0) + 1; });
+                const cgsmPerKelompokMap = {};
+                const pembimbingPerKelompokMap = {};
+                participants.forEach(p => {
+                    const k = norm(p.kelas);
+                    if (isCgsmStat(p)) { cgsmPerKelompokMap[k] = (cgsmPerKelompokMap[k] || 0) + 1; return; }
+                    totalPerKelompokMap[k] = (totalPerKelompokMap[k] || 0) + 1;
+                    if (isPembimbingStat(p)) pembimbingPerKelompokMap[k] = (pembimbingPerKelompokMap[k] || 0) + 1;
+                });
                 const hadirPerKelompokMap = {};
-                hadirRecords.forEach(r => { const k = norm(r.kelas); hadirPerKelompokMap[k] = (hadirPerKelompokMap[k] || 0) + 1; });
-                const kelompokRatioList = Array.from(new Set([...Object.keys(totalPerKelompokMap), ...Object.keys(hadirPerKelompokMap)]))
+                hadirRecords.forEach(r => {
+                    if (isCgsmStat(pByIdStat[String(r.id)]) || isCgsmStat(r)) return;
+                    const k = norm(r.kelas);
+                    hadirPerKelompokMap[k] = (hadirPerKelompokMap[k] || 0) + 1;
+                });
+                const kelompokRatioList = Array.from(new Set([...Object.keys(totalPerKelompokMap), ...Object.keys(hadirPerKelompokMap), ...Object.keys(cgsmPerKelompokMap)]))
                     .map(k => {
                         const hadir = hadirPerKelompokMap[k] || 0;
                         const total = totalPerKelompokMap[k] || 0;
                         const pct = total > 0 ? Math.round((hadir / total) * 100) : 0;
-                        return { kelompok: k, hadir, total, pct };
+                        return { kelompok: k, hadir, total, cgsm: cgsmPerKelompokMap[k] || 0, pembimbing: pembimbingPerKelompokMap[k] || 0, pct };
                     })
                     .sort((a, b) => b.pct - a.pct || b.hadir - a.hadir);
 
@@ -6206,6 +6293,12 @@ const handleExportUsers = () => {
                                     <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                                         <div className="h-full rounded-full transition-all duration-700" style={{ width: Math.max(d.pct, d.hadir > 0 ? 4 : 0) + '%', backgroundColor: barColor }}></div>
                                     </div>
+                                    {(d.cgsm > 0 || d.pembimbing > 0) && (
+                                        <div className="flex flex-wrap gap-1.5 mt-1">
+                                            {d.cgsm > 0 && <span className="text-[9px] font-black text-sky-700 bg-sky-50 border border-sky-100 px-1.5 py-0.5 rounded">Total CGSM: {d.cgsm}</span>}
+                                            {d.pembimbing > 0 && <span className="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">Total Pembimbing: {d.pembimbing}</span>}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
