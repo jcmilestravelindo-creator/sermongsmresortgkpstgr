@@ -1,4 +1,3 @@
-
 // =============================================================
 // Service Worker - SM GKPS Resort Tangerang
 // Naikkan CACHE_NAME setiap kali deploy (v6 -> v7, dst).
