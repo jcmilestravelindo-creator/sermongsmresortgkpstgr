@@ -3984,20 +3984,46 @@ const handleExportUsers = () => {
                         }));
                     }
 
+                    // 3b) Pindai juga record KEHADIRAN KEGIATAN (events/{id}/records), tamu diabaikan.
+                    const perEvent = {}; // evId -> { evNama, evTanggal, src: [{id,data}], tgtCands: {id: data} }
+                    try {
+                        const evSnap = await getDocs(collection(db, `${basePath}/events`));
+                        const evDocs = (evSnap && evSnap.docs) ? evSnap.docs : [];
+                        for (let i = 0; i < evDocs.length; i += batchSize) {
+                            const slice = evDocs.slice(i, i + batchSize);
+                            await Promise.all(slice.map(async (evDoc) => {
+                                try {
+                                    const evData = evDoc.data() || {};
+                                    const rs = await getDocs(collection(db, `${basePath}/events/${evDoc.id}/records`));
+                                    if (!rs || !rs.docs || rs.docs.length === 0) return;
+                                    const bucket = { evNama: evData.nama || evDoc.id, evTanggal: evData.tanggal || '', src: [], tgtCands: {} };
+                                    rs.docs.forEach(dd => {
+                                        const data = dd.data() || {};
+                                        if (data.isGuest) return;
+                                        const nm = normFull(data.nama);
+                                        if ((tgtIdKnown && dd.id === tgtIdKnown) || tgtNames.has(nm)) { bucket.tgtCands[dd.id] = data; return; }
+                                        if (srcIds.has(dd.id) || srcNames.has(nm)) bucket.src.push({ id: dd.id, data });
+                                    });
+                                    if (bucket.src.length || Object.keys(bucket.tgtCands).length) perEvent[evDoc.id] = bucket;
+                                } catch (e) { /* lewati kegiatan yang gagal */ }
+                            }));
+                        }
+                    } catch (e) { /* koleksi kegiatan kosong / gagal, lewati */ }
+
                     // 4) Pastikan id target. Bila Oky tidak ada di Database Peserta / user,
-                    //    ambil dari record absensi bernama "Oky" (harus tepat satu id).
+                    //    ambil dari record absensi (sermon/kegiatan) bernama "Oky" (harus tepat satu id).
                     let tgtId = tgtIdKnown;
                     let tgtInfo = tgtP ? { nama: tgtP.nama, kategori: tgtP.kategori, kelas: tgtP.kelas, gender: tgtP.gender } : null;
                     let tgtSource = tgtP ? 'Database Peserta' : '';
                     if (!tgtId) {
                         const idCount = {};
-                        Object.values(perDate).forEach(b => Object.entries(b.tgtCands).forEach(([id, data]) => {
+                        [...Object.values(perDate), ...Object.values(perEvent)].forEach(b => Object.entries(b.tgtCands).forEach(([id, data]) => {
                             if (!idCount[id]) idCount[id] = { n: 0, data };
                             idCount[id].n++;
                         }));
                         const ids = Object.keys(idCount);
                         if (ids.length === 0) {
-                            alert('Nama "Oky" tidak ditemukan di Database Peserta, di daftar User, maupun di data kehadiran sermon.\nTidak ada yang diproses.');
+                            alert('Nama "Oky" tidak ditemukan di Database Peserta, di daftar User, maupun di data kehadiran sermon/kegiatan.\nTidak ada yang diproses.');
                             return;
                         }
                         if (ids.length > 1) {
@@ -4010,34 +4036,59 @@ const handleExportUsers = () => {
                         tgtSource = 'data kehadiran (tidak ada di Database Peserta / User)';
                     }
 
-                    // Susun rencana pemindahan.
-                    const plan = []; // { dt, srcDocId, srcData, tgtData|null }
+                    // Susun rencana pemindahan: sermon + kegiatan.
+                    const plan = []; // sermon: { dt, srcDocId, srcData, tgtData|null }
                     Object.keys(perDate).sort().forEach(dt => {
                         const b = perDate[dt];
                         const tgtData = b.tgtCands[tgtId] || null;
                         b.src.filter(sd => sd.id !== tgtId).forEach(sd => plan.push({ dt, srcDocId: sd.id, srcData: sd.data, tgtData }));
                     });
+                    const evPlan = []; // kegiatan: { evId, evNama, srcDocId, srcData, tgtData|null }
+                    Object.keys(perEvent)
+                        .sort((x, y) => String(perEvent[x].evTanggal).localeCompare(String(perEvent[y].evTanggal)))
+                        .forEach(evId => {
+                            const b = perEvent[evId];
+                            const tgtData = b.tgtCands[tgtId] || null;
+                            b.src.filter(sd => sd.id !== tgtId).forEach(sd => evPlan.push({ evId, evNama: b.evNama, srcDocId: sd.id, srcData: sd.data, tgtData }));
+                        });
 
-                    if (plan.length === 0) {
-                        alert(`Tidak ada data kehadiran sermon atas nama "Oki" yang perlu digabung ke "${tgtInfo.nama}" (id: ${tgtId}).`);
+                    if (plan.length === 0 && evPlan.length === 0) {
+                        alert(`Tidak ada data kehadiran sermon maupun kegiatan atas nama "Oki" yang perlu digabung ke "${tgtInfo.nama}" (id: ${tgtId}).`);
                         return;
                     }
                     const bentrok = plan.filter(x => x.tgtData).length;
-                    const srcIdList = Array.from(new Set(plan.map(x => x.srcDocId)));
+                    const evBentrok = evPlan.filter(x => x.tgtData).length;
+                    const evCount = new Set(evPlan.map(x => x.evId)).size;
+                    const srcIdList = Array.from(new Set([...plan, ...evPlan].map(x => x.srcDocId)));
                     const relink = srcUser && String(srcUser.participantId || '') !== tgtId;
                     const msg =
-                        `Gabung data kehadiran sermon?\n\n` +
+                        `Gabung data kehadiran Oki ke Oky?\n\n` +
                         `DARI : "Oki"${srcUser ? ` • user ${srcUser.username}` : ' • (tidak ada user)'}\n` +
                         `       id record: ${srcIdList.join(', ')}\n` +
                         `KE   : "${tgtInfo.nama}" • id ${tgtId}\n` +
                         `       ditemukan di: ${tgtSource}\n\n` +
-                        `${plan.length} record akan dipindahkan (${plan[0].dt} s/d ${plan[plan.length - 1].dt}).\n` +
-                        (bentrok ? `${bentrok} tanggal Oky sudah punya record -> record Oky dipertahankan (status Hadir diutamakan).\n` : '') +
-                        (relink && tgtP ? `User "${srcUser.username}" akan ditautkan ke peserta "${tgtInfo.nama}" agar absensi berikutnya masuk ke Oky.\n` : '') +
+                        `SERMON  : ${plan.length ? `${plan.length} record (${plan[0].dt} s/d ${plan[plan.length - 1].dt})` : 'tidak ada (sudah tergabung)'}\n` +
+                        (bentrok ? `          ${bentrok} tanggal Oky sudah punya record -> record Oky dipertahankan (Hadir diutamakan).\n` : '') +
+                        `KEGIATAN: ${evPlan.length ? `${evPlan.length} record dari ${evCount} kegiatan` : 'tidak ada'}\n` +
+                        (evBentrok ? `          ${evBentrok} kegiatan Oky sudah tercatat -> record Oky dipertahankan (Hadir diutamakan).\n` : '') +
+                        (relink && tgtP ? `\nUser "${srcUser.username}" akan ditautkan ke peserta "${tgtInfo.nama}" agar absensi berikutnya masuk ke Oky.\n` : '') +
                         `\nRecord Oki akan dihapus setelah dipindah. Lanjutkan?`;
                     if (!confirm(msg)) return;
 
-                    // 5) Eksekusi: tulis ke id Oky, lalu hapus record Oki.
+                    // Data baru untuk record target (identitas Oky, sisanya dari record Oki).
+                    const asTarget = (srcData) => ({
+                        ...srcData,
+                        id: tgtId,
+                        nama: tgtInfo.nama || srcData.nama,
+                        kategori: tgtInfo.kategori || srcData.kategori || '',
+                        kelas: tgtInfo.kelas || srcData.kelas || '-',
+                        gender: tgtInfo.gender || srcData.gender || ''
+                    });
+                    const preferHadir = (srcData, tgtData) => (tgtData && tgtData.status !== 'Hadir' && srcData.status === 'Hadir')
+                        ? { status: 'Hadir', jam: srcData.jam || tgtData.jam || '', timestamp: srcData.timestamp || tgtData.timestamp || Date.now() }
+                        : null;
+
+                    // 5) Eksekusi SERMON: tulis ke id Oky, lalu hapus record Oki.
                     let moved = 0, kept = 0, failed = 0;
                     const seen = new Set();
                     for (const it of plan) {
@@ -4045,36 +4096,48 @@ const handleExportUsers = () => {
                             const tgtRef = doc(db, `${basePath}/attendance/${it.dt}/records`, tgtId);
                             const already = it.tgtData || seen.has(it.dt);
                             if (!already) {
-                                await setDoc(tgtRef, {
-                                    ...it.srcData,
-                                    id: tgtId,
-                                    nama: tgtInfo.nama || it.srcData.nama,
-                                    kategori: tgtInfo.kategori || it.srcData.kategori || '',
-                                    kelas: tgtInfo.kelas || it.srcData.kelas || '-',
-                                    gender: tgtInfo.gender || it.srcData.gender || ''
-                                }, { merge: true });
+                                await setDoc(tgtRef, asTarget(it.srcData), { merge: true });
                                 seen.add(it.dt);
                                 moved++;
                             } else {
-                                if (it.tgtData && it.tgtData.status !== 'Hadir' && it.srcData.status === 'Hadir') {
-                                    await setDoc(tgtRef, { status: 'Hadir', jam: it.srcData.jam || it.tgtData.jam || '', timestamp: it.srcData.timestamp || it.tgtData.timestamp || Date.now() }, { merge: true });
-                                }
+                                const upd = preferHadir(it.srcData, it.tgtData);
+                                if (upd) await setDoc(tgtRef, upd, { merge: true });
                                 kept++;
                             }
                             await deleteDoc(doc(db, `${basePath}/attendance/${it.dt}/records`, it.srcDocId));
                         } catch (e) { failed++; }
                     }
+
+                    // 5b) Eksekusi KEGIATAN: tulis ke events/{id}/records/{idOky}, lalu hapus record Oki.
+                    let evMoved = 0, evKept = 0, evFailed = 0;
+                    const evSeen = new Set();
+                    for (const it of evPlan) {
+                        try {
+                            const tgtRef = doc(db, `${basePath}/events/${it.evId}/records`, tgtId);
+                            const already = it.tgtData || evSeen.has(it.evId);
+                            if (!already) {
+                                await setDoc(tgtRef, { ...asTarget(it.srcData), isGuest: false }, { merge: true });
+                                evSeen.add(it.evId);
+                                evMoved++;
+                            } else {
+                                const upd = preferHadir(it.srcData, it.tgtData);
+                                if (upd) await setDoc(tgtRef, upd, { merge: true });
+                                evKept++;
+                            }
+                            await deleteDoc(doc(db, `${basePath}/events/${it.evId}/records`, it.srcDocId));
+                        } catch (e) { evFailed++; }
+                    }
+
                     let relinked = false;
                     if (relink && tgtP) {
                         try { await saveToCloud(`users/${srcUser.username}`, { participantId: tgtId }); relinked = true; } catch (e) { /* lewati */ }
                     }
                     alert(
-                        `Penggabungan selesai.\n\n` +
-                        `${moved} record dipindahkan ke "${tgtInfo.nama}" (id: ${tgtId}).\n` +
-                        (kept ? `${kept} record bentrok (Oky sudah ada) -> record Oky dipertahankan.\n` : '') +
-                        (failed ? `${failed} record gagal diproses.\n` : '') +
-                        (relinked ? `User "${srcUser.username}" kini tertaut ke peserta "${tgtInfo.nama}".\n` : '') +
-                        (relink && !tgtP ? `Catatan: "Oky" tidak ada di Database Peserta, jadi user "${srcUser.username}" belum bisa ditautkan.\n` : '') +
+                        `Penggabungan selesai -> "${tgtInfo.nama}" (id: ${tgtId}).\n\n` +
+                        `SERMON  : ${moved} dipindahkan` + (kept ? `, ${kept} bentrok (record Oky dipertahankan)` : '') + (failed ? `, ${failed} gagal` : '') + `\n` +
+                        `KEGIATAN: ${evMoved} dipindahkan` + (evKept ? `, ${evKept} bentrok (record Oky dipertahankan)` : '') + (evFailed ? `, ${evFailed} gagal` : '') + `\n` +
+                        (relinked ? `\nUser "${srcUser.username}" kini tertaut ke peserta "${tgtInfo.nama}".\n` : '') +
+                        (relink && !tgtP ? `\nCatatan: "Oky" tidak ada di Database Peserta, jadi user "${srcUser.username}" belum bisa ditautkan.\n` : '') +
                         `\nUser & peserta Oki tidak dihapus; hapus manual bila sudah tidak dipakai.`
                     );
                 } catch (e) {
@@ -6838,7 +6901,7 @@ const handleExportUsers = () => {
                         </button>
 
                         <button onClick={handleMergeOkiToOky} className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition shadow-lg mb-4">
-                            <i data-lucide="git-merge" width="18"></i> Gabung Kehadiran Sermon: Oki → Oky
+                            <i data-lucide="git-merge" width="18"></i> Gabung Kehadiran Sermon &amp; Kegiatan: Oki → Oky
                         </button>
                     
                         <div ref={userFormRef} className={`bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 transition ${editingId ? 'border-amber-300' : 'border-slate-100'}`}>
