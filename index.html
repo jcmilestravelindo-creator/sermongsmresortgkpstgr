@@ -6896,13 +6896,6 @@ const handleExportUsers = () => {
                             </button>
                         </div>
 
-                        <button onClick={handleFixJoharmenSpacing} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition shadow-lg mb-4">
-                            <i data-lucide="wand-2" width="18"></i> Perbaiki Spasi: Joharmen Damanik
-                        </button>
-
-                        <button onClick={handleMergeOkiToOky} className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition shadow-lg mb-4">
-                            <i data-lucide="git-merge" width="18"></i> Gabung Kehadiran Sermon &amp; Kegiatan: Oki → Oky
-                        </button>
                     
                         <div ref={userFormRef} className={`bg-white rounded-3xl shadow-lg p-6 mb-4 border-2 transition ${editingId ? 'border-amber-300' : 'border-slate-100'}`}>
                             <h2 className="font-black text-xl mb-4 flex gap-2 items-center text-slate-700">{editingId ? <><i data-lucide="edit" className="text-orange-500"></i> Edit User: {newUser.nama || newUser.username}</> : <><i data-lucide="user-plus" className="text-blue-500"></i> Tambah User</>}</h2>
@@ -7068,12 +7061,6 @@ const handleExportUsers = () => {
                                     </button>
                                     <button onClick={downloadAllQR} disabled={isDownloading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
                                         {isDownloading ? 'Sedang Download...' : <><i data-lucide="download" width="20"></i> Download Semua QR</>}
-                                    </button>
-                                    <button onClick={handleMigratePersBSD} className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
-                                        <i data-lucide="shuffle" width="20"></i> Migrasi Nama ke Kelas GKPS-PersBSD
-                                    </button>
-                                    <button onClick={handleFixUsernamePrefix} className="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold flex justify-center gap-2 transition shadow-lg">
-                                        <i data-lucide="wrench" width="20"></i> Perbaiki Username (Hapus Awalan K/B)
                                     </button>
                                 </div>
                             )}
